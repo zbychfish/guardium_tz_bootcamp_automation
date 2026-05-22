@@ -145,6 +145,8 @@ def update_hosts_file_remote(ssh_client: SSHClient, hosts_content: str, logger) 
         
     except Exception as e:
         logger.error(f"Error updating /etc/hosts: {str(e)}")
+        return False
+
 
 def configure_sshd_local(logger) -> bool:
     """
@@ -348,8 +350,6 @@ fi
         
     except Exception as e:
         logger.error(f"Error configuring SSHD: {str(e)}")
-        return False
-
         return False
 
 
