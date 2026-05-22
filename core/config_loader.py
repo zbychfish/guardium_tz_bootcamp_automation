@@ -254,5 +254,29 @@ class ConfigLoader:
             Dictionary containing deployment information
         """
         return self.config.get('deployment', {})
+    
+    def get_custom_variables(self) -> Dict[str, Any]:
+        """
+        Get custom variables from machines_info.json.
+        These are variables passed from the TechZone manifest.
+        
+        Returns:
+            Dictionary containing custom variables (e.g., pwd, stage, etc.)
+        """
+        return self.machines_info.get('custom_variables', {})
+    
+    def get_custom_variable(self, key: str, default: Any = None) -> Any:
+        """
+        Get a specific custom variable value.
+        
+        Args:
+            key: Variable name
+            default: Default value if not found
+            
+        Returns:
+            Variable value or default
+        """
+        custom_vars = self.get_custom_variables()
+        return custom_vars.get(key, default)
 
 # Made with Bob

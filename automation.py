@@ -215,18 +215,26 @@ def main():
     credentials = orchestrator.config.get_credentials()
     logger = setup_logger("TaskRegistration")
     
-    # Setup /etc/hosts and SSHD on local machine (raptor)
+    # Get root password from custom_variables (passed from manifest)
+    root_password = orchestrator.config.get_custom_variable('pwd')
+    if root_password:
+        logger.info("Root password found in custom_variables - will be set on all machines")
+    else:
+        logger.warning("No root password (pwd) found in custom_variables - password will not be changed")
+    
+    # Setup /etc/hosts, SSHD, and root password on local machine (raptor)
     orchestrator.register_task(
         task_id="setup_local_raptor",
         task_fn=lambda: setup_hosts_locally(
             all_machines=machines,
             logger=logger,
-            configure_sshd=True  # Configure both /etc/hosts and SSHD
+            configure_sshd=True,
+            root_password=root_password
         ),
-        description="Setup /etc/hosts and SSHD on local machine (raptor)"
+        description="Setup /etc/hosts, SSHD, and root password on local machine (raptor)"
     )
     
-    # Setup /etc/hosts and SSHD on remote machines
+    # Setup /etc/hosts, SSHD, and root password on remote machines
     # Get list of remote machines from config
     remote_machines = orchestrator.config.get('tasks', {}).get('remote_machines', [])
     logger.info(f"Remote machines to configure: {remote_machines}")
@@ -243,9 +251,10 @@ def main():
                     credentials=credentials,
                     logger=logger,
                     use_private_ip=True,
-                    configure_sshd=True  # Configure both /etc/hosts and SSHD
+                    configure_sshd=True,
+                    root_password=root_password
                 ),
-                description=f"Setup /etc/hosts and SSHD on {machine_name}"
+                description=f"Setup /etc/hosts, SSHD, and root password on {machine_name}"
             )
         else:
             logger.warning(f"Machine {machine_name} not found in configuration")

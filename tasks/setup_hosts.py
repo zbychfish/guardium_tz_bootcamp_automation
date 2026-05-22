@@ -4,13 +4,14 @@
 Setup /etc/hosts and SSHD configuration on machines
 Generates and deploys /etc/hosts with machine entries
 Configures SSHD for password authentication
+Sets root password
 """
 
 import sys
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
@@ -270,6 +271,76 @@ def configure_sshd_local(logger) -> bool:
         return False
 
 
+def set_root_password_local(password: str, logger) -> bool:
+    """
+    Set root password on local machine.
+    
+    Args:
+        password: New root password
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info("Setting root password on local machine")
+        
+        # Use chpasswd to set password
+        # Format: username:password
+        process = subprocess.Popen(
+            ["chpasswd"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        stdout, stderr = process.communicate(input=f"root:{password}\n")
+        
+        if process.returncode != 0:
+            logger.error(f"Failed to set root password: {stderr}")
+            return False
+        
+        logger.info("Successfully set root password")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting root password: {str(e)}")
+        return False
+
+
+def set_root_password_remote(ssh_client: SSHClient, password: str, logger) -> bool:
+    """
+    Set root password on remote machine via SSH.
+    
+    Args:
+        ssh_client: SSH client instance
+        password: New root password
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info("Setting root password on remote machine")
+        
+        # Use chpasswd with sudo
+        # We need to pass the password securely through stdin
+        cmd = f"echo 'root:{password}' | sudo chpasswd"
+        
+        result = ssh_client.execute_command(cmd, print_output=False)
+        if result['rc'] != 0:
+            logger.error(f"Failed to set root password: {result['stderr']}")
+            return False
+        
+        logger.info("Successfully set root password")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting root password: {str(e)}")
+        return False
+
+
 def configure_sshd_remote(ssh_client: SSHClient, logger) -> bool:
     """
     Configure SSHD on remote machine via SSH using sudo.
@@ -354,14 +425,16 @@ fi
 
 
 def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
-                        configure_sshd: bool = True) -> bool:
+                        configure_sshd: bool = True,
+                        root_password: Optional[str] = None) -> bool:
     """
-    Setup /etc/hosts and optionally SSHD on local machine (raptor).
+    Setup /etc/hosts, SSHD, and root password on local machine (raptor).
     
     Args:
         all_machines: All machines in the deployment
         logger: Logger instance
         configure_sshd: Whether to configure SSHD (default: True)
+        root_password: Root password to set (optional)
         
     Returns:
         True if successful, False otherwise
@@ -386,6 +459,14 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
             logger.error("Failed to configure SSHD")
             return False
     
+    # Set root password if provided
+    if root_password:
+        logger.info("Setting root password")
+        pwd_success = set_root_password_local(root_password, logger)
+        if not pwd_success:
+            logger.error("Failed to set root password")
+            return False
+    
     logger.info("Local machine setup completed successfully")
     return True
 
@@ -395,9 +476,10 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
                                   credentials: Dict[str, Any], logger,
                                   use_private_ip: bool = True,
                                   ssh_port: int = 2223,
-                                  configure_sshd: bool = True) -> bool:
+                                  configure_sshd: bool = True,
+                                  root_password: Optional[str] = None) -> bool:
     """
-    Setup /etc/hosts and optionally SSHD on a remote machine via SSH.
+    Setup /etc/hosts, SSHD, and root password on a remote machine via SSH.
     
     Args:
         machine_name: Name of the machine
@@ -408,6 +490,7 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
         use_private_ip: Use private IP instead of public (default: True)
         ssh_port: SSH port (default: 2223)
         configure_sshd: Whether to configure SSHD (default: True)
+        root_password: Root password to set (optional)
         
     Returns:
         True if successful, False otherwise
@@ -446,6 +529,14 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
                 sshd_success = configure_sshd_remote(ssh, logger)
                 if not sshd_success:
                     logger.error("Failed to configure SSHD")
+                    return False
+            
+            # Set root password if provided
+            if root_password:
+                logger.info("Setting root password")
+                pwd_success = set_root_password_remote(ssh, root_password, logger)
+                if not pwd_success:
+                    logger.error("Failed to set root password")
                     return False
             
             logger.info(f"Remote machine {machine_name} setup completed successfully")
