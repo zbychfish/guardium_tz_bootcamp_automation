@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Configuration Loader Module
-Handles loading and accessing configuration from YAML files
+Handles loading and accessing configuration from YAML files and JSON machine info
 """
 
 import os
+import json
 import yaml
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from pathlib import Path
 
 
@@ -17,15 +18,21 @@ class ConfigLoader:
     Supports YAML configuration files and environment variable overrides.
     """
     
-    def __init__(self, config_file: str = "config/config.yaml"):
+    def __init__(self, config_file: str = "config/config.yaml", machines_info_file: str = "/root/machines_info.json"):
         """
         Initialize configuration loader.
         
         Args:
             config_file: Path to YAML configuration file
+            machines_info_file: Path to JSON file containing machine information
         """
         self.config_file = Path(config_file)
+        self.machines_info_file = Path(machines_info_file)
         self.config: Dict[str, Any] = self._load_config()
+        self.machines_info: Dict[str, Any] = self._load_machines_info()
+        
+        # Merge machines from JSON into config
+        self._merge_machines_into_config()
     
     def _load_config(self) -> Dict[str, Any]:
         """
@@ -48,6 +55,67 @@ class ConfigLoader:
         except IOError as e:
             print(f"Error: Could not read config file: {e}")
             return {}
+    
+    def _load_machines_info(self) -> Dict[str, Any]:
+        """
+        Load machine information from JSON file.
+        
+        Returns:
+            Dictionary containing machine information
+        """
+        if not self.machines_info_file.exists():
+            print(f"Warning: Machines info file not found: {self.machines_info_file}")
+            return {}
+        
+        try:
+            with open(self.machines_info_file, 'r', encoding='utf-8') as f:
+                machines_info = json.load(f)
+                return machines_info
+        except json.JSONDecodeError as e:
+            print(f"Error: Could not parse machines info file: {e}")
+            return {}
+        except IOError as e:
+            print(f"Error: Could not read machines info file: {e}")
+            return {}
+    
+    def _merge_machines_into_config(self):
+        """
+        Merge machine information from JSON into config structure.
+        Extracts machine names without suffixes and creates machine entries.
+        """
+        if not self.machines_info or 'machines' not in self.machines_info:
+            return
+        
+        # Initialize machines section if it doesn't exist
+        if 'machines' not in self.config:
+            self.config['machines'] = {}
+        
+        # Process each machine from the JSON file
+        for machine in self.machines_info.get('machines', []):
+            # Extract machine name without suffix (e.g., "hana-dsbni7pj" -> "hana")
+            full_name = machine.get('name', '')
+            if not full_name:
+                continue
+            
+            # Split by '-' and take the first part as the base name
+            base_name = full_name.split('-')[0]
+            
+            # Create machine entry in config
+            self.config['machines'][base_name] = {
+                'host': machine.get('public_ip', ''),
+                'private_ip': machine.get('private_ip', ''),
+                'fqdn': machine.get('fqdn', ''),
+                'full_name': full_name,
+                'alias': machine.get('alias', ''),
+                'description': f"Auto-loaded from machines_info.json"
+            }
+        
+        # Also store credentials and deployment info if available
+        if 'credentials' in self.machines_info:
+            self.config['credentials'] = self.machines_info['credentials']
+        
+        if 'deployment' in self.machines_info:
+            self.config['deployment'] = self.machines_info['deployment']
     
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -127,5 +195,64 @@ class ConfigLoader:
             return False
         
         return True
+    
+    def get_machines(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get all machines configuration.
+        
+        Returns:
+            Dictionary of machine configurations keyed by base name
+        """
+        return self.config.get('machines', {})
+    
+    def get_machine(self, machine_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get configuration for a specific machine by base name.
+        
+        Args:
+            machine_name: Base machine name (without suffix)
+            
+        Returns:
+            Machine configuration dictionary or None if not found
+        """
+        machines = self.get_machines()
+        return machines.get(machine_name)
+    
+    def get_machine_ip(self, machine_name: str, use_private: bool = False) -> Optional[str]:
+        """
+        Get IP address for a specific machine.
+        
+        Args:
+            machine_name: Base machine name (without suffix)
+            use_private: If True, return private IP; otherwise return public IP
+            
+        Returns:
+            IP address or None if not found
+        """
+        machine = self.get_machine(machine_name)
+        if not machine:
+            return None
+        
+        if use_private:
+            return machine.get('private_ip')
+        return machine.get('host')
+    
+    def get_credentials(self) -> Dict[str, Any]:
+        """
+        Get credentials information from machines_info.json.
+        
+        Returns:
+            Dictionary containing credentials
+        """
+        return self.config.get('credentials', {})
+    
+    def get_deployment_info(self) -> Dict[str, Any]:
+        """
+        Get deployment information from machines_info.json.
+        
+        Returns:
+            Dictionary containing deployment information
+        """
+        return self.config.get('deployment', {})
 
 # Made with Bob

@@ -24,22 +24,32 @@ class AutomationOrchestrator:
     Manages task execution, state tracking, and error handling.
     """
     
-    def __init__(self, config_file: str = "config/config.yaml", state_file: str = "state.json"):
+    def __init__(self, config_file: str = "config/config.yaml", state_file: str = "state.json",
+                 machines_info_file: str = "/root/machines_info.json"):
         """
         Initialize the orchestrator.
         
         Args:
             config_file: Path to configuration file
             state_file: Path to state tracking file
+            machines_info_file: Path to JSON file containing machine information
         """
         self.logger = setup_logger("AutomationOrchestrator")
-        self.config = ConfigLoader(config_file)
+        self.config = ConfigLoader(config_file, machines_info_file)
         self.state = StateManager(state_file)
         self.tasks: List[tuple] = []
         
         self.logger.info("Automation Orchestrator initialized")
         self.logger.info(f"Config: {config_file}")
+        self.logger.info(f"Machines Info: {machines_info_file}")
         self.logger.info(f"State: {state_file}")
+        
+        # Log loaded machines
+        machines = self.config.get_machines()
+        if machines:
+            self.logger.info(f"Loaded {len(machines)} machine(s): {', '.join(machines.keys())}")
+        else:
+            self.logger.warning("No machines loaded from machines_info.json")
     
     def register_task(self, task_id: str, task_fn: Callable, description: str = ""):
         """
@@ -151,6 +161,12 @@ def main():
     )
     
     parser.add_argument(
+        "--machines-info",
+        default="/root/machines_info.json",
+        help="Path to machines info JSON file (default: /root/machines_info.json)"
+    )
+    
+    parser.add_argument(
         "--state",
         default="state.json",
         help="Path to state file (default: state.json)"
@@ -178,7 +194,8 @@ def main():
     # Initialize orchestrator
     orchestrator = AutomationOrchestrator(
         config_file=args.config,
-        state_file=args.state
+        state_file=args.state,
+        machines_info_file=args.machines_info
     )
     
     # Handle special commands
@@ -191,7 +208,24 @@ def main():
         return 0
     
     # Register your tasks here
-    # Example:
+    #
+    # Access machine information:
+    # machines = orchestrator.config.get_machines()
+    # for machine_name, machine_info in machines.items():
+    #     print(f"Machine: {machine_name}")
+    #     print(f"  Public IP: {machine_info['host']}")
+    #     print(f"  Private IP: {machine_info['private_ip']}")
+    #     print(f"  Full name: {machine_info['full_name']}")
+    #
+    # Get specific machine:
+    # hana_machine = orchestrator.config.get_machine('hana')
+    # hana_ip = orchestrator.config.get_machine_ip('hana')
+    #
+    # Get credentials:
+    # credentials = orchestrator.config.get_credentials()
+    # username = credentials.get('username')
+    #
+    # Example task:
     # orchestrator.register_task(
     #     task_id="task_001_example",
     #     task_fn=lambda: example_task_function(),
