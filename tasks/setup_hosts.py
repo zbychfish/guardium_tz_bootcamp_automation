@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Setup /etc/hosts file on machines
+Setup /etc/hosts and SSHD configuration on machines
 Generates and deploys /etc/hosts with machine entries
+Configures SSHD for password authentication
 """
 
 import sys
@@ -144,37 +145,254 @@ def update_hosts_file_remote(ssh_client: SSHClient, hosts_content: str, logger) 
         
     except Exception as e:
         logger.error(f"Error updating /etc/hosts: {str(e)}")
-        return False
 
-
-def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger) -> bool:
+def configure_sshd_local(logger) -> bool:
     """
-    Setup /etc/hosts on local machine (raptor).
+    Configure SSHD on local machine.
+    Changes:
+    - PasswordAuthentication yes
+    - PermitRootLogin yes
+    - LoginGraceTime 0
     
     Args:
-        all_machines: All machines in the deployment
         logger: Logger instance
         
     Returns:
         True if successful, False otherwise
     """
-    logger.info("Setting up /etc/hosts on local machine (raptor)")
+    try:
+        sshd_config = "/etc/ssh/sshd_config"
+        
+        logger.info("Backing up existing sshd_config")
+        result = subprocess.run(
+            ["cp", sshd_config, f"{sshd_config}.backup"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.warning(f"Could not backup sshd_config: {result.stderr}")
+        
+        logger.info("Modifying SSHD configuration")
+        
+        # Read current config
+        with open(sshd_config, 'r') as f:
+            lines = f.readlines()
+        
+        # Modify configuration
+        new_lines = []
+        settings_found = {
+            'PasswordAuthentication': False,
+            'PermitRootLogin': False,
+            'LoginGraceTime': False
+        }
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            # Handle PasswordAuthentication
+            if stripped.startswith('PasswordAuthentication'):
+                new_lines.append('PasswordAuthentication yes\n')
+                settings_found['PasswordAuthentication'] = True
+            # Handle PermitRootLogin
+            elif stripped.startswith('PermitRootLogin'):
+                new_lines.append('PermitRootLogin yes\n')
+                settings_found['PermitRootLogin'] = True
+            # Handle LoginGraceTime
+            elif stripped.startswith('LoginGraceTime'):
+                new_lines.append('LoginGraceTime 0\n')
+                settings_found['LoginGraceTime'] = True
+            else:
+                new_lines.append(line)
+        
+        # Add settings if not found
+        if not settings_found['PasswordAuthentication']:
+            new_lines.append('\n# Added by automation\n')
+            new_lines.append('PasswordAuthentication yes\n')
+        if not settings_found['PermitRootLogin']:
+            new_lines.append('PermitRootLogin yes\n')
+        if not settings_found['LoginGraceTime']:
+            new_lines.append('LoginGraceTime 0\n')
+        
+        # Write new config
+        temp_file = "/tmp/sshd_config.new"
+        with open(temp_file, 'w') as f:
+            f.writelines(new_lines)
+        
+        # Install new config
+        logger.info("Installing new sshd_config")
+        result = subprocess.run(
+            ["mv", temp_file, sshd_config],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error(f"Failed to install sshd_config: {result.stderr}")
+            return False
+        
+        # Set proper permissions
+        result = subprocess.run(
+            ["chmod", "600", sshd_config],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.warning(f"Could not set permissions on sshd_config: {result.stderr}")
+        
+        # Restart SSHD
+        logger.info("Restarting SSHD service")
+        result = subprocess.run(
+            ["systemctl", "restart", "sshd"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error(f"Failed to restart SSHD: {result.stderr}")
+            return False
+        
+        logger.info("Successfully configured SSHD")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error configuring SSHD: {str(e)}")
+        return False
+
+
+def configure_sshd_remote(ssh_client: SSHClient, logger) -> bool:
+    """
+    Configure SSHD on remote machine via SSH using sudo.
+    Changes:
+    - PasswordAuthentication yes
+    - PermitRootLogin yes
+    - LoginGraceTime 0
     
-    # Generate hosts content
+    Args:
+        ssh_client: SSH client instance
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        sshd_config = "/etc/ssh/sshd_config"
+        
+        logger.info("Backing up existing sshd_config")
+        backup_result = ssh_client.execute_command(f"sudo cp {sshd_config} {sshd_config}.backup", print_output=False)
+        if backup_result['rc'] != 0:
+            logger.warning(f"Could not backup sshd_config: {backup_result['stderr']}")
+        
+        logger.info("Modifying SSHD configuration")
+        
+        # Use sed to modify the configuration in place
+        commands = [
+            # Change or add PasswordAuthentication
+            f"sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' {sshd_config}",
+            # Change or add PermitRootLogin
+            f"sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' {sshd_config}",
+            # Change or add LoginGraceTime
+            f"sudo sed -i 's/^#*LoginGraceTime.*/LoginGraceTime 0/' {sshd_config}",
+        ]
+        
+        for cmd in commands:
+            result = ssh_client.execute_command(cmd, print_output=False)
+            if result['rc'] != 0:
+                logger.warning(f"Command failed: {cmd}\nError: {result['stderr']}")
+        
+        # Verify settings exist, if not append them
+        verify_and_add = """
+if ! grep -q '^PasswordAuthentication' /etc/ssh/sshd_config; then
+    echo 'PasswordAuthentication yes' | sudo tee -a /etc/ssh/sshd_config
+fi
+if ! grep -q '^PermitRootLogin' /etc/ssh/sshd_config; then
+    echo 'PermitRootLogin yes' | sudo tee -a /etc/ssh/sshd_config
+fi
+if ! grep -q '^LoginGraceTime' /etc/ssh/sshd_config; then
+    echo 'LoginGraceTime 0' | sudo tee -a /etc/ssh/sshd_config
+fi
+"""
+        result = ssh_client.execute_command(verify_and_add, print_output=False)
+        if result['rc'] != 0:
+            logger.warning(f"Could not verify/add settings: {result['stderr']}")
+        
+        # Set proper permissions
+        result = ssh_client.execute_command(f"sudo chmod 600 {sshd_config}", print_output=False)
+        if result['rc'] != 0:
+            logger.warning(f"Could not set permissions on sshd_config: {result['stderr']}")
+        
+        # Restart SSHD
+        logger.info("Restarting SSHD service")
+        result = ssh_client.execute_command("sudo systemctl restart sshd", print_output=False)
+        if result['rc'] != 0:
+            logger.error(f"Failed to restart SSHD: {result['stderr']}")
+            return False
+        
+        logger.info("Successfully configured SSHD")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error configuring SSHD: {str(e)}")
+        return False
+
+        return False
+
+
+def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
+                        configure_sshd: bool = True) -> bool:
+    """
+    Setup /etc/hosts and optionally SSHD on local machine (raptor).
+    
+    Args:
+        all_machines: All machines in the deployment
+        logger: Logger instance
+        configure_sshd: Whether to configure SSHD (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info("Setting up local machine (raptor)")
+    
+    # Setup /etc/hosts
+    logger.info("Configuring /etc/hosts")
     hosts_content = generate_hosts_content(all_machines)
     logger.debug(f"Generated /etc/hosts content:\n{hosts_content}")
     
-    # Update local /etc/hosts
-    return update_hosts_file_local(hosts_content, logger)
+    hosts_success = update_hosts_file_local(hosts_content, logger)
+    if not hosts_success:
+        logger.error("Failed to update /etc/hosts")
+        return False
+    
+    # Configure SSHD if requested
+    if configure_sshd:
+        logger.info("Configuring SSHD")
+        sshd_success = configure_sshd_local(logger)
+        if not sshd_success:
+            logger.error("Failed to configure SSHD")
+            return False
+    
+    logger.info("Local machine setup completed successfully")
+    return True
 
 
 def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any],
                                   all_machines: Dict[str, Dict[str, Any]],
                                   credentials: Dict[str, Any], logger,
                                   use_private_ip: bool = True,
-                                  ssh_port: int = 2223) -> bool:
+                                  ssh_port: int = 2223,
+                                  configure_sshd: bool = True) -> bool:
     """
-    Setup /etc/hosts on a remote machine via SSH.
+    Setup /etc/hosts and optionally SSHD on a remote machine via SSH.
+    
+    Args:
+        machine_name: Name of the machine
+        machine_info: Machine configuration
+        all_machines: All machines in the deployment
+        credentials: SSH credentials
+        logger: Logger instance
+        use_private_ip: Use private IP instead of public (default: True)
+        ssh_port: SSH port (default: 2223)
+        configure_sshd: Whether to configure SSHD (default: True)
+        
+    Returns:
+        True if successful, False otherwise
     """
     if use_private_ip:
         host = machine_info.get('private_ip')
@@ -188,7 +406,7 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
         logger.error(f"No IP address for {machine_name}")
         return False
     
-    logger.info(f"Setting up /etc/hosts on {machine_name} ({host}:{ssh_port})")
+    logger.info(f"Setting up remote machine {machine_name} ({host}:{ssh_port})")
     
     hosts_content = generate_hosts_content(all_machines)
     username = credentials.get('username', 'root')
@@ -196,10 +414,27 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
     try:
         with SSHClient(host=host, username=username, port=ssh_port) as ssh:
             logger.info(f"Connected to {machine_name}")
-            return update_hosts_file_remote(ssh, hosts_content, logger)
+            
+            # Setup /etc/hosts
+            logger.info("Configuring /etc/hosts")
+            hosts_success = update_hosts_file_remote(ssh, hosts_content, logger)
+            if not hosts_success:
+                logger.error("Failed to update /etc/hosts")
+                return False
+            
+            # Configure SSHD if requested
+            if configure_sshd:
+                logger.info("Configuring SSHD")
+                sshd_success = configure_sshd_remote(ssh, logger)
+                if not sshd_success:
+                    logger.error("Failed to configure SSHD")
+                    return False
+            
+            logger.info(f"Remote machine {machine_name} setup completed successfully")
+            return True
             
     except Exception as e:
-        logger.error(f"Failed to setup hosts on {machine_name}: {str(e)}")
+        logger.error(f"Failed to setup {machine_name}: {str(e)}")
         return False
 
 
