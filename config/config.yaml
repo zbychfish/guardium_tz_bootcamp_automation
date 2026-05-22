@@ -9,32 +9,14 @@ general:
 
 # SSH connection defaults
 ssh:
-  port: 22
+  port: 2223
   timeout: 30
   username: "root"
   # password: ""  # Can be set via SSH_PASSWORD env var
   # key_file: ""  # Can be set via SSH_KEY_FILE env var
 
-# Machines configuration
-# Define your target machines here
-machines:
-  # Example machine configuration
-  example_machine:
-    host: "192.168.1.100"
-    description: "Example target machine"
-    # Override SSH defaults if needed
-    ssh:
-      username: "admin"
-      port: 22
-    # Custom machine-specific settings
-    settings:
-      os: "rhel8"
-      role: "database"
-
-  # Add more machines as needed
-  # machine2:
-  #   host: "192.168.1.101"
-  #   description: "Another machine"
+# NOTE: Machines are automatically loaded from /root/machines_info.json
+# No need to define them here manually
 
 # Task execution settings
 execution:
