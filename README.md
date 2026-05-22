@@ -1,0 +1,415 @@
+# Machine Automation Framework
+
+A flexible, extensible Python framework for automating machine configuration and management tasks. Built with modularity and ease of use in mind.
+
+## 🎯 Features
+
+- **Task Orchestration** - Sequential task execution with state tracking
+- **SSH Operations** - Built-in SSH client for remote command execution
+- **State Management** - Resume execution from where you left off
+- **Configuration Management** - YAML-based configuration with environment variable overrides
+- **Logging** - Comprehensive logging to console and files
+- **Extensible** - Easy to add new tasks and modules
+- **Error Handling** - Robust error handling and retry mechanisms
+
+## 📁 Project Structure
+
+```
+machine_automation_framework/
+├── automation.py              # Main orchestration script
+├── requirements.txt           # Python dependencies
+├── README.md                  # This file
+├── state.json                 # Task execution state (auto-generated)
+│
+├── config/                    # Configuration files
+│   └── config.yaml           # Main configuration file
+│
+├── core/                      # Core framework modules
+│   ├── __init__.py
+│   ├── state_manager.py      # State tracking and persistence
+│   ├── config_loader.py      # Configuration loading
+│   ├── logger.py             # Logging setup
+│   ├── ssh_client.py         # SSH operations
+│   └── utils.py              # Utility functions
+│
+├── tasks/                     # Task definitions
+│   └── example_tasks.py      # Example task implementations
+│
+└── logs/                      # Log files (auto-generated)
+```
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+
+```bash
+cd machine_automation_framework
+pip install -r requirements.txt
+```
+
+Or create a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 2. Configure Your Environment
+
+Edit `config/config.yaml` to define your target machines and settings:
+
+```yaml
+machines:
+  my_server:
+    host: "192.168.1.100"
+    description: "My target server"
+    ssh:
+      username: "root"
+      # password can be set via SSH_PASSWORD env var
+```
+
+### 3. Create Your Tasks
+
+Create a new file in the `tasks/` directory or use `example_tasks.py` as a template:
+
+```python
+from core import SSHClient, get_logger, ConfigLoader
+
+logger = get_logger("MyTasks")
+
+def my_custom_task(config: ConfigLoader) -> bool:
+    """Your custom task implementation."""
+    logger.info("Running my custom task...")
+    
+    host = config.get('machines.my_server.host')
+    
+    with SSHClient(host=host, username='root') as ssh:
+        result = ssh.execute_command("echo 'Hello World'")
+        return result['rc'] == 0
+```
+
+### 4. Register and Run Tasks
+
+Edit `automation.py` to register your tasks:
+
+```python
+# In the main() function, after creating orchestrator:
+from tasks.example_tasks import register_example_tasks
+
+# Register tasks
+register_example_tasks(orchestrator)
+
+# Or register individual tasks:
+orchestrator.register_task(
+    task_id="my_task_001",
+    task_fn=lambda: my_custom_task(orchestrator.config),
+    description="My custom task"
+)
+```
+
+### 5. Execute Automation
+
+```bash
+python automation.py
+```
+
+## 📖 Usage Examples
+
+### Basic Usage
+
+```bash
+# Run all tasks
+python automation.py
+
+# Use custom config file
+python automation.py --config my_config.yaml
+
+# Stop at specific task
+python automation.py --stop-at task_003
+
+# Show execution status
+python automation.py --status
+
+# Reset state and start fresh
+python automation.py --reset
+```
+
+### Using SSH Client
+
+```python
+from core import SSHClient
+
+# Context manager (auto-connect/disconnect)
+with SSHClient(host="192.168.1.100", username="root") as ssh:
+    result = ssh.execute_command("hostname")
+    print(result['stdout'])
+
+# Manual connection management
+ssh = SSHClient(host="192.168.1.100", username="root", password="secret")
+if ssh.connect():
+    ssh.execute_command("ls -la")
+    ssh.upload_file("local.txt", "/remote/path/file.txt")
+    ssh.disconnect()
+```
+
+### Using Configuration
+
+```python
+from core import ConfigLoader
+
+config = ConfigLoader("config/config.yaml")
+
+# Get configuration values
+host = config.get('machines.my_server.host')
+port = config.get('ssh.port', default=22)
+
+# Get entire section
+machines = config.get_section('machines')
+
+# Validate required keys
+if config.validate_required(['machines.my_server.host', 'ssh.username']):
+    print("Configuration valid")
+```
+
+### State Management
+
+```python
+from core import StateManager
+
+state = StateManager("state.json")
+
+# Check if task completed
+if state.is_completed("task_001"):
+    print("Task already completed")
+
+# Mark task as completed
+state.mark_completed("task_001")
+
+# Store metadata
+state.set_metadata("deployment_id", "12345")
+value = state.get_metadata("deployment_id")
+
+# Reset state
+state.reset()
+```
+
+### Utility Functions
+
+```python
+from core import retry, wait_for_condition, validate_ip
+
+# Retry function on failure
+result = retry(
+    func=lambda: risky_operation(),
+    max_attempts=3,
+    delay=5
+)
+
+# Wait for condition
+success = wait_for_condition(
+    condition_func=lambda: check_service_ready(),
+    timeout=300,
+    interval=10,
+    description="service to be ready"
+)
+
+# Validate IP address
+if validate_ip("192.168.1.100"):
+    print("Valid IP")
+```
+
+## 🔧 Configuration
+
+### Configuration File (config.yaml)
+
+```yaml
+# General settings
+general:
+  project_name: "My Automation"
+  environment: "production"
+  log_level: "INFO"
+
+# SSH defaults
+ssh:
+  port: 22
+  timeout: 30
+  username: "root"
+
+# Target machines
+machines:
+  server1:
+    host: "192.168.1.100"
+    description: "Database server"
+  
+  server2:
+    host: "192.168.1.101"
+    description: "Application server"
+    ssh:
+      username: "admin"  # Override default
+
+# Custom settings
+custom:
+  database:
+    type: "postgresql"
+    port: 5432
+```
+
+### Environment Variables
+
+Configuration values can be overridden using environment variables:
+
+```bash
+# Override SSH password
+export SSH_PASSWORD="mysecret"
+
+# Override machine host
+export MACHINES_SERVER1_HOST="192.168.1.200"
+
+# Run automation
+python automation.py
+```
+
+## 📝 Creating Custom Tasks
+
+### Task Template
+
+```python
+def task_name(config: ConfigLoader) -> bool:
+    """
+    Task description.
+    
+    Args:
+        config: Configuration loader instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    logger = get_logger("TaskName")
+    logger.info("Starting task...")
+    
+    try:
+        # Your task logic here
+        
+        logger.info("✓ Task completed successfully")
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Task failed: {e}")
+        return False
+```
+
+### Task Registration
+
+```python
+def register_my_tasks(orchestrator):
+    """Register tasks with orchestrator."""
+    config = orchestrator.config
+    
+    orchestrator.register_task(
+        task_id="001_setup_environment",
+        task_fn=lambda: setup_environment(config),
+        description="Setup base environment"
+    )
+    
+    orchestrator.register_task(
+        task_id="002_install_packages",
+        task_fn=lambda: install_packages(config),
+        description="Install required packages"
+    )
+```
+
+## 🛠️ Extending the Framework
+
+### Adding New Core Modules
+
+1. Create new module in `core/` directory
+2. Import in `core/__init__.py`
+3. Use in your tasks
+
+Example - adding a database module:
+
+```python
+# core/database.py
+class DatabaseClient:
+    def __init__(self, host, port, database):
+        self.host = host
+        # ... implementation
+
+# core/__init__.py
+from .database import DatabaseClient
+__all__ = [..., 'DatabaseClient']
+```
+
+### Adding External Dependencies
+
+1. Add to `requirements.txt`
+2. Install: `pip install -r requirements.txt`
+3. Import and use in your tasks
+
+## 🐛 Troubleshooting
+
+### SSH Connection Issues
+
+```python
+# Enable debug logging
+import logging
+logging.getLogger("paramiko").setLevel(logging.DEBUG)
+
+# Check SSH key permissions
+# chmod 600 ~/.ssh/id_rsa
+```
+
+### State File Corruption
+
+```bash
+# Reset state
+python automation.py --reset
+
+# Or manually delete
+rm state.json
+```
+
+### Import Errors
+
+```bash
+# Ensure you're in the correct directory
+cd machine_automation_framework
+
+# Check Python path
+python -c "import sys; print(sys.path)"
+```
+
+## 📚 Best Practices
+
+1. **Idempotency** - Design tasks to be safely re-runnable
+2. **Error Handling** - Always handle exceptions gracefully
+3. **Logging** - Use logger instead of print statements
+4. **Configuration** - Keep credentials in environment variables
+5. **State Management** - Use state tracking for long-running operations
+6. **Testing** - Test tasks individually before full automation
+7. **Documentation** - Document your custom tasks and configurations
+
+## 🤝 Contributing
+
+When adding new features:
+
+1. Follow existing code structure
+2. Add appropriate logging
+3. Handle errors gracefully
+4. Update documentation
+5. Test thoroughly
+
+## 📄 License
+
+This framework is provided as-is for automation purposes.
+
+## 🔗 Related Projects
+
+- [Ansible](https://www.ansible.com/) - More comprehensive automation platform
+- [Fabric](https://www.fabfile.org/) - Python library for SSH operations
+- [Paramiko](https://www.paramiko.org/) - Python SSH library (used by this framework)
+
+---
+
+**Happy Automating! 🚀**

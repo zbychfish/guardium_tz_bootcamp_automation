@@ -1,0 +1,64 @@
+# Machine Automation Framework Configuration
+# This is an example configuration file showing available options
+
+# General settings
+general:
+  project_name: "Machine Automation"
+  environment: "development"  # development, staging, production
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# SSH connection defaults
+ssh:
+  port: 22
+  timeout: 30
+  username: "root"
+  # password: ""  # Can be set via SSH_PASSWORD env var
+  # key_file: ""  # Can be set via SSH_KEY_FILE env var
+
+# Machines configuration
+# Define your target machines here
+machines:
+  # Example machine configuration
+  example_machine:
+    host: "192.168.1.100"
+    description: "Example target machine"
+    # Override SSH defaults if needed
+    ssh:
+      username: "admin"
+      port: 22
+    # Custom machine-specific settings
+    settings:
+      os: "rhel8"
+      role: "database"
+
+  # Add more machines as needed
+  # machine2:
+  #   host: "192.168.1.101"
+  #   description: "Another machine"
+
+# Task execution settings
+execution:
+  stop_on_error: true
+  parallel_execution: false
+  max_retries: 3
+  retry_delay: 5  # seconds
+
+# Paths
+paths:
+  state_file: "state.json"
+  log_dir: "logs"
+  temp_dir: "/tmp/automation"
+
+# Custom settings
+# Add your own configuration sections here
+custom:
+  # Example custom settings
+  database:
+    type: "postgresql"
+    port: 5432
+  
+  application:
+    version: "1.0.0"
+    port: 8080
+
+# Made with Bob
