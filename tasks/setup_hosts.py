@@ -238,16 +238,16 @@ def configure_sshd_local(logger) -> bool:
         if result.returncode != 0:
             logger.warning(f"Could not set permissions on sshd_config: {result.stderr}")
         
-        # Remove RedHat override config if exists
-        redhat_config = "/etc/ssh/sshd_config.d/50-redhat.conf"
-        logger.info(f"Removing {redhat_config} if exists")
+        # Remove cloud-init override config if exists
+        cloud_init_config = "/etc/ssh/sshd_config.d/50-cloud-init.conf"
+        logger.info(f"Removing {cloud_init_config} if exists")
         result = subprocess.run(
-            ["rm", "-f", redhat_config],
+            ["rm", "-f", cloud_init_config],
             capture_output=True,
             text=True
         )
         if result.returncode != 0:
-            logger.warning(f"Could not remove {redhat_config}: {result.stderr}")
+            logger.warning(f"Could not remove {cloud_init_config}: {result.stderr}")
         
         # Restart SSHD
         logger.info("Restarting SSHD service")
@@ -329,12 +329,12 @@ fi
         if result['rc'] != 0:
             logger.warning(f"Could not set permissions on sshd_config: {result['stderr']}")
         
-        # Remove RedHat override config if exists
-        redhat_config = "/etc/ssh/sshd_config.d/50-redhat.conf"
-        logger.info(f"Removing {redhat_config} if exists")
-        result = ssh_client.execute_command(f"sudo rm -f {redhat_config}", print_output=False)
+        # Remove cloud-init override config if exists
+        cloud_init_config = "/etc/ssh/sshd_config.d/50-cloud-init.conf"
+        logger.info(f"Removing {cloud_init_config} if exists")
+        result = ssh_client.execute_command(f"sudo rm -f {cloud_init_config}", print_output=False)
         if result['rc'] != 0:
-            logger.warning(f"Could not remove {redhat_config}: {result['stderr']}")
+            logger.warning(f"Could not remove {cloud_init_config}: {result['stderr']}")
         
         # Restart SSHD
         logger.info("Restarting SSHD service")
