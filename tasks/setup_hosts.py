@@ -116,27 +116,27 @@ def update_hosts_file_remote(ssh_client: SSHClient, hosts_content: str, logger) 
     """
     try:
         logger.info("Backing up existing /etc/hosts")
-        backup_result = ssh_client.execute_command("sudo cp /etc/hosts /etc/hosts.backup")
-        if backup_result['exit_code'] != 0:
+        backup_result = ssh_client.execute_command("sudo cp /etc/hosts /etc/hosts.backup", print_output=False)
+        if backup_result['rc'] != 0:
             logger.warning(f"Could not backup /etc/hosts: {backup_result['stderr']}")
         
         logger.info("Writing new /etc/hosts content")
         temp_file = "/tmp/hosts.new"
         write_cmd = f"cat > {temp_file} << 'EOF'\n{hosts_content}\nEOF"
         
-        result = ssh_client.execute_command(write_cmd)
-        if result['exit_code'] != 0:
+        result = ssh_client.execute_command(write_cmd, print_output=False)
+        if result['rc'] != 0:
             logger.error(f"Failed to write temporary hosts file: {result['stderr']}")
             return False
         
         logger.info("Installing new /etc/hosts")
-        result = ssh_client.execute_command(f"sudo mv {temp_file} /etc/hosts")
-        if result['exit_code'] != 0:
+        result = ssh_client.execute_command(f"sudo mv {temp_file} /etc/hosts", print_output=False)
+        if result['rc'] != 0:
             logger.error(f"Failed to install /etc/hosts: {result['stderr']}")
             return False
         
-        result = ssh_client.execute_command("sudo chmod 644 /etc/hosts")
-        if result['exit_code'] != 0:
+        result = ssh_client.execute_command("sudo chmod 644 /etc/hosts", print_output=False)
+        if result['rc'] != 0:
             logger.warning(f"Could not set permissions on /etc/hosts: {result['stderr']}")
         
         logger.info("Successfully updated /etc/hosts")
