@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent / "tasks"))
 from core.state_manager import StateManager
 from core.config_loader import ConfigLoader
 from core.logger import setup_logger
-from tasks.setup_hosts import setup_hosts_on_machine
+from tasks.setup_hosts import setup_hosts_locally, setup_hosts_on_remote_machine
 
 
 class AutomationOrchestrator:
@@ -216,22 +216,15 @@ def main():
     credentials = orchestrator.config.get_credentials()
     logger = setup_logger("TaskRegistration")
     
-    # Task 001: Setup /etc/hosts on raptor machine
-    raptor_machine = orchestrator.config.get_machine('raptor')
-    if raptor_machine:
-        orchestrator.register_task(
-            task_id="task_001_setup_hosts_raptor",
-            task_fn=lambda: setup_hosts_on_machine(
-                machine_name='raptor',
-                machine_info=raptor_machine,
-                all_machines=machines,
-                credentials=credentials,
-                logger=logger
-            ),
-            description="Setup /etc/hosts file on raptor machine with all deployment machines"
-        )
-    else:
-        logger.warning("Raptor machine not found in configuration")
+    # Task 001: Setup /etc/hosts on local machine (raptor)
+    orchestrator.register_task(
+        task_id="task_001_setup_hosts_local",
+        task_fn=lambda: setup_hosts_locally(
+            all_machines=machines,
+            logger=logger
+        ),
+        description="Setup /etc/hosts file on local machine (raptor) with all deployment machines"
+    )
     
     # Run all tasks
     success = orchestrator.run_all_tasks(stop_at=args.stop_at)

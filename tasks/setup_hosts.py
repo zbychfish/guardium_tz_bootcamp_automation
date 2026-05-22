@@ -6,6 +6,8 @@ Generates and deploys /etc/hosts with machine entries
 """
 
 import sys
+import os
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, List
 
@@ -50,9 +52,67 @@ def generate_hosts_content(machines: Dict[str, Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def update_hosts_file(ssh_client: SSHClient, hosts_content: str, logger) -> bool:
+def update_hosts_file_local(hosts_content: str, logger) -> bool:
     """
-    Update /etc/hosts file on remote machine.
+    Update /etc/hosts file on local machine.
+    
+    Args:
+        hosts_content: Content to write to /etc/hosts
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Backup existing /etc/hosts
+        logger.info("Backing up existing /etc/hosts")
+        result = subprocess.run(
+            ["cp", "/etc/hosts", "/etc/hosts.backup"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.warning(f"Could not backup /etc/hosts: {result.stderr}")
+        
+        # Write new /etc/hosts content
+        logger.info("Writing new /etc/hosts content")
+        
+        # Create temporary file with new content
+        temp_file = "/tmp/hosts.new"
+        with open(temp_file, 'w') as f:
+            f.write(hosts_content)
+        
+        # Move temporary file to /etc/hosts
+        logger.info("Installing new /etc/hosts")
+        result = subprocess.run(
+            ["mv", temp_file, "/etc/hosts"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error(f"Failed to install /etc/hosts: {result.stderr}")
+            return False
+        
+        # Set proper permissions
+        result = subprocess.run(
+            ["chmod", "644", "/etc/hosts"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.warning(f"Could not set permissions on /etc/hosts: {result.stderr}")
+        
+        logger.info("Successfully updated /etc/hosts")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error updating /etc/hosts: {str(e)}")
+        return False
+
+
+def update_hosts_file_remote(ssh_client: SSHClient, hosts_content: str, logger) -> bool:
+    """
+    Update /etc/hosts file on remote machine via SSH.
     
     Args:
         ssh_client: SSH client connected to target machine
@@ -101,11 +161,33 @@ def update_hosts_file(ssh_client: SSHClient, hosts_content: str, logger) -> bool
         return False
 
 
-def setup_hosts_on_machine(machine_name: str, machine_info: Dict[str, Any], 
-                          all_machines: Dict[str, Dict[str, Any]], 
-                          credentials: Dict[str, Any], logger) -> bool:
+def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger) -> bool:
     """
-    Setup /etc/hosts on a specific machine.
+    Setup /etc/hosts on local machine (raptor).
+    
+    Args:
+        all_machines: All machines in the deployment
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    logger.info("Setting up /etc/hosts on local machine (raptor)")
+    
+    # Generate hosts content
+    hosts_content = generate_hosts_content(all_machines)
+    logger.debug(f"Generated /etc/hosts content:\n{hosts_content}")
+    
+    # Update local /etc/hosts
+    return update_hosts_file_local(hosts_content, logger)
+
+
+def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any],
+                                  all_machines: Dict[str, Dict[str, Any]],
+                                  credentials: Dict[str, Any], logger,
+                                  use_private_ip: bool = True) -> bool:
+    """
+    Setup /etc/hosts on a remote machine via SSH.
     
     Args:
         machine_name: Name of the machine to configure
@@ -113,13 +195,22 @@ def setup_hosts_on_machine(machine_name: str, machine_info: Dict[str, Any],
         all_machines: All machines in the deployment
         credentials: SSH credentials
         logger: Logger instance
+        use_private_ip: If True, use private IP for connection (default: True)
         
     Returns:
         True if successful, False otherwise
     """
-    host = machine_info.get('host')
+    # Get IP address (prefer private IP for internal network)
+    if use_private_ip:
+        host = machine_info.get('private_ip')
+        if not host:
+            logger.warning(f"No private IP found for {machine_name}, falling back to public IP")
+            host = machine_info.get('host')
+    else:
+        host = machine_info.get('host')
+    
     if not host:
-        logger.error(f"No host IP found for machine: {machine_name}")
+        logger.error(f"No IP address found for machine: {machine_name}")
         return False
     
     logger.info(f"Setting up /etc/hosts on {machine_name} ({host})")
@@ -134,7 +225,7 @@ def setup_hosts_on_machine(machine_name: str, machine_info: Dict[str, Any],
     try:
         with SSHClient(host=host, username=username) as ssh:
             logger.info(f"Connected to {machine_name}")
-            return update_hosts_file(ssh, hosts_content, logger)
+            return update_hosts_file_remote(ssh, hosts_content, logger)
             
     except Exception as e:
         logger.error(f"Failed to setup hosts on {machine_name}: {str(e)}")

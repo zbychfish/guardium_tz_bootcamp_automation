@@ -153,23 +153,23 @@ python automation.py
 
 ## 🎯 Built-in Tasks
 
-### Task 001: Setup /etc/hosts
+### Task 001: Setup /etc/hosts (Local)
 
-Automatically configures `/etc/hosts` on the raptor machine with all deployment machines using their private IPs and demo.guardium domain.
+Automatically configures `/etc/hosts` on the local machine (raptor) with all deployment machines using their private IPs and demo.guardium domain.
 
 **What it does:**
 - Generates `/etc/hosts` entries for all machines in the deployment
 - Uses private IPs for internal communication
 - Creates entries with short names (e.g., "hana") and FQDN (e.g., "hana.demo.guardium")
 - Backs up existing `/etc/hosts` before modification
-- Deploys to raptor machine via SSH
+- Updates local `/etc/hosts` file directly (no SSH needed)
 
 **Test without deploying:**
 ```bash
 python test_setup_hosts.py
 ```
 
-**Deploy to raptor:**
+**Deploy locally:**
 ```bash
 python automation.py
 ```
@@ -185,6 +185,8 @@ python automation.py
 10.240.0.59     hana.demo.guardium hana
 10.240.0.60     raptor.demo.guardium raptor
 ```
+
+**Note:** The framework is designed to run on the raptor machine. For remote machine configuration, use `setup_hosts_on_remote_machine()` function with private IPs for internal network communication.
 
 ## 📖 Usage Examples
 
