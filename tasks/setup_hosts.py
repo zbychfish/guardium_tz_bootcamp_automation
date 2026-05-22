@@ -112,27 +112,15 @@ def update_hosts_file_local(hosts_content: str, logger) -> bool:
 
 def update_hosts_file_remote(ssh_client: SSHClient, hosts_content: str, logger) -> bool:
     """
-    Update /etc/hosts file on remote machine via SSH.
-    
-    Args:
-        ssh_client: SSH client connected to target machine
-        hosts_content: Content to write to /etc/hosts
-        logger: Logger instance
-        
-    Returns:
-        True if successful, False otherwise
+    Update /etc/hosts file on remote machine via SSH using sudo.
     """
     try:
-        # Backup existing /etc/hosts
         logger.info("Backing up existing /etc/hosts")
-        backup_result = ssh_client.execute_command("cp /etc/hosts /etc/hosts.backup")
+        backup_result = ssh_client.execute_command("sudo cp /etc/hosts /etc/hosts.backup")
         if backup_result['exit_code'] != 0:
             logger.warning(f"Could not backup /etc/hosts: {backup_result['stderr']}")
         
-        # Write new /etc/hosts content
         logger.info("Writing new /etc/hosts content")
-        
-        # Create temporary file with new content
         temp_file = "/tmp/hosts.new"
         write_cmd = f"cat > {temp_file} << 'EOF'\n{hosts_content}\nEOF"
         
@@ -141,15 +129,13 @@ def update_hosts_file_remote(ssh_client: SSHClient, hosts_content: str, logger) 
             logger.error(f"Failed to write temporary hosts file: {result['stderr']}")
             return False
         
-        # Move temporary file to /etc/hosts
         logger.info("Installing new /etc/hosts")
-        result = ssh_client.execute_command(f"mv {temp_file} /etc/hosts")
+        result = ssh_client.execute_command(f"sudo mv {temp_file} /etc/hosts")
         if result['exit_code'] != 0:
             logger.error(f"Failed to install /etc/hosts: {result['stderr']}")
             return False
         
-        # Set proper permissions
-        result = ssh_client.execute_command("chmod 644 /etc/hosts")
+        result = ssh_client.execute_command("sudo chmod 644 /etc/hosts")
         if result['exit_code'] != 0:
             logger.warning(f"Could not set permissions on /etc/hosts: {result['stderr']}")
         
