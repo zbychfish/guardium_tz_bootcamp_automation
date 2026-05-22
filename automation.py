@@ -12,10 +12,12 @@ from typing import List, Callable, Optional
 
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent / "core"))
+sys.path.insert(0, str(Path(__file__).parent / "tasks"))
 
 from core.state_manager import StateManager
 from core.config_loader import ConfigLoader
 from core.logger import setup_logger
+from tasks.setup_hosts import setup_hosts_on_machine
 
 
 class AutomationOrchestrator:
@@ -208,29 +210,28 @@ def main():
         return 0
     
     # Register your tasks here
-    #
-    # Access machine information:
-    # machines = orchestrator.config.get_machines()
-    # for machine_name, machine_info in machines.items():
-    #     print(f"Machine: {machine_name}")
-    #     print(f"  Public IP: {machine_info['host']}")
-    #     print(f"  Private IP: {machine_info['private_ip']}")
-    #     print(f"  Full name: {machine_info['full_name']}")
-    #
-    # Get specific machine:
-    # hana_machine = orchestrator.config.get_machine('hana')
-    # hana_ip = orchestrator.config.get_machine_ip('hana')
-    #
-    # Get credentials:
-    # credentials = orchestrator.config.get_credentials()
-    # username = credentials.get('username')
-    #
-    # Example task:
-    # orchestrator.register_task(
-    #     task_id="task_001_example",
-    #     task_fn=lambda: example_task_function(),
-    #     description="Example task description"
-    # )
+    
+    # Get machines and credentials
+    machines = orchestrator.config.get_machines()
+    credentials = orchestrator.config.get_credentials()
+    logger = setup_logger("TaskRegistration")
+    
+    # Task 001: Setup /etc/hosts on raptor machine
+    raptor_machine = orchestrator.config.get_machine('raptor')
+    if raptor_machine:
+        orchestrator.register_task(
+            task_id="task_001_setup_hosts_raptor",
+            task_fn=lambda: setup_hosts_on_machine(
+                machine_name='raptor',
+                machine_info=raptor_machine,
+                all_machines=machines,
+                credentials=credentials,
+                logger=logger
+            ),
+            description="Setup /etc/hosts file on raptor machine with all deployment machines"
+        )
+    else:
+        logger.warning("Raptor machine not found in configuration")
     
     # Run all tasks
     success = orchestrator.run_all_tasks(stop_at=args.stop_at)
