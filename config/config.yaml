@@ -31,6 +31,14 @@ paths:
   log_dir: "logs"
   temp_dir: "/tmp/automation"
 
+# Task configuration
+tasks:
+  # List of remote machines to configure /etc/hosts on
+  # These names must match base machine names from machines_info.json
+  remote_machines:
+    - hana
+    - toolnode
+
 # Custom settings
 # Add your own configuration sections here
 custom:

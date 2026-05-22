@@ -226,7 +226,10 @@ def main():
     )
     
     # Setup /etc/hosts on remote machines
-    remote_machines = ['hana']  # Add more machines as needed
+    # Get list of remote machines from config
+    remote_machines = orchestrator.config.get('tasks', {}).get('remote_machines', [])
+    logger.info(f"Remote machines to configure: {remote_machines}")
+    
     for machine_name in remote_machines:
         machine_info = orchestrator.config.get_machine(machine_name)
         if machine_info:
