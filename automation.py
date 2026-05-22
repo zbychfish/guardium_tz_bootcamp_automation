@@ -215,9 +215,9 @@ def main():
     credentials = orchestrator.config.get_credentials()
     logger = setup_logger("TaskRegistration")
     
-    # Task 001: Setup /etc/hosts on local machine (raptor)
+    # Setup /etc/hosts on local machine (raptor)
     orchestrator.register_task(
-        task_id="task_001_setup_hosts_local",
+        task_id="setup_hosts_local_raptor",
         task_fn=lambda: setup_hosts_locally(
             all_machines=machines,
             logger=logger
@@ -225,13 +225,13 @@ def main():
         description="Setup /etc/hosts on local machine (raptor)"
     )
     
-    # Task 002: Setup /etc/hosts on remote machines
+    # Setup /etc/hosts on remote machines
     remote_machines = ['hana']  # Add more machines as needed
     for machine_name in remote_machines:
         machine_info = orchestrator.config.get_machine(machine_name)
         if machine_info:
             orchestrator.register_task(
-                task_id=f"task_002_setup_hosts_{machine_name}",
+                task_id=f"setup_hosts_remote_{machine_name}",
                 task_fn=lambda m=machine_name, mi=machine_info: setup_hosts_on_remote_machine(
                     machine_name=m,
                     machine_info=mi,
