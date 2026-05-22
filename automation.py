@@ -13,9 +13,9 @@ from typing import List, Callable, Optional
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent / "core"))
 
-from state_manager import StateManager
-from config_loader import ConfigLoader
-from logger import setup_logger
+from core.state_manager import StateManager
+from core.config_loader import ConfigLoader
+from core.logger import setup_logger
 
 
 class AutomationOrchestrator:
