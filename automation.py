@@ -211,7 +211,6 @@ def main():
     
     # Register your tasks here
     
-    # Get machines and credentials
     machines = orchestrator.config.get_machines()
     credentials = orchestrator.config.get_credentials()
     logger = setup_logger("TaskRegistration")
@@ -223,8 +222,28 @@ def main():
             all_machines=machines,
             logger=logger
         ),
-        description="Setup /etc/hosts file on local machine (raptor) with all deployment machines"
+        description="Setup /etc/hosts on local machine (raptor)"
     )
+    
+    # Task 002: Setup /etc/hosts on remote machines
+    remote_machines = ['hana']  # Add more machines as needed
+    for machine_name in remote_machines:
+        machine_info = orchestrator.config.get_machine(machine_name)
+        if machine_info:
+            orchestrator.register_task(
+                task_id=f"task_002_setup_hosts_{machine_name}",
+                task_fn=lambda m=machine_name, mi=machine_info: setup_hosts_on_remote_machine(
+                    machine_name=m,
+                    machine_info=mi,
+                    all_machines=machines,
+                    credentials=credentials,
+                    logger=logger,
+                    use_private_ip=True
+                ),
+                description=f"Setup /etc/hosts on {machine_name}"
+            )
+        else:
+            logger.warning(f"Machine {machine_name} not found in configuration")
     
     # Run all tasks
     success = orchestrator.run_all_tasks(stop_at=args.stop_at)

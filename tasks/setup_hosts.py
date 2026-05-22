@@ -185,45 +185,30 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger) -> bool
 def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any],
                                   all_machines: Dict[str, Dict[str, Any]],
                                   credentials: Dict[str, Any], logger,
-                                  use_private_ip: bool = True) -> bool:
+                                  use_private_ip: bool = True,
+                                  ssh_port: int = 2223) -> bool:
     """
     Setup /etc/hosts on a remote machine via SSH.
-    
-    Args:
-        machine_name: Name of the machine to configure
-        machine_info: Machine configuration
-        all_machines: All machines in the deployment
-        credentials: SSH credentials
-        logger: Logger instance
-        use_private_ip: If True, use private IP for connection (default: True)
-        
-    Returns:
-        True if successful, False otherwise
     """
-    # Get IP address (prefer private IP for internal network)
     if use_private_ip:
         host = machine_info.get('private_ip')
         if not host:
-            logger.warning(f"No private IP found for {machine_name}, falling back to public IP")
+            logger.warning(f"No private IP for {machine_name}, using public IP")
             host = machine_info.get('host')
     else:
         host = machine_info.get('host')
     
     if not host:
-        logger.error(f"No IP address found for machine: {machine_name}")
+        logger.error(f"No IP address for {machine_name}")
         return False
     
-    logger.info(f"Setting up /etc/hosts on {machine_name} ({host})")
+    logger.info(f"Setting up /etc/hosts on {machine_name} ({host}:{ssh_port})")
     
-    # Generate hosts content
     hosts_content = generate_hosts_content(all_machines)
-    logger.debug(f"Generated /etc/hosts content:\n{hosts_content}")
-    
-    # Connect via SSH and update
     username = credentials.get('username', 'root')
     
     try:
-        with SSHClient(host=host, username=username) as ssh:
+        with SSHClient(host=host, username=username, port=ssh_port) as ssh:
             logger.info(f"Connected to {machine_name}")
             return update_hosts_file_remote(ssh, hosts_content, logger)
             
