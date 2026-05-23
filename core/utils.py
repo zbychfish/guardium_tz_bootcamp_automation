@@ -143,6 +143,175 @@ def write_file(path: str, content: str, encoding: str = 'utf-8'):
         f.write(content)
 
 
+def append_to_file(path: str, content: str, encoding: str = 'utf-8', ensure_newline: bool = True):
+    """
+    Append content to file. Creates file if it doesn't exist.
+    
+    Args:
+        path: File path
+        content: Content to append
+        encoding: File encoding (default: utf-8)
+        ensure_newline: Add newline before content if file doesn't end with one (default: True)
+    """
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Check if file exists and doesn't end with newline
+    needs_newline = False
+    if ensure_newline and file_path.exists():
+        with open(file_path, 'r', encoding=encoding) as f:
+            existing = f.read()
+            if existing and not existing.endswith('\n'):
+                needs_newline = True
+    
+    with open(file_path, 'a', encoding=encoding) as f:
+        if needs_newline:
+            f.write('\n')
+        f.write(content)
+
+
+def modify_config_file(
+    path: str,
+    content: str,
+    mode: str = 'append',
+    pattern: Optional[str] = None,
+    line_number: Optional[int] = None,
+    encoding: str = 'utf-8',
+    backup: bool = True,
+    logger=None
+) -> bool:
+    """
+    Advanced file modification function for config files.
+    
+    Modes:
+    - 'append': Add content at the end of file
+    - 'prepend': Add content at the beginning of file
+    - 'after': Add content after line matching pattern
+    - 'before': Add content before line matching pattern
+    - 'replace': Replace line matching pattern with content
+    - 'insert': Insert content at specific line number (1-based)
+    
+    Args:
+        path: File path
+        content: Content to add/replace
+        mode: Operation mode (default: 'append')
+        pattern: Regex pattern to match line (for after/before/replace modes)
+        line_number: Line number for insert mode (1-based)
+        encoding: File encoding (default: utf-8)
+        backup: Create backup file before modification (default: True)
+        logger: Logger instance for logging operations
+        
+    Returns:
+        True if successful, False otherwise
+        
+    Examples:
+        # Append to end
+        modify_config_file('/etc/config', 'new_setting=value', mode='append')
+        
+        # Insert at line 10
+        modify_config_file('/etc/config', 'new_line', mode='insert', line_number=10)
+        
+        # Add after pattern
+        modify_config_file('/etc/config', 'security:\n  enabled: true',
+                          mode='after', pattern=r'^# Security')
+        
+        # Replace line
+        modify_config_file('/etc/config', 'port=8080',
+                          mode='replace', pattern=r'^port=')
+    """
+    log = logger if logger else globals()['logger']
+    file_path = Path(path)
+    
+    try:
+        # Create file if doesn't exist
+        if not file_path.exists():
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.touch()
+            log.info(f"Created new file: {path}")
+        
+        # Read existing content
+        with open(file_path, 'r', encoding=encoding) as f:
+            lines = f.readlines()
+        
+        # Create backup if requested
+        if backup and lines:
+            backup_path = f"{path}.backup"
+            with open(backup_path, 'w', encoding=encoding) as f:
+                f.writelines(lines)
+            log.debug(f"Created backup: {backup_path}")
+        
+        # Ensure content ends with newline if it doesn't
+        if content and not content.endswith('\n'):
+            content = content + '\n'
+        
+        # Process based on mode
+        new_lines = []
+        modified = False
+        
+        if mode == 'append':
+            new_lines = lines + [content]
+            modified = True
+            
+        elif mode == 'prepend':
+            new_lines = [content] + lines
+            modified = True
+            
+        elif mode == 'insert':
+            if line_number is None:
+                log.error("line_number required for insert mode")
+                return False
+            # Convert to 0-based index
+            idx = line_number - 1
+            if idx < 0:
+                idx = 0
+            elif idx > len(lines):
+                idx = len(lines)
+            new_lines = lines[:idx] + [content] + lines[idx:]
+            modified = True
+            
+        elif mode in ['after', 'before', 'replace']:
+            if pattern is None:
+                log.error(f"pattern required for {mode} mode")
+                return False
+            
+            import re
+            pattern_re = re.compile(pattern)
+            
+            for i, line in enumerate(lines):
+                if pattern_re.search(line):
+                    if mode == 'after':
+                        new_lines.append(line)
+                        new_lines.append(content)
+                    elif mode == 'before':
+                        new_lines.append(content)
+                        new_lines.append(line)
+                    elif mode == 'replace':
+                        new_lines.append(content)
+                    modified = True
+                else:
+                    new_lines.append(line)
+            
+            if not modified:
+                log.warning(f"Pattern not found: {pattern}")
+                return False
+        else:
+            log.error(f"Unknown mode: {mode}")
+            return False
+        
+        # Write modified content
+        if modified:
+            with open(file_path, 'w', encoding=encoding) as f:
+                f.writelines(new_lines)
+            log.info(f"Modified file: {path} (mode: {mode})")
+            return True
+        
+        return False
+        
+    except Exception as e:
+        log.error(f"Error modifying file {path}: {e}")
+        return False
+
+
 # ============================================================================
 # Retry Logic
 # ============================================================================
@@ -439,6 +608,83 @@ def execute_mysql_sql(
         # Clean up temporary file
         if os.path.exists(sql_file):
             os.remove(sql_file)
+
+
+def execute_mongo_js(
+    js_commands: str,
+    username: str = "",
+    password: str = "",
+    host: str = "localhost",
+    port: int = 27017,
+    database: str = "admin",
+    auth_database: str = "admin",
+    additional_options: str = "",
+    logger=None,
+    verbose: bool = True
+) -> dict:
+    """
+    Execute JavaScript commands in MongoDB using mongosh.
+    
+    This is a general-purpose function for executing JavaScript in MongoDB.
+    Creates a temporary JS file, executes it, and cleans up.
+    
+    Args:
+        js_commands: JavaScript commands to execute (can be multi-line)
+        username: MongoDB username (default: empty - no auth)
+        password: MongoDB password (default: empty)
+        host: MongoDB host (default: localhost)
+        port: MongoDB port (default: 27017)
+        database: Database to connect to (default: admin)
+        auth_database: Authentication database (default: admin)
+        additional_options: Additional mongosh CLI options
+        logger: Logger instance (uses module logger if None)
+        verbose: If True, log command and output; if False, only log errors
+        
+    Returns:
+        Dictionary with 'rc' (return code), 'stdout', and 'stderr'
+    """
+    import tempfile
+    import os
+    
+    log = logger if logger else globals()['logger']
+    
+    if verbose:
+        log.info(f"Executing MongoDB JavaScript commands on {host}:{port}/{database}")
+    
+    # Create temporary JS file
+    fd, js_file = tempfile.mkstemp(suffix='.js', text=True)
+    try:
+        # Write JS commands to file
+        with os.fdopen(fd, 'w') as f:
+            f.write(js_commands)
+        
+        # Build mongosh command
+        mongosh_cmd = f"mongosh"
+        
+        if username and password:
+            mongosh_cmd += f" --username {username} --password '{password}'"
+            if auth_database:
+                mongosh_cmd += f" --authenticationDatabase {auth_database}"
+        
+        mongosh_cmd += f" --host {host} --port {port}"
+        
+        if database:
+            mongosh_cmd += f" {database}"
+        
+        if additional_options:
+            mongosh_cmd += f" {additional_options}"
+        
+        mongosh_cmd += f" --file {js_file}"
+        
+        # Execute JavaScript
+        result = execute_local_command(mongosh_cmd, log, verbose)
+        
+        return result
+        
+    finally:
+        # Clean up temporary file
+        if os.path.exists(js_file):
+            os.remove(js_file)
 
 
 # ============================================================================

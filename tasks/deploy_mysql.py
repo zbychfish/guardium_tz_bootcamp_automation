@@ -11,7 +11,7 @@ from pathlib import Path
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_local_command, execute_commands, execute_mysql_sql, ConfigLoader, download_and_extract
+from core import execute_local_command, execute_commands, execute_mysql_sql, write_file, ConfigLoader, download_and_extract
 import re
 
 
@@ -164,12 +164,11 @@ password={password}
 """
     
     try:
-        # Write .my.cnf file
+        # Write .my.cnf file using core function
         if verbose:
             logger.info(f"Writing configuration to: {my_cnf_path}")
         
-        with open(my_cnf_path, 'w') as f:
-            f.write(my_cnf_content)
+        write_file(my_cnf_path, my_cnf_content)
         
         # Set permissions to 600 (read/write for owner only)
         os.chmod(my_cnf_path, 0o600)

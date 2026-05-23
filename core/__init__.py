@@ -22,12 +22,14 @@ from .utils import parse_key_value           # Extract value from text using reg
 from .utils import ensure_directory          # Create directory if it doesn't exist
 from .utils import read_file                 # Read file contents
 from .utils import write_file                # Write content to file
+from .utils import modify_config_file        # Advanced file modification (insert/replace/append)
 from .utils import retry                     # Retry function execution on failure
 from .utils import wait_for_condition        # Wait for a condition to become true
 from .utils import run_local_command         # Execute command locally (returns CompletedProcess)
 from .utils import execute_local_command     # Execute command locally (returns dict with rc/stdout/stderr)
 from .utils import execute_commands          # Execute list of commands sequentially
 from .utils import execute_mysql_sql         # Execute SQL commands in MySQL
+from .utils import execute_mongo_js          # Execute JavaScript commands in MongoDB
 from .utils import validate_ip               # Validate IP address format
 from .utils import validate_hostname         # Validate hostname format
 from .utils import download_file             # Download file from URL
@@ -47,12 +49,14 @@ __all__ = [
     'ensure_directory',
     'read_file',
     'write_file',
+    'modify_config_file',
     'retry',
     'wait_for_condition',
     'run_local_command',
     'execute_local_command',
     'execute_commands',
     'execute_mysql_sql',
+    'execute_mongo_js',
     'validate_ip',
     'validate_hostname',
     'download_file',

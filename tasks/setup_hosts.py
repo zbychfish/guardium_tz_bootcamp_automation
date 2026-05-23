@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from core.ssh_client import SSHClient
 from core.logger import setup_logger
+from core import modify_config_file
 
 
 def generate_hosts_content(machines: Dict[str, Dict[str, Any]]) -> str:
@@ -166,71 +167,59 @@ def configure_sshd_local(logger) -> bool:
     try:
         sshd_config = "/etc/ssh/sshd_config"
         
-        logger.info("Backing up existing sshd_config")
-        result = subprocess.run(
-            ["cp", sshd_config, f"{sshd_config}.backup"],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            logger.warning(f"Could not backup sshd_config: {result.stderr}")
-        
         logger.info("Modifying SSHD configuration")
         
-        # Read current config
-        with open(sshd_config, 'r') as f:
-            lines = f.readlines()
+        # Replace or add PasswordAuthentication setting
+        if not modify_config_file(
+            path=sshd_config,
+            content='PasswordAuthentication yes\n',
+            mode='replace',
+            pattern=r'^#*\s*PasswordAuthentication',
+            backup=True,
+            logger=logger
+        ):
+            # If pattern not found, append it
+            modify_config_file(
+                path=sshd_config,
+                content='\n# Added by automation\nPasswordAuthentication yes\n',
+                mode='append',
+                backup=False,
+                logger=logger
+            )
         
-        # Modify configuration
-        new_lines = []
-        settings_found = {
-            'PasswordAuthentication': False,
-            'PermitRootLogin': False,
-            'LoginGraceTime': False
-        }
+        # Replace or add PermitRootLogin setting
+        if not modify_config_file(
+            path=sshd_config,
+            content='PermitRootLogin yes\n',
+            mode='replace',
+            pattern=r'^#*\s*PermitRootLogin',
+            backup=False,
+            logger=logger
+        ):
+            modify_config_file(
+                path=sshd_config,
+                content='PermitRootLogin yes\n',
+                mode='append',
+                backup=False,
+                logger=logger
+            )
         
-        for line in lines:
-            stripped = line.strip()
-            
-            # Handle PasswordAuthentication
-            if stripped.startswith('PasswordAuthentication'):
-                new_lines.append('PasswordAuthentication yes\n')
-                settings_found['PasswordAuthentication'] = True
-            # Handle PermitRootLogin
-            elif stripped.startswith('PermitRootLogin'):
-                new_lines.append('PermitRootLogin yes\n')
-                settings_found['PermitRootLogin'] = True
-            # Handle LoginGraceTime
-            elif stripped.startswith('LoginGraceTime'):
-                new_lines.append('LoginGraceTime 0\n')
-                settings_found['LoginGraceTime'] = True
-            else:
-                new_lines.append(line)
-        
-        # Add settings if not found
-        if not settings_found['PasswordAuthentication']:
-            new_lines.append('\n# Added by automation\n')
-            new_lines.append('PasswordAuthentication yes\n')
-        if not settings_found['PermitRootLogin']:
-            new_lines.append('PermitRootLogin yes\n')
-        if not settings_found['LoginGraceTime']:
-            new_lines.append('LoginGraceTime 0\n')
-        
-        # Write new config
-        temp_file = "/tmp/sshd_config.new"
-        with open(temp_file, 'w') as f:
-            f.writelines(new_lines)
-        
-        # Install new config
-        logger.info("Installing new sshd_config")
-        result = subprocess.run(
-            ["mv", temp_file, sshd_config],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            logger.error(f"Failed to install sshd_config: {result.stderr}")
-            return False
+        # Replace or add LoginGraceTime setting
+        if not modify_config_file(
+            path=sshd_config,
+            content='LoginGraceTime 0\n',
+            mode='replace',
+            pattern=r'^#*\s*LoginGraceTime',
+            backup=False,
+            logger=logger
+        ):
+            modify_config_file(
+                path=sshd_config,
+                content='LoginGraceTime 0\n',
+                mode='append',
+                backup=False,
+                logger=logger
+            )
         
         # Set proper permissions
         result = subprocess.run(

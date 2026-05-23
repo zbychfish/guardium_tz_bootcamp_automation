@@ -11,6 +11,33 @@
 #### ✅ DO:
 - **Update CODING_GUIDELINES.md** when adding new patterns
 
+### 0.1. Commented Code Rules
+
+#### ❌ DON'T DELETE:
+- **Commented-out code** (e.g., `# command_to_run()`) - This is temporarily disabled code that may be needed
+- **Alternative implementations** - Code that shows different approaches
+
+#### ✅ CAN DELETE:
+- **Explanatory comments** that are outdated or redundant
+- **TODO comments** that have been completed
+
+**Example of what NOT to delete:**
+```python
+commands = [
+    # "dnf install -y mongodb-enterprise-database",  # DON'T DELETE - alternative option
+    # "dnf install -y mongodb-enterprise-tools",     # DON'T DELETE - alternative option
+    "dnf install -y mongodb-enterprise",             # Current active command
+]
+```
+
+**Why:** Commented code often represents:
+- Alternative installation methods
+- Temporarily disabled features
+- Different configuration options
+- Debugging alternatives
+
+**Rule:** When refactoring, preserve commented code unless explicitly asked to remove it.
+
 ### 1. Code Organization and Refactoring
 
 **ALWAYS follow these rules:**
