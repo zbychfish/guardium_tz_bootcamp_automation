@@ -309,11 +309,23 @@ def main():
         else:
             logger.warning(f"Machine {machine_name} not found in configuration")
     
+    # Marker task: End of initial configuration phase
+    # This task does nothing but serves as a checkpoint for stage mechanism
+    # Use stage="initial_config" in machines_info.json to stop here
+    orchestrator.register_task(
+        task_id="initial_config",
+        task_fn=lambda: True,  # Empty task - always succeeds
+        description="Initial configuration completed - checkpoint for stage mechanism"
+    )
+    
+    # Add more tasks here (e.g., Guardium installation, configuration, etc.)
+    # They will be executed only when running with --continue flag
+    
     # Determine stop_at parameter
     # Priority: --stop-at argument > stage from machines_info.json
     stop_at_task = args.stop_at if args.stop_at else stage
     
-    # Validate stop_at task exists if specified
+    # Validate stop_at task exists if specified (after all tasks are registered)
     if stop_at_task and not args.continue_mode:
         task_ids = [task_id for task_id, _, _ in orchestrator.tasks]
         if stop_at_task not in task_ids:
