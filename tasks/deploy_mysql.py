@@ -137,6 +137,59 @@ FLUSH PRIVILEGES;
     return True
 
 
+def create_mysql_config_file(password: str, logger, verbose: bool = True) -> bool:
+    """
+    Create ~/.my.cnf file for root user with MySQL credentials.
+    This allows passwordless MySQL access for root user.
+    
+    Args:
+        password: MySQL root password
+        logger: Logger instance
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating ~/.my.cnf configuration file")
+        logger.info("=" * 80)
+    
+    import os
+    
+    # Get root home directory
+    home_dir = os.path.expanduser("~")
+    my_cnf_path = os.path.join(home_dir, ".my.cnf")
+    
+    # Create .my.cnf content
+    my_cnf_content = f"""[client]
+user=root
+password={password}
+"""
+    
+    try:
+        # Write .my.cnf file
+        if verbose:
+            logger.info(f"Writing configuration to: {my_cnf_path}")
+        
+        with open(my_cnf_path, 'w') as f:
+            f.write(my_cnf_content)
+        
+        # Set permissions to 600 (read/write for owner only)
+        os.chmod(my_cnf_path, 0o600)
+        
+        if verbose:
+            logger.info(f"✓ Created {my_cnf_path}")
+            logger.info("✓ Set permissions to 600")
+            logger.info("=" * 80)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to create .my.cnf file: {e}")
+        return False
+
+
 def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     """
     Deploy MySQL on local machine (raptor).
@@ -156,10 +209,36 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         logger.info("Starting MySQL deployment on raptor")
         logger.info("=" * 80)
     
+    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
+    password = config.get_custom_variable('pwd')
+
+    # Update system and create necessary directories
+    commands = [
+        "dnf update --exclude=kernel* -y",
+        "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
+    ]
+
+    for i, command in enumerate(commands, 1):
+        logger.info(f"Step {i}/{len(commands)}: {command}")
+        
+        result = execute_local_command(command, logger)
+        
+        if result['rc'] != 0:
+            logger.error(f"Command failed: {command}")
+            logger.error("MySQL deployment failed")
+            return False
+
+    # Create mysql defaults file with password to avoid prompting for password
+    create_mysql_config_file(password, logger, verbose)
+
+    # Download supporting files
+    if not download_and_extract("https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip", "/opt/guardium_tz_bootcamp_automation/upload/", logger, verbose):
+        logger.error("Failed to create MySQL superadmin users")
+        return False
+
     # List of commands to execute
     # Add your MySQL installation commands here
     # commands = [
-    #     "dnf update --exclude=kernel* -y",
     #     "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
     #     "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
     #     "dnf install -y mysql-community-server"
@@ -178,24 +257,20 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #         logger.error("MySQL deployment failed")
     #         return False
     
-    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
-    password = config.get_custom_variable('pwd')
-    
     # Set root password
     # if not set_mysql_root_password(password, logger, verbose):
     #     logger.error("Failed to set MySQL root password")
     #     return False
     
+    # Create ~/.my.cnf configuration file
+    if not create_mysql_config_file(password, logger, verbose):
+        logger.error("Failed to create MySQL configuration file")
+        return False
+    
     # Create superadmin users
     # if not create_mysql_superadmins(password, logger, verbose):
     #     logger.error("Failed to create MySQL superadmin users")
     #     return False
-
-    if not download_and_extract("https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip", "/opt/guardium_tz_bootcamp_automation/", logger, verbose):
-        logger.error("Failed to create MySQL superadmin users")
-        return False
-
-
 
     if verbose:
         logger.info("=" * 80)
