@@ -55,7 +55,6 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
     if verbose:
         logger.info("Temporary password extracted successfully")
     
-    # Step 2: Change root@localhost password and create root@'%'
     if verbose:
         logger.info("Step 2: Changing root@localhost password and creating root@'%' user")
     
@@ -210,13 +209,13 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     password = config.get_custom_variable('pwd')
 
     # Update system and create necessary directories
-    # commands = [
-    #     "dnf update --exclude=kernel* -y",
-    #     "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
-    # ]
-    # if not execute_commands(commands, logger, verbose):
-    #     logger.error("Initial setup commands failed")
-    #     return False
+    commands = [
+        "dnf update --exclude=kernel* -y",
+        "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Initial setup commands failed")
+        return False
 
     # Create mysql defaults file with password to avoid prompting for password
     create_mysql_config_file(password, logger, verbose)
@@ -226,23 +225,22 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         logger.error("Failed to create MySQL superadmin users")
         return False
 
-    # List of commands to execute
-    # Add your MySQL installation commands here
-    # commands = [
-    #     "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
-    #     "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
-    #     "dnf install -y mysql-community-server"
-    #     "systemctl start mysqld",
-    #     "systemctl enable mysqld"
-    # ]
-    # if not execute_commands(commands, logger, verbose):
-    #     logger.error("Initial setup commands failed")
-    #     return False
+    # Install MySQL server
+    commands = [
+        "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
+        "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
+        "dnf install -y mysql-community-server"
+        "systemctl start mysqld",
+        "systemctl enable mysqld"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Initial setup commands failed")
+        return False
     
     # Set root password
-    # if not set_mysql_root_password(password, logger, verbose):
-    #     logger.error("Failed to set MySQL root password")
-    #     return False
+    if not set_mysql_root_password(password, logger, verbose):
+        logger.error("Failed to set MySQL root password")
+        return False
     
     # Create ~/.my.cnf configuration file
     if not create_mysql_config_file(password, logger, verbose):
@@ -250,9 +248,9 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         return False
     
     # Create superadmin users
-    # if not create_mysql_superadmins(password, logger, verbose):
-    #     logger.error("Failed to create MySQL superadmin users")
-    #     return False
+    if not create_mysql_superadmins(password, logger, verbose):
+        logger.error("Failed to create MySQL superadmin users")
+        return False
 
     # Import salesDB database
     commands = [
