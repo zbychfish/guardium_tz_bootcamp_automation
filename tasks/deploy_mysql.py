@@ -191,7 +191,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #     logger.error("Failed to create MySQL superadmin users")
     #     return False
 
-    if not download_and_extract("https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip", "/opt/guardium_tz_bootcamp_automation/", logger=logger, verbose=False):
+    if not download_and_extract("https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip", "/opt/guardium_tz_bootcamp_automation/", logger, verbose):
         logger.error("Failed to create MySQL superadmin users")
         return False
 
