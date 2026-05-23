@@ -20,6 +20,7 @@ from .utils import (
     retry,
     wait_for_condition,
     run_local_command,
+    execute_local_command,
     validate_ip,
     validate_hostname
 )
@@ -40,6 +41,7 @@ __all__ = [
     'retry',
     'wait_for_condition',
     'run_local_command',
+    'execute_local_command',
     'validate_ip',
     'validate_hostname'
 ]

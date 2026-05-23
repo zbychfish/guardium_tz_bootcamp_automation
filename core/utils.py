@@ -251,6 +251,60 @@ def run_local_command(
     return result
 
 
+def execute_local_command(command: str, logger=None) -> dict:
+    """
+    Execute a command locally as root and return detailed result.
+    
+    This is a higher-level wrapper around run_local_command() that:
+    - Logs command execution
+    - Returns dict with rc, stdout, stderr
+    - Logs output and errors
+    
+    Args:
+        command: Command to execute
+        logger: Logger instance (uses module logger if None)
+        
+    Returns:
+        Dictionary with 'rc' (return code), 'stdout', and 'stderr'
+    """
+    log = logger if logger else globals()['logger']
+    log.info(f"Executing: {command}")
+    
+    try:
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate()
+        
+        result = {
+            'rc': process.returncode,
+            'stdout': stdout.strip(),
+            'stderr': stderr.strip()
+        }
+        
+        if result['rc'] == 0:
+            if result['stdout']:
+                log.info(f"Output: {result['stdout']}")
+        else:
+            log.error(f"Command failed with return code {result['rc']}")
+            if result['stderr']:
+                log.error(f"Error: {result['stderr']}")
+        
+        return result
+        
+    except Exception as e:
+        log.error(f"Exception executing command: {e}")
+        return {
+            'rc': 1,
+            'stdout': '',
+            'stderr': str(e)
+        }
+
+
 # ============================================================================
 # Validation
 # ============================================================================
