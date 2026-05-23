@@ -19,7 +19,7 @@ from core.config_loader import ConfigLoader
 from core.logger import setup_logger
 from tasks.setup_hosts import setup_hosts_locally, setup_hosts_on_remote_machine
 from tasks.deploy_mysql import deploy_mysql_on_raptor
-
+from tasks.deploy_mongo import deploy_mongo_on_raptor
 
 class AutomationOrchestrator:
     """
@@ -377,6 +377,14 @@ def main():
     )
     
     # Add more tasks here - they will be executed only when running with --continue flag
+
+    # Deploy MongoDB on raptor
+    orchestrator.register_task(
+        task_id="deploy_mongo_on_raptor",
+        task_fn=lambda: deploy_mongo_on_raptor(logger, verbose=args.verbose),
+        description="Deploy and configure MongoDB on raptor machine"
+    )
+
 
     # Determine stop_at parameter
     # Priority: --stop-at argument > stage from machines_info.json
