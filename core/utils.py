@@ -309,6 +309,78 @@ def execute_local_command(command: str, logger=None) -> dict:
 
 
 # ============================================================================
+# Database Operations
+# ============================================================================
+
+def execute_mysql_sql(
+    sql_commands: str,
+    username: str = "root",
+    password: str = "",
+    host: str = "localhost",
+    database: str = "",
+    additional_options: str = "",
+    logger=None
+) -> dict:
+    """
+    Execute SQL commands in MySQL.
+    
+    This is a general-purpose function for executing SQL in MySQL.
+    Creates a temporary SQL file, executes it, and cleans up.
+    
+    Args:
+        sql_commands: SQL commands to execute (can be multi-line)
+        username: MySQL username (default: root)
+        password: MySQL password (default: empty)
+        host: MySQL host (default: localhost)
+        database: Database name (default: empty - no database selected)
+        additional_options: Additional mysql CLI options (e.g., "--connect-expired-password")
+        logger: Logger instance (uses module logger if None)
+        
+    Returns:
+        Dictionary with 'rc' (return code), 'stdout', and 'stderr'
+    """
+    import tempfile
+    import os
+    
+    log = logger if logger else globals()['logger']
+    log.info(f"Executing SQL commands as {username}@{host}")
+    
+    # Create temporary SQL file
+    fd, sql_file = tempfile.mkstemp(suffix='.sql', text=True)
+    try:
+        # Write SQL commands to file
+        with os.fdopen(fd, 'w') as f:
+            f.write(sql_commands)
+        
+        # Build mysql command
+        mysql_cmd = f"mysql -u{username}"
+        
+        if password:
+            mysql_cmd += f" -p'{password}'"
+        
+        if host != "localhost":
+            mysql_cmd += f" -h{host}"
+        
+        if database:
+            mysql_cmd += f" {database}"
+        
+        if additional_options:
+            mysql_cmd += f" {additional_options}"
+        
+        mysql_cmd += f" < {sql_file}"
+        
+        # Execute SQL
+        result = execute_local_command(mysql_cmd, log)
+        
+        return result
+        
+    finally:
+        # Clean up temporary file
+        if os.path.exists(sql_file):
+            os.remove(sql_file)
+
+
+# ============================================================================
 # Validation
 # ============================================================================
 

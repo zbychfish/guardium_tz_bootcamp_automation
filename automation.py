@@ -28,7 +28,7 @@ class AutomationOrchestrator:
     """
     
     def __init__(self, config_file: str = "config/config.yaml", state_file: str = "state.json",
-                 machines_info_file: str = "/root/machines_info.json"):
+                 machines_info_file: str = "/root/machines_info.json", verbose: bool = False):
         """
         Initialize the orchestrator.
         
@@ -36,11 +36,13 @@ class AutomationOrchestrator:
             config_file: Path to configuration file
             state_file: Path to state tracking file
             machines_info_file: Path to JSON file containing machine information
+            verbose: Enable verbose logging
         """
         self.logger = setup_logger("AutomationOrchestrator")
         self.config = ConfigLoader(config_file, machines_info_file)
         self.state = StateManager(state_file)
         self.tasks: List[tuple] = []
+        self.verbose = verbose
         
         self.logger.info("Automation Orchestrator initialized")
         self.logger.info(f"Config: {config_file}")
@@ -79,22 +81,31 @@ class AutomationOrchestrator:
             True if task executed successfully, False otherwise
         """
         if self.state.is_completed(task_id):
-            self.logger.info(f"⏭  Skipping (already completed): {task_id}")
+            if self.verbose:
+                self.logger.info(f"⏭  Skipping (already completed): {task_id}")
+            else:
+                self.logger.info(f"⏭  {task_id}")
             return True
         
-        self.logger.info(f"➤  Running: {task_id}")
-        if description:
-            self.logger.info(f"   Description: {description}")
+        if self.verbose:
+            self.logger.info(f"➤  Running: {task_id}")
+            if description:
+                self.logger.info(f"   Description: {description}")
+        else:
+            self.logger.info(f"➤  {task_id}")
         
         try:
             result = task_fn()
             self.state.mark_completed(task_id)
-            self.logger.info(f"✓  Completed: {task_id}")
+            if self.verbose:
+                self.logger.info(f"✓  Completed: {task_id}")
+            else:
+                self.logger.info(f"✓  {task_id}")
             return True
             
         except Exception as e:
             self.logger.error(f"✗  Failed: {task_id}")
-            self.logger.error(f"   Error: {str(e)}", exc_info=True)
+            self.logger.error(f"   Error: {str(e)}", exc_info=self.verbose)
             return False
     
     def run_all_tasks(self, stop_at: Optional[str] = None, continue_mode: bool = False) -> bool:
@@ -146,10 +157,13 @@ class AutomationOrchestrator:
         self.logger.info("State reset - all tasks will be re-executed")
     
     def show_status(self):
-        """Display current execution status."""
+        """Display current execution status with task descriptions."""
         completed = self.state.get_completed_tasks()
         total = len(self.tasks)
         stage = self.config.get_custom_variable('stage')
+        
+        # Create task map for descriptions
+        task_map = {task_id: (desc, idx) for idx, (task_id, _, desc) in enumerate(self.tasks, 1)}
         
         print("\n" + "=" * 80)
         print("AUTOMATION STATUS")
@@ -171,17 +185,24 @@ class AutomationOrchestrator:
             marker = "  ✓ "
             if stage and task_id == stage:
                 marker = "  ✓ [STAGE] "
-            print(f"{marker}{task_id}")
+            desc, idx = task_map.get(task_id, ("", 0))
+            if desc:
+                print(f"{marker}[{idx}] {task_id}")
+                print(f"      {desc}")
+            else:
+                print(f"{marker}{task_id}")
         
         if total > len(completed):
             print("\nRemaining tasks:")
-            all_task_ids = [task_id for task_id, _, _ in self.tasks]
-            for task_id in all_task_ids:
+            for task_id, task_fn, desc in self.tasks:
                 if task_id not in completed:
                     marker = "  ○ "
                     if stage and task_id == stage:
                         marker = "  ○ [STAGE] "
-                    print(f"{marker}{task_id}")
+                    idx = task_map[task_id][1]
+                    print(f"{marker}[{idx}] {task_id}")
+                    if desc:
+                        print(f"      {desc}")
         
         print("=" * 80 + "\n")
 
@@ -241,13 +262,21 @@ def main():
         help="Show current execution status"
     )
     
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose output (show full task details and descriptions)"
+    )
+    
     args = parser.parse_args()
     
     # Initialize orchestrator
     orchestrator = AutomationOrchestrator(
         config_file=args.config,
         state_file=args.state,
-        machines_info_file=args.machines_info
+        machines_info_file=args.machines_info,
+        verbose=args.verbose
     )
     
     # Handle special commands
