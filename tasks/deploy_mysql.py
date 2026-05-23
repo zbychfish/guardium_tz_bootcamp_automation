@@ -257,15 +257,19 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #     logger.error("Failed to create MySQL superadmin users")
     #     return False
 
-
-    execute_local_command("mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql", logger, verbose)
+    # Import salesDB database
+    commands = [
+        'mysql -u root -e "CREATE DATABASE IF NOT EXISTS salesDB"',
+        "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql"
+    ]
+    if not create_mysql_config_file(password, logger, verbose):
+        logger.error("Failed to create MySQL configuration file")
+        return False
 
     if verbose:
         logger.info("=" * 80)
         logger.info("MySQL deployment completed successfully")
         logger.info("=" * 80)
     return True
-
-
-
+    
 # Made with Bob
