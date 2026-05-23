@@ -75,9 +75,8 @@ def create_mongodb_admin_user(password: str, logger, verbose: bool = True) -> bo
         logger.info("=" * 80)
     
     # JavaScript commands to create admin user
-    js_commands = f"""use admin
-
-db.createUser({{
+    # Note: We connect directly to admin database, so no need for 'use admin'
+    js_commands = f"""db.createUser({{
   user: "admin",
   pwd: "{password}",
   roles: [ {{ role: "root", db: "admin" }} ]
@@ -95,6 +94,8 @@ db.createUser({{
         logger.error("Failed to create MongoDB admin user")
         if result['stderr']:
             logger.error(f"MongoDB error: {result['stderr']}")
+        if result['stdout']:
+            logger.error(f"MongoDB output: {result['stdout']}")
         return False
     
     if verbose:
@@ -184,12 +185,21 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
         "dnf install -y mongodb-enterprise",
         "systemctl enable mongod",
         "systemctl start mongod",
+        "sleep 5",  # Wait for MongoDB to be ready
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("MongoDB installation failed")
         return False
     
-    # Create admin user
+    # Verify MongoDB is running
+    if verbose:
+        logger.info("Verifying MongoDB is running...")
+    verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
+    if verify_result['rc'] != 0:
+        logger.error("MongoDB service is not running")
+        return False
+    
+    # Create admin user (before enabling authorization)
     if not create_mongodb_admin_user(password, logger, verbose):
         logger.error("Failed to create MongoDB admin user")
         return False
