@@ -258,7 +258,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #     return False
 
 
-    execute_local_command("mysql -u root -p salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql", logger, verbose)
+    execute_local_command("mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql", logger, verbose)
 
     if verbose:
         logger.info("=" * 80)
