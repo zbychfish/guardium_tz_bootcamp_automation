@@ -29,6 +29,9 @@ from .utils import execute_local_command     # Execute command locally (returns 
 from .utils import execute_mysql_sql         # Execute SQL commands in MySQL
 from .utils import validate_ip               # Validate IP address format
 from .utils import validate_hostname         # Validate hostname format
+from .utils import download_file             # Download file from URL
+from .utils import extract_zip               # Extract ZIP archive
+from .utils import download_and_extract      # Download and extract ZIP in one step
 
 __all__ = [
     'StateManager',
@@ -49,7 +52,10 @@ __all__ = [
     'execute_local_command',
     'execute_mysql_sql',
     'validate_ip',
-    'validate_hostname'
+    'validate_hostname',
+    'download_file',
+    'extract_zip',
+    'download_and_extract'
 ]
 
 # Made with Bob

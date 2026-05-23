@@ -9,6 +9,8 @@ import os
 import re
 import time
 import subprocess
+import zipfile
+import requests
 from typing import Optional, Any, Callable
 from pathlib import Path
 from .logger import get_logger
@@ -423,3 +425,172 @@ def validate_hostname(hostname: str) -> bool:
     return bool(re.match(pattern, hostname))
 
 # Made with Bob
+
+
+
+# ============================================================================
+# File Download and Extraction
+# ============================================================================
+
+def download_file(url: str, destination: str, logger=None, verbose: bool = True) -> bool:
+    """
+    Download file from URL to destination path.
+    
+    Args:
+        url: URL to download from (e.g., IBM Box shared link)
+        destination: Local file path to save to
+        logger: Logger instance (uses module logger if None)
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    log = logger if logger else globals()['logger']
+    
+    try:
+        if verbose:
+            log.info(f"Downloading file from: {url}")
+            log.info(f"Destination: {destination}")
+        
+        # Ensure destination directory exists
+        dest_path = Path(destination)
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Download file with streaming to handle large files
+        response = requests.get(url, stream=True, timeout=300)
+        response.raise_for_status()
+        
+        # Get file size if available
+        total_size = int(response.headers.get('content-length', 0))
+        
+        # Write file in chunks
+        downloaded = 0
+        chunk_size = 8192
+        
+        with open(destination, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    
+                    # Log progress for large files
+                    if verbose and total_size > 0:
+                        progress = (downloaded / total_size) * 100
+                        if downloaded % (chunk_size * 100) == 0:  # Log every ~800KB
+                            log.info(f"Progress: {progress:.1f}% ({downloaded}/{total_size} bytes)")
+        
+        if verbose:
+            log.info(f"✓ File downloaded successfully: {destination}")
+            log.info(f"  Size: {downloaded} bytes")
+        
+        return True
+        
+    except requests.exceptions.RequestException as e:
+        log.error(f"Failed to download file: {e}")
+        return False
+    except Exception as e:
+        log.error(f"Error downloading file: {e}")
+        return False
+
+
+def extract_zip(zip_path: str, extract_to: str, logger=None, verbose: bool = True) -> bool:
+    """
+    Extract ZIP archive to specified directory.
+    
+    Args:
+        zip_path: Path to ZIP file
+        extract_to: Directory to extract files to
+        logger: Logger instance (uses module logger if None)
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    log = logger if logger else globals()['logger']
+    
+    try:
+        if verbose:
+            log.info(f"Extracting ZIP archive: {zip_path}")
+            log.info(f"Extract to: {extract_to}")
+        
+        # Ensure extract directory exists
+        extract_path = Path(extract_to)
+        extract_path.mkdir(parents=True, exist_ok=True)
+        
+        # Extract ZIP file
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Get list of files
+            file_list = zip_ref.namelist()
+            
+            if verbose:
+                log.info(f"Archive contains {len(file_list)} file(s)")
+            
+            # Extract all files
+            zip_ref.extractall(extract_to)
+            
+            if verbose:
+                log.info("✓ ZIP archive extracted successfully")
+                log.info(f"  Extracted {len(file_list)} file(s) to: {extract_to}")
+        
+        return True
+        
+    except zipfile.BadZipFile:
+        log.error(f"Invalid ZIP file: {zip_path}")
+        return False
+    except Exception as e:
+        log.error(f"Error extracting ZIP file: {e}")
+        return False
+
+
+def download_and_extract(url: str, extract_to: str, logger=None, verbose: bool = True) -> bool:
+    """
+    Download ZIP file from URL and extract it to specified directory.
+    
+    This is a convenience function that combines download_file() and extract_zip().
+    The ZIP file is downloaded to a temporary location and deleted after extraction.
+    
+    Args:
+        url: URL to download ZIP from (e.g., IBM Box shared link)
+        extract_to: Directory to extract files to
+        logger: Logger instance (uses module logger if None)
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+        
+    Example:
+        >>> download_and_extract(
+        ...     "https://ibm.box.com/shared/static/abc123.zip",
+        ...     "upload/",
+        ...     logger
+        ... )
+    """
+    log = logger if logger else globals()['logger']
+    
+    try:
+        # Create temporary file for download
+        import tempfile
+        fd, temp_zip = tempfile.mkstemp(suffix='.zip')
+        os.close(fd)
+        
+        try:
+            # Download file
+            if not download_file(url, temp_zip, log, verbose):
+                return False
+            
+            # Extract file
+            if not extract_zip(temp_zip, extract_to, log, verbose):
+                return False
+            
+            return True
+            
+        finally:
+            # Clean up temporary file
+            if os.path.exists(temp_zip):
+                os.remove(temp_zip)
+                if verbose:
+                    log.info("Cleaned up temporary ZIP file")
+        
+    except Exception as e:
+        log.error(f"Error in download_and_extract: {e}")
+        return False

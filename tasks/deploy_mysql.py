@@ -11,7 +11,7 @@ from pathlib import Path
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_local_command, execute_mysql_sql, ConfigLoader
+from core import execute_local_command, execute_mysql_sql, ConfigLoader, download_and_extract
 import re
 
 
@@ -91,6 +91,52 @@ FLUSH PRIVILEGES;
     return True
 
 
+def create_mysql_superadmins(password: str, logger, verbose: bool = True) -> bool:
+    """
+    Create MySQL superadmin users 'tom' and 'jerry' with full privileges.
+    
+    Args:
+        password: Password to set for both users
+        logger: Logger instance
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating MySQL superadmin users (tom, jerry)")
+        logger.info("=" * 80)
+    
+    sql_commands = f"""CREATE USER IF NOT EXISTS 'tom'@'%' IDENTIFIED BY '{password}';
+CREATE USER IF NOT EXISTS 'jerry'@'%' IDENTIFIED BY '{password}';
+GRANT ALL PRIVILEGES ON *.* TO 'tom'@'%' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON *.* TO 'jerry'@'%' WITH GRANT OPTION;
+FLUSH PRIVILEGES;
+"""
+    
+    result = execute_mysql_sql(
+        sql_commands=sql_commands,
+        username="root",
+        password=password,
+        logger=logger,
+        verbose=verbose
+    )
+    
+    if result['rc'] != 0:
+        logger.error("Failed to create MySQL superadmin users")
+        if result['stderr']:
+            logger.error(f"MySQL error: {result['stderr']}")
+        return False
+    
+    if verbose:
+        logger.info("✓ Created superadmin user 'tom'@'%'")
+        logger.info("✓ Created superadmin user 'jerry'@'%'")
+        logger.info("=" * 80)
+    
+    return True
+
+
 def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     """
     Deploy MySQL on local machine (raptor).
@@ -134,7 +180,22 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     
     config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
-    set_mysql_root_password(password, logger, verbose)
+    
+    # Set root password
+    # if not set_mysql_root_password(password, logger, verbose):
+    #     logger.error("Failed to set MySQL root password")
+    #     return False
+    
+    # Create superadmin users
+    # if not create_mysql_superadmins(password, logger, verbose):
+    #     logger.error("Failed to create MySQL superadmin users")
+    #     return False
+
+    if not download_and_extract("https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip", "/opt/guardium_tz_bootcamp_automation/", logger=logger, verbose=False):
+        logger.error("Failed to create MySQL superadmin users")
+        return False
+
+
 
     if verbose:
         logger.info("=" * 80)

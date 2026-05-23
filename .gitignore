@@ -60,6 +60,9 @@ Thumbs.db
 temp/
 tmp/
 
+# Upload directory (downloaded files)
+upload/
+
 # SSH keys (never commit!)
 *.pem
 *.key
