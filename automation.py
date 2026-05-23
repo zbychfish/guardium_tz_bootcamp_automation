@@ -360,6 +360,13 @@ def main():
         else:
             logger.warning(f"Machine {machine_name} not found in configuration")
     
+    # Deploy MySQL on raptor
+    orchestrator.register_task(
+        task_id="deploy_mysql_on_raptor",
+        task_fn=lambda: deploy_mysql_on_raptor(logger, verbose=args.verbose),
+        description="Deploy and configure MySQL on raptor machine"
+    )
+    
     # Marker task: End of initial configuration phase
     # This task does nothing but serves as a checkpoint for stage mechanism
     # Use stage="initial_config" in machines_info.json to stop here
@@ -370,14 +377,7 @@ def main():
     )
     
     # Add more tasks here - they will be executed only when running with --continue flag
-    
-    # Deploy MySQL on raptor
-    orchestrator.register_task(
-        task_id="deploy_mysql_on_raptor",
-        task_fn=lambda: deploy_mysql_on_raptor(logger, verbose=args.verbose),
-        description="Deploy and configure MySQL on raptor machine"
-    )
-    
+
     # Determine stop_at parameter
     # Priority: --stop-at argument > stage from machines_info.json
     stop_at_task = args.stop_at if args.stop_at else stage
