@@ -96,12 +96,13 @@ class AutomationOrchestrator:
             self.logger.error(f"   Error: {str(e)}", exc_info=True)
             return False
     
-    def run_all_tasks(self, stop_at: Optional[str] = None) -> bool:
+    def run_all_tasks(self, stop_at: Optional[str] = None, continue_mode: bool = False) -> bool:
         """
         Execute all registered tasks in sequence.
         
         Args:
-            stop_at: Optional task_id to stop execution at
+            stop_at: Optional task_id to stop execution at (from stage parameter)
+            continue_mode: If True, ignore stop_at and run all remaining tasks
             
         Returns:
             True if all tasks completed successfully, False otherwise
@@ -109,6 +110,12 @@ class AutomationOrchestrator:
         self.logger.info("=" * 80)
         self.logger.info("Starting automation execution")
         self.logger.info(f"Total tasks registered: {len(self.tasks)}")
+        if continue_mode:
+            self.logger.info("Mode: CONTINUE - executing all remaining tasks")
+        elif stop_at:
+            self.logger.info(f"Mode: INITIAL - stopping at stage: {stop_at}")
+        else:
+            self.logger.info("Mode: FULL - executing all tasks")
         self.logger.info("=" * 80)
         
         for task_id, task_fn, description in self.tasks:
@@ -118,9 +125,14 @@ class AutomationOrchestrator:
                 self.logger.error("Task execution failed. Stopping.")
                 return False
             
-            if stop_at and task_id == stop_at:
-                self.logger.info(f"Stopping at requested task: {stop_at}")
-                break
+            # Stop at stage only if not in continue mode
+            if not continue_mode and stop_at and task_id == stop_at:
+                self.logger.info("=" * 80)
+                self.logger.info(f"✓ Reached stage checkpoint: {stop_at}")
+                self.logger.info("Initial setup phase completed successfully")
+                self.logger.info("To continue with remaining tasks, run: python automation.py --continue")
+                self.logger.info("=" * 80)
+                return True
         
         self.logger.info("=" * 80)
         self.logger.info("Automation execution completed successfully")
@@ -136,6 +148,7 @@ class AutomationOrchestrator:
         """Display current execution status."""
         completed = self.state.get_completed_tasks()
         total = len(self.tasks)
+        stage = self.config.get_custom_variable('stage')
         
         print("\n" + "=" * 80)
         print("AUTOMATION STATUS")
@@ -143,9 +156,32 @@ class AutomationOrchestrator:
         print(f"Total tasks: {total}")
         print(f"Completed: {len(completed)}")
         print(f"Remaining: {total - len(completed)}")
+        
+        if stage:
+            print(f"\nStage checkpoint: {stage}")
+            # Check if stage task is completed
+            if stage in completed:
+                print(f"  ✓ Stage reached - run with --continue to proceed")
+            else:
+                print(f"  ⧗ Stage not yet reached")
+        
         print("\nCompleted tasks:")
         for task_id in completed:
-            print(f"  ✓ {task_id}")
+            marker = "  ✓ "
+            if stage and task_id == stage:
+                marker = "  ✓ [STAGE] "
+            print(f"{marker}{task_id}")
+        
+        if total > len(completed):
+            print("\nRemaining tasks:")
+            all_task_ids = [task_id for task_id, _, _ in self.tasks]
+            for task_id in all_task_ids:
+                if task_id not in completed:
+                    marker = "  ○ "
+                    if stage and task_id == stage:
+                        marker = "  ○ [STAGE] "
+                    print(f"{marker}{task_id}")
+        
         print("=" * 80 + "\n")
 
 
@@ -176,7 +212,14 @@ def main():
     
     parser.add_argument(
         "--stop-at",
-        help="Stop execution at specified task ID"
+        help="Stop execution at specified task ID (overrides stage from machines_info.json)"
+    )
+    
+    parser.add_argument(
+        "--continue",
+        dest="continue_mode",
+        action="store_true",
+        help="Continue execution of remaining tasks (ignores stage parameter)"
     )
     
     parser.add_argument(
@@ -222,6 +265,13 @@ def main():
     else:
         logger.warning("No root password (pwd) found in custom_variables - password will not be changed")
     
+    # Get stage from custom_variables (defines where to stop in initial run)
+    stage = orchestrator.config.get_custom_variable('stage')
+    if stage:
+        logger.info(f"Stage parameter found: '{stage}' - initial run will stop at this task")
+    else:
+        logger.info("No stage parameter found - will execute all tasks")
+    
     # Setup /etc/hosts, SSHD, and root password on local machine (raptor)
     orchestrator.register_task(
         task_id="setup_local_raptor",
@@ -259,8 +309,23 @@ def main():
         else:
             logger.warning(f"Machine {machine_name} not found in configuration")
     
+    # Determine stop_at parameter
+    # Priority: --stop-at argument > stage from machines_info.json
+    stop_at_task = args.stop_at if args.stop_at else stage
+    
+    # Validate stop_at task exists if specified
+    if stop_at_task and not args.continue_mode:
+        task_ids = [task_id for task_id, _, _ in orchestrator.tasks]
+        if stop_at_task not in task_ids:
+            logger.error(f"Stage task '{stop_at_task}' not found in registered tasks")
+            logger.error(f"Available task IDs: {', '.join(task_ids)}")
+            return 1
+    
     # Run all tasks
-    success = orchestrator.run_all_tasks(stop_at=args.stop_at)
+    success = orchestrator.run_all_tasks(
+        stop_at=stop_at_task,
+        continue_mode=args.continue_mode
+    )
     
     return 0 if success else 1
 

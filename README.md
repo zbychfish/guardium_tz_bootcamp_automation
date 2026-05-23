@@ -5,6 +5,7 @@ A flexible, extensible Python framework for automating machine configuration and
 ## 🎯 Features
 
 - **Task Orchestration** - Sequential task execution with state tracking
+- **Stage Mechanism** - Control execution flow with checkpoints for initial vs. manual runs
 - **SSH Operations** - Built-in SSH client for remote command execution
 - **State Management** - Resume execution from where you left off
 - **Configuration Management** - YAML-based configuration with environment variable overrides
@@ -205,12 +206,41 @@ python automation.py --machines-info /path/to/machines_info.json
 # Stop at specific task
 python automation.py --stop-at task_003
 
+# Continue execution after stage checkpoint
+python automation.py --continue
+
 # Show execution status
 python automation.py --status
 
 # Reset state and start fresh
 python automation.py --reset
 ```
+
+### Stage Mechanism (Initial vs. Manual Execution)
+
+The framework supports a **stage mechanism** that allows you to control execution flow:
+
+```bash
+# Initial run (automatic via post-deploy)
+# Reads 'stage' from machines_info.json and stops at that checkpoint
+python automation.py
+
+# Continue manually after initial setup
+# Ignores stage and executes all remaining tasks
+python automation.py --continue
+
+# Check status and see stage checkpoint
+python automation.py --status
+```
+
+**Example workflow:**
+1. TechZone deploys VMs and runs automation automatically
+2. Automation reads `stage: "setup_remote_toolnode"` from machines_info.json
+3. Executes tasks up to and including "setup_remote_toolnode"
+4. Stops with message: "To continue with remaining tasks, run: python automation.py --continue"
+5. Later, manually run `python automation.py --continue` to complete remaining tasks
+
+**See [STAGE_MECHANISM.md](STAGE_MECHANISM.md) for detailed documentation.**
 
 ### Example: Accessing Machine Information
 
