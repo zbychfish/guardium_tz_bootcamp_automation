@@ -26,6 +26,7 @@ from .utils import retry                     # Retry function execution on failu
 from .utils import wait_for_condition        # Wait for a condition to become true
 from .utils import run_local_command         # Execute command locally (returns CompletedProcess)
 from .utils import execute_local_command     # Execute command locally (returns dict with rc/stdout/stderr)
+from .utils import execute_commands          # Execute list of commands sequentially
 from .utils import execute_mysql_sql         # Execute SQL commands in MySQL
 from .utils import validate_ip               # Validate IP address format
 from .utils import validate_hostname         # Validate hostname format
@@ -50,6 +51,7 @@ __all__ = [
     'wait_for_condition',
     'run_local_command',
     'execute_local_command',
+    'execute_commands',
     'execute_mysql_sql',
     'validate_ip',
     'validate_hostname',

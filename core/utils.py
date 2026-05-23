@@ -313,6 +313,58 @@ def execute_local_command(command: str, logger=None, verbose: bool = True) -> di
         }
 
 
+def execute_commands(commands: list, logger=None, verbose: bool = True, stop_on_error: bool = True) -> bool:
+    """
+    Execute a list of shell commands sequentially.
+    
+    Args:
+        commands: List of command strings to execute
+        logger: Logger instance (uses module logger if None)
+        verbose: Enable verbose logging (default: True)
+        stop_on_error: Stop execution if a command fails (default: True)
+        
+    Returns:
+        True if all commands succeeded, False if any failed
+        
+    Example:
+        >>> commands = [
+        ...     "dnf update -y",
+        ...     "dnf install -y mysql-server",
+        ...     "systemctl start mysqld"
+        ... ]
+        >>> execute_commands(commands, logger)
+    """
+    log = logger if logger else globals()['logger']
+    
+    total = len(commands)
+    failed_commands = []
+    
+    for i, command in enumerate(commands, 1):
+        if verbose:
+            log.info(f"Step {i}/{total}: {command}")
+        
+        result = execute_local_command(command, log, verbose)
+        
+        if result['rc'] != 0:
+            log.error(f"Command failed: {command}")
+            failed_commands.append(command)
+            
+            if stop_on_error:
+                log.error(f"Stopping execution due to error")
+                return False
+    
+    if failed_commands:
+        log.error(f"Failed commands: {len(failed_commands)}/{total}")
+        for cmd in failed_commands:
+            log.error(f"  - {cmd}")
+        return False
+    
+    if verbose:
+        log.info(f"✓ All {total} commands executed successfully")
+    
+    return True
+
+
 # ============================================================================
 # Database Operations
 # ============================================================================

@@ -11,7 +11,7 @@ from pathlib import Path
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_local_command, execute_mysql_sql, ConfigLoader, download_and_extract
+from core import execute_local_command, execute_commands, execute_mysql_sql, ConfigLoader, download_and_extract
 import re
 
 
@@ -33,11 +33,10 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
         logger.info("Setting MySQL root password")
         logger.info("=" * 80)
     
-    # Step 1: Extract temporary password from mysqld.log
     if verbose:
-        logger.info("Step 1: Extracting temporary password from /var/log/mysqld.log")
+        logger.info("Extracting temporary password from /var/log/mysqld.log")
     result = execute_local_command(
-        "sudo grep 'temporary password' /var/log/mysqld.log",
+        "grep 'temporary password' /var/log/mysqld.log",
         logger,
         verbose
     )
@@ -46,8 +45,6 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
         logger.error("Failed to extract temporary password from mysqld.log")
         return False
     
-    # Parse temporary password from output
-    # Expected format: "A temporary password is generated for root@localhost: <password>"
     temp_password_match = re.search(r'temporary password.*:\s*(\S+)', result['stdout'])
     if not temp_password_match:
         logger.error("Could not parse temporary password from log")
@@ -218,15 +215,9 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
     ]
 
-    for i, command in enumerate(commands, 1):
-        logger.info(f"Step {i}/{len(commands)}: {command}")
-        
-        result = execute_local_command(command, logger)
-        
-        if result['rc'] != 0:
-            logger.error(f"Command failed: {command}")
-            logger.error("MySQL deployment failed")
-            return False
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Initial setup commands failed")
+        return False
 
     # Create mysql defaults file with password to avoid prompting for password
     create_mysql_config_file(password, logger, verbose)
@@ -246,16 +237,10 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #     "systemctl enable mysqld"
     # ]
     
-    # # Execute each command
-    # for i, command in enumerate(commands, 1):
-    #     logger.info(f"Step {i}/{len(commands)}: {command}")
-        
-    #     result = execute_local_command(command, logger)
-        
-    #     if result['rc'] != 0:
-    #         logger.error(f"Command failed: {command}")
-    #         logger.error("MySQL deployment failed")
-    #         return False
+    # if not execute_commands(commands, logger, verbose):
+    #     logger.error("Initial setup commands failed")
+    #     return False
+    
     
     # Set root password
     # if not set_mysql_root_password(password, logger, verbose):
@@ -272,11 +257,15 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #     logger.error("Failed to create MySQL superadmin users")
     #     return False
 
+
+    execute_local_command("mysql -u root -p salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql", logger, verbose)
+
     if verbose:
         logger.info("=" * 80)
         logger.info("MySQL deployment completed successfully")
         logger.info("=" * 80)
     return True
+
 
 
 # Made with Bob
