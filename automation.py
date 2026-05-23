@@ -328,7 +328,8 @@ def main():
             all_machines=machines,
             logger=logger,
             configure_sshd=True,
-            root_password=root_password
+            root_password=root_password,
+            verbose=args.verbose
         ),
         description="Setup /etc/hosts, SSHD, and root password on local machine (raptor)"
     )
@@ -351,7 +352,8 @@ def main():
                     logger=logger,
                     use_private_ip=True,
                     configure_sshd=True,
-                    root_password=root_password
+                    root_password=root_password,
+                    verbose=args.verbose
                 ),
                 description=f"Setup /etc/hosts, SSHD, and root password on {machine_name}"
             )
@@ -372,7 +374,7 @@ def main():
     # Deploy MySQL on raptor
     orchestrator.register_task(
         task_id="deploy_mysql_on_raptor",
-        task_fn=lambda: deploy_mysql_on_raptor(logger),
+        task_fn=lambda: deploy_mysql_on_raptor(logger, verbose=args.verbose),
         description="Deploy and configure MySQL on raptor machine"
     )
     

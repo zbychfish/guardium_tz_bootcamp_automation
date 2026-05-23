@@ -254,7 +254,7 @@ def run_local_command(
     return result
 
 
-def execute_local_command(command: str, logger=None) -> dict:
+def execute_local_command(command: str, logger=None, verbose: bool = True) -> dict:
     """
     Execute a command locally as root and return detailed result.
     
@@ -266,12 +266,15 @@ def execute_local_command(command: str, logger=None) -> dict:
     Args:
         command: Command to execute
         logger: Logger instance (uses module logger if None)
+        verbose: If True, log command and output; if False, only log errors
         
     Returns:
         Dictionary with 'rc' (return code), 'stdout', and 'stderr'
     """
     log = logger if logger else globals()['logger']
-    log.info(f"Executing: {command}")
+    
+    if verbose:
+        log.info(f"Executing: {command}")
     
     try:
         process = subprocess.Popen(
@@ -290,7 +293,7 @@ def execute_local_command(command: str, logger=None) -> dict:
         }
         
         if result['rc'] == 0:
-            if result['stdout']:
+            if verbose and result['stdout']:
                 log.info(f"Output: {result['stdout']}")
         else:
             log.error(f"Command failed with return code {result['rc']}")
@@ -319,7 +322,8 @@ def execute_mysql_sql(
     host: str = "localhost",
     database: str = "",
     additional_options: str = "",
-    logger=None
+    logger=None,
+    verbose: bool = True
 ) -> dict:
     """
     Execute SQL commands in MySQL.
@@ -335,6 +339,7 @@ def execute_mysql_sql(
         database: Database name (default: empty - no database selected)
         additional_options: Additional mysql CLI options (e.g., "--connect-expired-password")
         logger: Logger instance (uses module logger if None)
+        verbose: If True, log command and output; if False, only log errors
         
     Returns:
         Dictionary with 'rc' (return code), 'stdout', and 'stderr'
@@ -343,7 +348,9 @@ def execute_mysql_sql(
     import os
     
     log = logger if logger else globals()['logger']
-    log.info(f"Executing SQL commands as {username}@{host}")
+    
+    if verbose:
+        log.info(f"Executing SQL commands as {username}@{host}")
     
     # Create temporary SQL file
     fd, sql_file = tempfile.mkstemp(suffix='.sql', text=True)
@@ -370,7 +377,7 @@ def execute_mysql_sql(
         mysql_cmd += f" < {sql_file}"
         
         # Execute SQL
-        result = execute_local_command(mysql_cmd, log)
+        result = execute_local_command(mysql_cmd, log, verbose)
         
         return result
         

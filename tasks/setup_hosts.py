@@ -426,7 +426,8 @@ fi
 
 def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
                         configure_sshd: bool = True,
-                        root_password: Optional[str] = None) -> bool:
+                        root_password: Optional[str] = None,
+                        verbose: bool = True) -> bool:
     """
     Setup /etc/hosts, SSHD, and root password on local machine (raptor).
     
@@ -435,6 +436,7 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
         logger: Logger instance
         configure_sshd: Whether to configure SSHD (default: True)
         root_password: Root password to set (optional)
+        verbose: Enable verbose logging (default: True)
         
     Returns:
         True if successful, False otherwise
@@ -477,7 +479,8 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
                                   use_private_ip: bool = True,
                                   ssh_port: int = 2223,
                                   configure_sshd: bool = True,
-                                  root_password: Optional[str] = None) -> bool:
+                                  root_password: Optional[str] = None,
+                                  verbose: bool = True) -> bool:
     """
     Setup /etc/hosts, SSHD, and root password on a remote machine via SSH.
     

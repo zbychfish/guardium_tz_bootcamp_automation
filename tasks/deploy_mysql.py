@@ -5,7 +5,6 @@ MySQL Deployment Task
 Handles MySQL installation and configuration on local machine (raptor)
 """
 
-from calendar import c
 import sys
 from pathlib import Path
 
@@ -16,7 +15,7 @@ from core import execute_local_command, execute_mysql_sql, ConfigLoader
 import re
 
 
-def set_mysql_root_password(new_password: str, logger) -> bool:
+def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> bool:
     """
     Set MySQL root password by extracting temporary password and changing it.
     Also creates root@'%' user with the same password for remote access.
@@ -24,19 +23,23 @@ def set_mysql_root_password(new_password: str, logger) -> bool:
     Args:
         new_password: New password to set for root user
         logger: Logger instance
+        verbose: Enable verbose logging (default: True)
         
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-    logger.info("Setting MySQL root password")
-    logger.info("=" * 80)
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Setting MySQL root password")
+        logger.info("=" * 80)
     
     # Step 1: Extract temporary password from mysqld.log
-    logger.info("Step 1: Extracting temporary password from /var/log/mysqld.log")
+    if verbose:
+        logger.info("Step 1: Extracting temporary password from /var/log/mysqld.log")
     result = execute_local_command(
         "sudo grep 'temporary password' /var/log/mysqld.log",
-        logger
+        logger,
+        verbose
     )
     
     if result['rc'] != 0:
@@ -52,10 +55,12 @@ def set_mysql_root_password(new_password: str, logger) -> bool:
         return False
     
     temp_password = temp_password_match.group(1)
-    logger.info("Temporary password extracted successfully")
+    if verbose:
+        logger.info("Temporary password extracted successfully")
     
     # Step 2: Change root@localhost password and create root@'%'
-    logger.info("Step 2: Changing root@localhost password and creating root@'%' user")
+    if verbose:
+        logger.info("Step 2: Changing root@localhost password and creating root@'%' user")
     
     sql_commands = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{new_password}';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '{new_password}';
@@ -68,7 +73,8 @@ FLUSH PRIVILEGES;
         username="root",
         password=temp_password,
         additional_options="--connect-expired-password",
-        logger=logger
+        logger=logger,
+        verbose=verbose
     )
     
     if result['rc'] != 0:
@@ -77,14 +83,15 @@ FLUSH PRIVILEGES;
             logger.error(f"MySQL error: {result['stderr']}")
         return False
     
-    logger.info("✓ MySQL root password changed successfully")
-    logger.info("✓ Created root@'%' user for remote access")
-    logger.info("=" * 80)
+    if verbose:
+        logger.info("✓ MySQL root password changed successfully")
+        logger.info("✓ Created root@'%' user for remote access")
+        logger.info("=" * 80)
     
     return True
 
 
-def deploy_mysql_on_raptor(logger) -> bool:
+def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     """
     Deploy MySQL on local machine (raptor).
     
@@ -93,13 +100,15 @@ def deploy_mysql_on_raptor(logger) -> bool:
     
     Args:
         logger: Logger instance
+        verbose: Enable verbose logging (default: True)
         
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-    logger.info("Starting MySQL deployment on raptor")
-    logger.info("=" * 80)
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Starting MySQL deployment on raptor")
+        logger.info("=" * 80)
     
     # List of commands to execute
     # Add your MySQL installation commands here
@@ -125,15 +134,12 @@ def deploy_mysql_on_raptor(logger) -> bool:
     
     config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
-    set_mysql_root_password(password, logger)
+    set_mysql_root_password(password, logger, verbose)
 
-
-
-
-
-    logger.info("=" * 80)
-    logger.info("MySQL deployment completed successfully")
-    logger.info("=" * 80)
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("MySQL deployment completed successfully")
+        logger.info("=" * 80)
     return True
 
 

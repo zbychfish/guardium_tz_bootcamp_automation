@@ -93,8 +93,42 @@ Keep function in `tasks/` when:
 - ✅ Function is specific to one task's business logic
 - ✅ Function orchestrates multiple core functions for a specific purpose
 - ✅ Function contains domain-specific logic (e.g., MySQL password setup flow)
+### 6. Verbose Mode
 
-### 6. Logging
+**ALWAYS pass `verbose` parameter through the call chain:**
+
+```python
+# In automation.py - pass args.verbose to tasks
+orchestrator.register_task(
+    task_id="my_task",
+    task_fn=lambda: my_task_function(logger, verbose=args.verbose),
+    description="Task description"
+)
+
+# In tasks/*.py - accept verbose and pass to core functions
+def my_task_function(logger, verbose: bool = True):
+    result = execute_local_command("command", logger, verbose)
+    result = execute_mysql_sql("SQL", logger=logger, verbose=verbose)
+    return True
+
+# In core/utils.py - use verbose to control logging
+def execute_local_command(command: str, logger=None, verbose: bool = True):
+    if verbose:
+        logger.info(f"Executing: {command}")
+    # ... execution ...
+    if verbose and result['stdout']:
+        logger.info(f"Output: {result['stdout']}")
+```
+
+**Rules:**
+- ✅ All task functions MUST accept `verbose` parameter (default: True)
+- ✅ All core utility functions MUST accept `verbose` parameter (default: True)
+- ✅ Always pass `verbose` from automation.py → tasks → core functions
+- ✅ Use `verbose` to control detailed logging (commands, outputs)
+- ✅ Always log errors regardless of verbose mode
+
+
+### 7. Logging
 
 **Default behavior (concise):**
 ```python
@@ -119,7 +153,7 @@ else:
     self.logger.info(f"➤  {task_id}")
 ```
 
-### 7. Error Handling
+### 8. Error Handling
 
 ```python
 try:
@@ -133,7 +167,7 @@ except Exception as e:
     return False
 ```
 
-### 8. SQL Operations
+### 9. SQL Operations
 
 **Always use `execute_mysql_sql()` from core:**
 ```python
@@ -149,7 +183,7 @@ result = execute_mysql_sql(
 
 **Don't create custom SQL execution in tasks.**
 
-### 9. Command Execution
+### 10. Command Execution
 
 **Use appropriate function from core:**
 
@@ -163,7 +197,7 @@ result = execute_local_command("dnf install -y package", logger)
 result = execute_mysql_sql("CREATE DATABASE db;", username="root", password="pass", logger=logger)
 ```
 
-### 10. State Management
+### 11. State Management
 
 ```python
 # Check if task completed
