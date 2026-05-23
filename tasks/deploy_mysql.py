@@ -229,7 +229,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     commands = [
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
         "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
-        "dnf install -y mysql-community-server"
+        "dnf install -y mysql-community-server",
         "systemctl start mysqld",
         "systemctl enable mysqld"
     ]
