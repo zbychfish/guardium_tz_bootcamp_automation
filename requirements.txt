@@ -9,18 +9,6 @@ PyYAML>=6.0
 # Environment Variables (optional, for .env file support)
 python-dotenv>=1.0.0
 
-# Optional: Database Drivers (uncomment if needed)
-# psycopg2-binary>=2.9.0  # PostgreSQL
-# oracledb>=1.0.0         # Oracle
-# pymongo>=4.0.0          # MongoDB
-# mysql-connector-python>=8.0.0  # MySQL
+# HTTP Client (for file downloads)
+requests>=2.31.0
 
-# Optional: Windows Management (uncomment if needed)
-# pywinrm>=0.4.0          # Windows Remote Management
-
-# Optional: Web Automation (uncomment if needed)
-# playwright>=1.40.0      # Web browser automation
-# selenium>=4.0.0         # Alternative web automation
-
-# Optional: API Clients (uncomment if needed)
-# requests>=2.31.0        # HTTP client

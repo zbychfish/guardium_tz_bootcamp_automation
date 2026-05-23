@@ -260,6 +260,10 @@ When adding new functionality:
 4. ☐ Did I add export to `core/__init__.py`? → Yes
 5. ☐ Did I import from core in task? → Yes
 6. ☐ Did I test the refactored code? → Yes
+7. ☐ Did I update `requirements.txt` if needed? → Yes
+   - Added new Python packages (e.g., `requests` for HTTP)
+   - Check imports in new code for external dependencies
+
 
 ## Communication Guidelines
 
