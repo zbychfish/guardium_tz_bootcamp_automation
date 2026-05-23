@@ -210,14 +210,13 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     password = config.get_custom_variable('pwd')
 
     # Update system and create necessary directories
-    commands = [
-        "dnf update --exclude=kernel* -y",
-        "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
-    ]
-
-    if not execute_commands(commands, logger, verbose):
-        logger.error("Initial setup commands failed")
-        return False
+    # commands = [
+    #     "dnf update --exclude=kernel* -y",
+    #     "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
+    # ]
+    # if not execute_commands(commands, logger, verbose):
+    #     logger.error("Initial setup commands failed")
+    #     return False
 
     # Create mysql defaults file with password to avoid prompting for password
     create_mysql_config_file(password, logger, verbose)
@@ -236,11 +235,9 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     #     "systemctl start mysqld",
     #     "systemctl enable mysqld"
     # ]
-    
     # if not execute_commands(commands, logger, verbose):
     #     logger.error("Initial setup commands failed")
     #     return False
-    
     
     # Set root password
     # if not set_mysql_root_password(password, logger, verbose):
@@ -262,8 +259,8 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         'mysql -u root -e "CREATE DATABASE IF NOT EXISTS salesDB"',
         "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql"
     ]
-    if not create_mysql_config_file(password, logger, verbose):
-        logger.error("Failed to create MySQL configuration file")
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Initial setup commands failed")
         return False
 
     if verbose:
@@ -271,5 +268,5 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         logger.info("MySQL deployment completed successfully")
         logger.info("=" * 80)
     return True
-    
+
 # Made with Bob
