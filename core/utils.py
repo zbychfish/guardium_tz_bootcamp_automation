@@ -166,7 +166,7 @@ def retry(
     Raises:
         Last exception if all attempts fail
     """
-    last_exception = None
+    last_exception: Optional[Exception] = None
     
     for attempt in range(1, max_attempts + 1):
         try:
@@ -180,7 +180,10 @@ def retry(
                 time.sleep(delay)
     
     logger.error(f"All {max_attempts} attempts failed")
-    raise last_exception
+    if last_exception:
+        raise last_exception
+    else:
+        raise RuntimeError("All retry attempts failed but no exception was captured")
 
 
 def wait_for_condition(

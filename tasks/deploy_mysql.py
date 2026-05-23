@@ -34,11 +34,10 @@ def deploy_mysql_on_raptor(logger) -> bool:
     # List of commands to execute
     # Add your MySQL installation commands here
     commands = [
-        # Example commands - modify as needed:
-        # "dnf install -y mysql-server",
-        # "systemctl enable mysqld",
-        # "systemctl start mysqld",
-        # "mysql -e \"CREATE DATABASE testdb;\"",
+        "dnf update --exclude=kernel* -y",
+        "dnf install -y https://dev.mysql.com/get/mysql80-community-release-el9-1.noarch.rpm",
+        "dnf install -y mysql-community-server"
+
     ]
     
     # If no commands defined yet, just log and return success
