@@ -7,6 +7,7 @@ Handles MongoDB installation and configuration on local machine (raptor)
 
 import sys
 from pathlib import Path
+from urllib.parse import quote_plus
 
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
@@ -172,6 +173,94 @@ def enable_mongodb_authorization(logger, verbose: bool = True) -> bool:
     return True
 
 
+def create_mongo_env_file(password: str, logger, verbose: bool = True) -> bool:
+    """
+    Create .mongo_env file in /root with MongoDB connection URI.
+    Also updates .bashrc to source this file.
+    
+    Args:
+        password: MongoDB admin password
+        logger: Logger instance
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating MongoDB environment file")
+        logger.info("=" * 80)
+    
+    # URL-encode password to handle special characters
+    encoded_password = quote_plus(password)
+    
+    # Create .mongo_env content
+    mongo_env_path = "/root/.mongo_env"
+    mongo_env_content = f'export MONGO_URI="mongodb://admin:{encoded_password}@localhost:27017/admin"\n'
+    
+    try:
+        if verbose:
+            logger.info(f"Writing MongoDB environment file to: {mongo_env_path}")
+        
+        # Write the .mongo_env file
+        write_file(mongo_env_path, mongo_env_content)
+        
+        # Set secure permissions (readable only by owner)
+        result = execute_local_command(f"chmod 600 {mongo_env_path}", logger, verbose=False)
+        if result['rc'] != 0:
+            logger.error(f"Failed to set permissions on {mongo_env_path}")
+            return False
+        
+        if verbose:
+            logger.info(f"✓ Created {mongo_env_path}")
+        
+        # Update .bashrc to source .mongo_env
+        bashrc_path = "/root/.bashrc"
+        bashrc_addition = """
+# Load MongoDB environment variables
+if [ -f /root/.mongo_env ]; then
+    . /root/.mongo_env
+fi
+"""
+        
+        # Check if .mongo_env is already sourced in .bashrc
+        check_result = execute_local_command(
+            f"grep -q '.mongo_env' {bashrc_path}",
+            logger,
+            verbose=False
+        )
+        
+        if check_result['rc'] != 0:  # Not found, add it
+            if verbose:
+                logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
+            
+            # Append to .bashrc
+            append_result = execute_local_command(
+                f"echo '{bashrc_addition}' >> {bashrc_path}",
+                logger,
+                verbose=False
+            )
+            
+            if append_result['rc'] != 0:
+                logger.error(f"Failed to update {bashrc_path}")
+                return False
+            
+            if verbose:
+                logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
+        else:
+            if verbose:
+                logger.info(f"✓ {bashrc_path} already sources .mongo_env")
+        
+        if verbose:
+            logger.info("=" * 80)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to create MongoDB environment file: {e}")
+        return False
+
+
 def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     """
     Deploy MongoDB on local machine (raptor).
@@ -234,6 +323,11 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Failed to restart MongoDB")
+        return False
+    
+    # Create .mongo_env file with connection URI
+    if not create_mongo_env_file(password, logger, verbose):
+        logger.error("Failed to create MongoDB environment file")
         return False
 
     if verbose:
