@@ -38,8 +38,8 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
         logger.info("Oracle Database 21c deployment on sauropod")
         logger.info("=" * 80)
     
-    # Get sauropod machine IP
-    sauropod_ip = config.get_machine_ip('sauropod')
+    # Get sauropod machine IP (use private IP for internal communication)
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
         logger.error("Could not find sauropod machine in configuration")
         return False
