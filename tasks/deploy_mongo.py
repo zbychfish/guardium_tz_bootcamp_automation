@@ -301,7 +301,8 @@ def import_mongodb_sample_data(logger, verbose: bool = True) -> bool:
     
     # Source .mongo_env in the same shell session and execute import
     # This ensures MONGO_URI is available for the mongorestore command
-    full_command = f'bash -c ". /root/.mongo_env && gunzip -c {archive_path} | mongorestore --archive --uri=\\"$MONGO_URI\\" --nsInclude=\\"*\\" {quiet_flag}"'
+    # Use single quotes around the bash -c command to avoid escaping issues
+    full_command = f"bash -c '. /root/.mongo_env && gunzip -c {archive_path} | mongorestore --archive --uri=\"$MONGO_URI\" --nsInclude=\"*\" {quiet_flag}'"
     
     result = execute_local_command(full_command, logger, verbose=verbose)
     
