@@ -422,13 +422,6 @@ def main():
         description="Deploy and configure MongoDB on raptor machine"
     )
     
-    # Deploy Oracle on raptor
-    orchestrator.register_task(
-        task_id="deploy_oracle_on_raptor",
-        task_fn=lambda: deploy_oracle_on_raptor(logger, verbose=args.verbose),
-        description="Deploy and configure Oracle on raptor machine"
-    )
-
     # Marker task: End of initial configuration phase
     # This task does nothing but serves as a checkpoint for stage mechanism
     # Use stage="initial_config" in machines_info.json to stop here
@@ -439,6 +432,13 @@ def main():
     )
     
     # Add more tasks here - they will be executed only when running with --continue flag
+
+    # Deploy Oracle on raptor
+    orchestrator.register_task(
+        task_id="deploy_oracle_on_raptor",
+        task_fn=lambda: deploy_oracle_on_raptor(logger, verbose=args.verbose),
+        description="Deploy and configure Oracle on raptor machine"
+    )
 
     # Determine stop_at parameter
     # Priority: --stop-at argument > stage from machines_info.json
