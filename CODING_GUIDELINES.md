@@ -357,6 +357,12 @@ This refactoring improves code reusability and maintainability...
 - No repetition of the task description
 - No unnecessary explanations
 
+**IMPORTANT RULE:**
+- ❌ **DON'T summarize entire task history** - only report what was done in the LAST step
+- ✅ **DO focus on immediate changes** - what files were modified/created in current action
+- ❌ **DON'T repeat previous steps** - user already saw those confirmations
+- ✅ **DO be concise** - 3-5 lines maximum for completion message
+
 ## Summary
 
 **Golden Rule:** If a function can be used by more than one task or is a general utility, it belongs in `core/`, not in `tasks/`.
