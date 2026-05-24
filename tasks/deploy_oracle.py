@@ -388,165 +388,275 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
 #             if verbose:
 #                 logger.info("✓ Pluggable databases configured to auto-start")
             
-            # Step 13: Upload and configure listener.ora
+            # # Step 13: Upload and configure listener.ora
+            # if verbose:
+            #     logger.info("Step 13: Configuring listener.ora")
+            
+            # # Path to local config file
+            # listener_config_path = Path(__file__).parent.parent / "automation_config_files" / "listener.ora"
+            
+            # if not listener_config_path.exists():
+            #     logger.error(f"listener.ora config file not found at {listener_config_path}")
+            #     return False
+            
+            # # Upload listener.ora to sauropod
+            # remote_listener_path = "/tmp/listener.ora"
+            # upload_success = ssh.upload_file(str(listener_config_path), remote_listener_path)
+            
+            # if not upload_success:
+            #     logger.error("Failed to upload listener.ora")
+            #     return False
+            
+            # # Copy to Oracle network admin directory
+            # copy_listener_cmd = f"su - oracle -c 'cp {remote_listener_path} $ORACLE_HOME/network/admin/listener.ora && chmod 644 $ORACLE_HOME/network/admin/listener.ora'"
+            
+            # result = ssh.execute_command(
+            #     copy_listener_cmd,
+            #     timeout=60,
+            #     print_output=verbose
+            # )
+            
+            # if result['rc'] != 0:
+            #     logger.error(f"Failed to copy listener.ora: {result['stderr']}")
+            #     return False
+            
+            # if verbose:
+            #     logger.info("✓ listener.ora configured")
+            
+            # # Step 14: Upload and configure tnsnames.ora
+            # if verbose:
+            #     logger.info("Step 14: Configuring tnsnames.ora")
+            
+            # # Path to local config file
+            # tnsnames_config_path = Path(__file__).parent.parent / "automation_config_files" / "tnsnames.ora"
+            
+            # if not tnsnames_config_path.exists():
+            #     logger.error(f"tnsnames.ora config file not found at {tnsnames_config_path}")
+            #     return False
+            
+            # # Upload tnsnames.ora to sauropod
+            # remote_tnsnames_path = "/tmp/tnsnames.ora"
+            # upload_success = ssh.upload_file(str(tnsnames_config_path), remote_tnsnames_path)
+            
+            # if not upload_success:
+            #     logger.error("Failed to upload tnsnames.ora")
+            #     return False
+            
+            # # Copy to Oracle network admin directory
+            # copy_tnsnames_cmd = f"su - oracle -c 'cp {remote_tnsnames_path} $ORACLE_HOME/network/admin/tnsnames.ora && chmod 644 $ORACLE_HOME/network/admin/tnsnames.ora'"
+            
+            # result = ssh.execute_command(
+            #     copy_tnsnames_cmd,
+            #     timeout=60,
+            #     print_output=verbose
+            # )
+            
+            # if result['rc'] != 0:
+            #     logger.error(f"Failed to copy tnsnames.ora: {result['stderr']}")
+            #     return False
+            
+            # if verbose:
+            #     logger.info("✓ tnsnames.ora configured")
+            
+            # # Step 15: Upload and configure sqlnet.ora
+            # if verbose:
+            #     logger.info("Step 15: Configuring sqlnet.ora")
+            
+            # # Path to local config file
+            # sqlnet_config_path = Path(__file__).parent.parent / "automation_config_files" / "sqlnet.ora"
+            
+            # if not sqlnet_config_path.exists():
+            #     logger.error(f"sqlnet.ora config file not found at {sqlnet_config_path}")
+            #     return False
+            
+            # # Upload sqlnet.ora to sauropod
+            # remote_sqlnet_path = "/tmp/sqlnet.ora"
+            # upload_success = ssh.upload_file(str(sqlnet_config_path), remote_sqlnet_path)
+            
+            # if not upload_success:
+            #     logger.error("Failed to upload sqlnet.ora")
+            #     return False
+            
+            # # Copy to Oracle network admin directory
+            # copy_sqlnet_cmd = f"su - oracle -c 'cp {remote_sqlnet_path} $ORACLE_HOME/network/admin/sqlnet.ora && chmod 644 $ORACLE_HOME/network/admin/sqlnet.ora'"
+            
+            # result = ssh.execute_command(
+            #     copy_sqlnet_cmd,
+            #     timeout=60,
+            #     print_output=verbose
+            # )
+            
+            # if result['rc'] != 0:
+            #     logger.error(f"Failed to copy sqlnet.ora: {result['stderr']}")
+            #     return False
+            
+            # if verbose:
+            #     logger.info("✓ sqlnet.ora configured")
+            
+            # # Step 16: Restart Oracle listener to apply new configuration
+            # if verbose:
+            #     logger.info("Step 16: Restarting Oracle listener")
+            
+            # restart_listener_cmds = [
+            #     "su - oracle -c 'lsnrctl stop'",
+            #     "su - oracle -c 'lsnrctl start'"
+            # ]
+            
+            # results = ssh.execute_commands(
+            #     commands=restart_listener_cmds,
+            #     timeout=120,
+            #     print_output=verbose,
+            #     stop_on_error=False  # Continue even if stop fails (listener might not be running)
+            # )
+            
+            # # Check if start command succeeded (it's the second command)
+            # if len(results) > 1 and results[1]['rc'] != 0:
+            #     logger.error(f"Failed to start Oracle listener: {results[1]['stderr']}")
+            #     return False
+            
+            # if verbose:
+            #     logger.info("✓ Oracle listener restarted with new configuration")
+            
+            # # Step 17: Configure /etc/oratab for auto-start
+            # if verbose:
+            #     logger.info("Step 17: Configuring /etc/oratab for database auto-start")
+            
+            # # Change the last field from N to Y to enable auto-start
+            # oratab_cmd = "sed -i 's/^ORCLCDB:\\(.*\\):N$/ORCLCDB:\\1:Y/' /etc/oratab"
+            
+            # result = ssh.execute_command(
+            #     oratab_cmd,
+            #     timeout=60,
+            #     print_output=verbose
+            # )
+            
+            # if result['rc'] != 0:
+            #     logger.error(f"Failed to configure /etc/oratab: {result['stderr']}")
+            #     return False
+            
+            # # Verify the change
+            # verify_cmd = "grep ORCLCDB /etc/oratab"
+            # result = ssh.execute_command(
+            #     verify_cmd,
+            #     timeout=30,
+            #     print_output=verbose
+            # )
+            
+            # if result['rc'] == 0 and ':Y' in result['stdout']:
+            #     if verbose:
+            #         logger.info("✓ /etc/oratab configured for auto-start")
+            # else:
+            #     logger.warning("Could not verify /etc/oratab configuration")
+            
+            # Step 18: Install HR schema with sample data
             if verbose:
-                logger.info("Step 13: Configuring listener.ora")
+                logger.info("Step 18: Installing HR schema with sample data")
             
-            # Path to local config file
-            listener_config_path = Path(__file__).parent.parent / "automation_config_files" / "listener.ora"
+            # Path to HR schema archive on raptor
+            hr_archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/human_resources.tar.gz"
+            hr_remote_path = "/home/oracle/human_resources.tar.gz"
             
-            if not listener_config_path.exists():
-                logger.error(f"listener.ora config file not found at {listener_config_path}")
-                return False
+            # Upload HR schema archive to sauropod
+            if verbose:
+                logger.info(f"Uploading HR schema archive to sauropod")
             
-            # Upload listener.ora to sauropod
-            remote_listener_path = "/tmp/listener.ora"
-            upload_success = ssh.upload_file(str(listener_config_path), remote_listener_path)
+            upload_success = ssh.upload_file(hr_archive_path, hr_remote_path)
             
             if not upload_success:
-                logger.error("Failed to upload listener.ora")
+                logger.error("Failed to upload HR schema archive")
                 return False
             
-            # Copy to Oracle network admin directory
-            copy_listener_cmd = f"su - oracle -c 'cp {remote_listener_path} $ORACLE_HOME/network/admin/listener.ora && chmod 644 $ORACLE_HOME/network/admin/listener.ora'"
-            
+            # Set ownership to oracle user
             result = ssh.execute_command(
-                copy_listener_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to copy listener.ora: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ listener.ora configured")
-            
-            # Step 14: Upload and configure tnsnames.ora
-            if verbose:
-                logger.info("Step 14: Configuring tnsnames.ora")
-            
-            # Path to local config file
-            tnsnames_config_path = Path(__file__).parent.parent / "automation_config_files" / "tnsnames.ora"
-            
-            if not tnsnames_config_path.exists():
-                logger.error(f"tnsnames.ora config file not found at {tnsnames_config_path}")
-                return False
-            
-            # Upload tnsnames.ora to sauropod
-            remote_tnsnames_path = "/tmp/tnsnames.ora"
-            upload_success = ssh.upload_file(str(tnsnames_config_path), remote_tnsnames_path)
-            
-            if not upload_success:
-                logger.error("Failed to upload tnsnames.ora")
-                return False
-            
-            # Copy to Oracle network admin directory
-            copy_tnsnames_cmd = f"su - oracle -c 'cp {remote_tnsnames_path} $ORACLE_HOME/network/admin/tnsnames.ora && chmod 644 $ORACLE_HOME/network/admin/tnsnames.ora'"
-            
-            result = ssh.execute_command(
-                copy_tnsnames_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to copy tnsnames.ora: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ tnsnames.ora configured")
-            
-            # Step 15: Upload and configure sqlnet.ora
-            if verbose:
-                logger.info("Step 15: Configuring sqlnet.ora")
-            
-            # Path to local config file
-            sqlnet_config_path = Path(__file__).parent.parent / "automation_config_files" / "sqlnet.ora"
-            
-            if not sqlnet_config_path.exists():
-                logger.error(f"sqlnet.ora config file not found at {sqlnet_config_path}")
-                return False
-            
-            # Upload sqlnet.ora to sauropod
-            remote_sqlnet_path = "/tmp/sqlnet.ora"
-            upload_success = ssh.upload_file(str(sqlnet_config_path), remote_sqlnet_path)
-            
-            if not upload_success:
-                logger.error("Failed to upload sqlnet.ora")
-                return False
-            
-            # Copy to Oracle network admin directory
-            copy_sqlnet_cmd = f"su - oracle -c 'cp {remote_sqlnet_path} $ORACLE_HOME/network/admin/sqlnet.ora && chmod 644 $ORACLE_HOME/network/admin/sqlnet.ora'"
-            
-            result = ssh.execute_command(
-                copy_sqlnet_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to copy sqlnet.ora: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ sqlnet.ora configured")
-            
-            # Step 16: Restart Oracle listener to apply new configuration
-            if verbose:
-                logger.info("Step 16: Restarting Oracle listener")
-            
-            restart_listener_cmds = [
-                "su - oracle -c 'lsnrctl stop'",
-                "su - oracle -c 'lsnrctl start'"
-            ]
-            
-            results = ssh.execute_commands(
-                commands=restart_listener_cmds,
-                timeout=120,
-                print_output=verbose,
-                stop_on_error=False  # Continue even if stop fails (listener might not be running)
-            )
-            
-            # Check if start command succeeded (it's the second command)
-            if len(results) > 1 and results[1]['rc'] != 0:
-                logger.error(f"Failed to start Oracle listener: {results[1]['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ Oracle listener restarted with new configuration")
-            
-            # Step 17: Configure /etc/oratab for auto-start
-            if verbose:
-                logger.info("Step 17: Configuring /etc/oratab for database auto-start")
-            
-            # Change the last field from N to Y to enable auto-start
-            oratab_cmd = "sed -i 's/^ORCLCDB:\\(.*\\):N$/ORCLCDB:\\1:Y/' /etc/oratab"
-            
-            result = ssh.execute_command(
-                oratab_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure /etc/oratab: {result['stderr']}")
-                return False
-            
-            # Verify the change
-            verify_cmd = "grep ORCLCDB /etc/oratab"
-            result = ssh.execute_command(
-                verify_cmd,
+                f"chown oracle:oinstall {hr_remote_path}",
                 timeout=30,
                 print_output=verbose
             )
             
-            if result['rc'] == 0 and ':Y' in result['stdout']:
-                if verbose:
-                    logger.info("✓ /etc/oratab configured for auto-start")
-            else:
-                logger.warning("Could not verify /etc/oratab configuration")
+            if result['rc'] != 0:
+                logger.error(f"Failed to set ownership on HR archive: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ HR schema archive uploaded")
+            
+            # Extract HR schema archive
+            if verbose:
+                logger.info("Extracting HR schema archive")
+            
+            extract_cmd = f"su - oracle -c 'cd /home/oracle && tar -xzf {hr_remote_path}'"
+            
+            result = ssh.execute_command(
+                extract_cmd,
+                timeout=120,
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to extract HR schema archive: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ HR schema archive extracted")
+            
+            # Update password in hr_install.sql
+            if verbose:
+                logger.info("Updating password in hr_install.sql")
+            
+            # Escape special characters in password for sed
+            escaped_password = root_password.replace('/', '\\/')
+            update_password_cmd = f"su - oracle -c \"sed -i 's/DEFINE pass = '<password>'/DEFINE pass = '{escaped_password}'/' /home/oracle/human_resources/hr_install.sql\""
+            
+            result = ssh.execute_command(
+                update_password_cmd,
+                timeout=60,
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to update password in hr_install.sql: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ Password updated in hr_install.sql")
+            
+            # Create HR tablespace
+            if verbose:
+                logger.info("Creating HR tablespace")
+            
+            create_tablespace_cmd = """su - oracle -c 'export ORACLE_SID=ORCLCDB && echo "ALTER SESSION SET CONTAINER = ORCLPDB1; CREATE TABLESPACE hr_data DATAFILE '\''/u01/app/oracle/oradata/hr_data01.dbf'\'' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE 1G;" | sqlplus -s / as sysdba'"""
+            
+            result = ssh.execute_command(
+                create_tablespace_cmd,
+                timeout=300,
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to create HR tablespace: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ HR tablespace created")
+            
+            # Install HR schema
+            if verbose:
+                logger.info("Installing HR schema (this may take a few minutes)")
+            
+            install_hr_cmd = """su - oracle -c 'export ORACLE_SID=ORCLCDB && cd /home/oracle/human_resources && echo "ALTER SESSION SET CONTAINER = ORCLPDB1; @hr_install.sql" | sqlplus -s / as sysdba'"""
+            
+            result = ssh.execute_command(
+                install_hr_cmd,
+                timeout=600,  # 10 minutes
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to install HR schema: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ HR schema installed")
             
             if verbose:
                 logger.info("=" * 80)
@@ -559,6 +669,7 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
                 logger.info("  - tnsnames.ora: ORCLPDB1 service configured")
                 logger.info("  - sqlnet.ora: TNSNAMES, EZCONNECT enabled")
                 logger.info("Auto-start: Enabled in /etc/oratab")
+                logger.info("Sample Data: HR schema installed in hr_data tablespace")
                 logger.info("=" * 80)
             
             return True
