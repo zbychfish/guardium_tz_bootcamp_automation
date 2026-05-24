@@ -74,14 +74,20 @@ def create_mongodb_admin_user(password: str, logger, verbose: bool = True) -> bo
         logger.info("Creating MongoDB admin user")
         logger.info("=" * 80)
     
+    # Escape single quotes in password for JavaScript
+    escaped_password = password.replace("'", "\\'").replace('"', '\\"')
+    
     # JavaScript commands to create admin user
     # Note: We connect directly to admin database, so no need for 'use admin'
     js_commands = f"""db.createUser({{
   user: "admin",
-  pwd: "{password}",
+  pwd: "{escaped_password}",
   roles: [ {{ role: "root", db: "admin" }} ]
 }})
 """
+    
+    if verbose:
+        logger.info("Executing user creation command...")
     
     result = execute_mongo_js(
         js_commands=js_commands,
@@ -97,6 +103,22 @@ def create_mongodb_admin_user(password: str, logger, verbose: bool = True) -> bo
         if result['stdout']:
             logger.error(f"MongoDB output: {result['stdout']}")
         return False
+    
+    # Verify user was created
+    if verbose:
+        logger.info("Verifying user creation...")
+    
+    verify_js = """db.getUsers()"""
+    verify_result = execute_mongo_js(
+        js_commands=verify_js,
+        database="admin",
+        logger=logger,
+        verbose=verbose
+    )
+    
+    if verify_result['rc'] == 0:
+        if verbose:
+            logger.info(f"Users in admin database: {verify_result['stdout']}")
     
     if verbose:
         logger.info("✓ MongoDB admin user created successfully")
