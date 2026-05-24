@@ -201,10 +201,7 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     
     # Install MongoDB
     commands = [
-        "dnf install -y mongodb-enterprise-database",
-        "dnf install -y mongodb-enterprise-tools",
-        "dnf install -y mongodb-mongosh-shared-openssl3",
-        "dnf install -y mongodb-enterprise",
+        "dnf install -y mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise",
         "systemctl enable mongod",
         "systemctl start mongod",
         "sleep 5",  # Wait for MongoDB to be ready
