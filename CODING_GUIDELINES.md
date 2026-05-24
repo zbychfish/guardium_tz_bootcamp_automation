@@ -69,6 +69,8 @@ guardium_tz_bootcamp_automation/
 ├── tasks/                     # Task-specific implementations
 │   ├── setup_hosts.py        # Host configuration tasks
 │   ├── deploy_mysql.py       # MySQL deployment tasks
+│   ├── deploy_mongo.py       # MongoDB deployment tasks
+│   ├── download_supporting_files.py  # Download supporting files
 │   └── ...                   # Other specific tasks
 │
 ├── config/                    # Configuration files
@@ -76,6 +78,36 @@ guardium_tz_bootcamp_automation/
 │
 └── automation.py              # Main orchestration script
 ```
+
+### 2.1. Task File Organization
+
+**IMPORTANT: Each state/stage should be in a separate file**
+
+#### ✅ DO:
+- **Create separate files for each major task/state** (e.g., `download_supporting_files.py`, `deploy_mysql.py`)
+- **Keep related functions together** in the same file
+- **One main entry point function per file** that orchestrates the task
+- **Helper functions in the same file** if they're only used by that task
+
+#### ❌ DON'T:
+- **Don't mix multiple unrelated tasks in one file**
+- **Don't put download/setup logic inside deployment tasks**
+- **Don't create monolithic task files** with multiple independent stages
+
+**Example Structure:**
+```
+tasks/
+├── download_supporting_files.py    # Separate: Downloads files from Box
+├── deploy_mysql.py                 # Separate: MySQL deployment only
+├── deploy_mongo.py                 # Separate: MongoDB deployment only
+└── setup_hosts.py                  # Separate: Host configuration
+```
+
+**Why:**
+- Clean separation of concerns
+- Easier to maintain and test
+- Clear dependencies between stages
+- Better code organization
 
 ### 3. Function Placement Rules
 

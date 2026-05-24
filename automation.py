@@ -20,6 +20,7 @@ from core.logger import setup_logger
 from tasks.setup_hosts import setup_hosts_locally, setup_hosts_on_remote_machine
 from tasks.deploy_mysql import deploy_mysql_on_raptor
 from tasks.deploy_mongo import deploy_mongo_on_raptor
+from tasks.download_supporting_files import download_supporting_files
 
 class AutomationOrchestrator:
     """
@@ -359,6 +360,13 @@ def main():
             )
         else:
             logger.warning(f"Machine {machine_name} not found in configuration")
+    
+    # Download supporting files (must be done before deployments)
+    orchestrator.register_task(
+        task_id="download_supporting_files",
+        task_fn=lambda: download_supporting_files(logger, verbose=args.verbose),
+        description="Download and extract supporting files from Box (MySQL, MongoDB, etc.)"
+    )
     
     # Deploy MySQL on raptor
     orchestrator.register_task(

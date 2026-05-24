@@ -11,7 +11,7 @@ from pathlib import Path
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_local_command, execute_commands, execute_mysql_sql, write_file, ConfigLoader, download_and_extract
+from core import execute_local_command, execute_commands, execute_mysql_sql, write_file, ConfigLoader
 import re
 
 
@@ -190,7 +190,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     Deploy MySQL on local machine (raptor).
     
     This function executes a series of commands to install and configure MySQL.
-    Commands should be added/modified as needed.
+    Assumes supporting files have already been downloaded by download_mysql_supporting_files().
     
     Args:
         logger: Logger instance
@@ -207,21 +207,12 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
 
-    # Update system and create necessary directories
+    # Update system
     commands = [
-        "dnf update --exclude=kernel* -y",
-        "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
+        "dnf update --exclude=kernel* -y"
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Initial setup commands failed")
-        return False
-
-    # Create mysql defaults file with password to avoid prompting for password
-    create_mysql_config_file(password, logger, verbose)
-
-    # Download supporting files
-    if not download_and_extract("https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip", "/opt/guardium_tz_bootcamp_automation/upload/", logger, verbose):
-        logger.error("Failed to create MySQL superadmin users")
+        logger.error("System update failed")
         return False
 
     # Install MySQL server
@@ -233,7 +224,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         "systemctl enable mysqld"
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Initial setup commands failed")
+        logger.error("MySQL installation failed")
         return False
     
     # Set root password
@@ -241,7 +232,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         logger.error("Failed to set MySQL root password")
         return False
     
-    # Create ~/.my.cnf configuration file
+    # Create ~/.my.cnf configuration file for passwordless access
     if not create_mysql_config_file(password, logger, verbose):
         logger.error("Failed to create MySQL configuration file")
         return False
@@ -252,13 +243,21 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         return False
 
     # Import salesDB database
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Importing salesDB database")
+        logger.info("=" * 80)
+    
     commands = [
         'mysql -u root -e "CREATE DATABASE IF NOT EXISTS salesDB"',
         "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql"
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Initial setup commands failed")
+        logger.error("Failed to import salesDB database")
         return False
+    
+    if verbose:
+        logger.info("✓ salesDB database imported successfully")
 
     if verbose:
         logger.info("=" * 80)
