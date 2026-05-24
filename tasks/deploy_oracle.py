@@ -197,43 +197,43 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
 #                 logger.info("✓ Oracle installation archive extracted")
             
             # Step 6: Configure SSH for oracle user
-            if verbose:
-                logger.info("Step 6: Configuring SSH for oracle user")
+#             if verbose:
+#                 logger.info("Step 6: Configuring SSH for oracle user")
             
-            # Get hostname for SSH config
-            hostname_result = ssh.execute_command("hostname", timeout=30, print_output=False)
-            if hostname_result['rc'] != 0:
-                logger.error("Failed to get hostname")
-                return False
+#             # Get hostname for SSH config
+#             hostname_result = ssh.execute_command("hostname", timeout=30, print_output=False)
+#             if hostname_result['rc'] != 0:
+#                 logger.error("Failed to get hostname")
+#                 return False
             
-            hostname = hostname_result['stdout'].strip()
+#             hostname = hostname_result['stdout'].strip()
             
-            # Create SSH config for oracle user
-            ssh_config_content = f"""Host localhost
-    Port 2223
-    StrictHostKeyChecking no
-Host {hostname}
-    Port 2223
-    StrictHostKeyChecking no
-"""
+#             # Create SSH config for oracle user
+#             ssh_config_content = f"""Host localhost
+#     Port 2223
+#     StrictHostKeyChecking no
+# Host {hostname}
+#     Port 2223
+#     StrictHostKeyChecking no
+# """
             
-            # Create .ssh directory if it doesn't exist
-            ssh.execute_command("su - oracle -c 'mkdir -p ~/.ssh'", timeout=30, print_output=verbose)
+#             # Create .ssh directory if it doesn't exist
+#             ssh.execute_command("su - oracle -c 'mkdir -p ~/.ssh'", timeout=30, print_output=verbose)
             
-            # Write SSH config
-            config_cmd = f"su - oracle -c 'cat >> ~/.ssh/config <<EOF\n{ssh_config_content}EOF'"
+#             # Write SSH config
+#             config_cmd = f"su - oracle -c 'cat >> ~/.ssh/config <<EOF\n{ssh_config_content}EOF'"
             
-            result = ssh.execute_command(config_cmd, timeout=30, print_output=verbose)
+#             result = ssh.execute_command(config_cmd, timeout=30, print_output=verbose)
             
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure SSH for oracle user: {result['stderr']}")
-                return False
+#             if result['rc'] != 0:
+#                 logger.error(f"Failed to configure SSH for oracle user: {result['stderr']}")
+#                 return False
             
-            # Set proper permissions on SSH config
-            ssh.execute_command("su - oracle -c 'chmod 600 ~/.ssh/config'", timeout=30, print_output=verbose)
+#             # Set proper permissions on SSH config
+#             ssh.execute_command("su - oracle -c 'chmod 600 ~/.ssh/config'", timeout=30, print_output=verbose)
             
-            if verbose:
-                logger.info("✓ SSH configured for oracle user")
+#             if verbose:
+#                 logger.info("✓ SSH configured for oracle user")
             
             # Step 7: Run Oracle installer
             if verbose:
