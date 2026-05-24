@@ -146,33 +146,36 @@ export PATH=$ORACLE_HOME/bin:$PATH
             if verbose:
                 logger.info("✓ Oracle user environment configured")
             
-            # Step 4: Copy Oracle installation archive from raptor
+            # Step 4: Copy Oracle installation archive from raptor to sauropod
             if verbose:
-                logger.info("Step 4: Copying Oracle installation archive from raptor")
-            
-            # Get raptor IP
-            raptor_ip = config.get_machine_ip('raptor', use_private=True)
-            if not raptor_ip:
-                logger.error("Could not find raptor machine IP")
-                return False
+                logger.info("Step 4: Copying Oracle installation archive from raptor to sauropod")
             
             source_file = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/LINUX.X64_213000_db_home.zip"
+            dest_file = "/home/oracle/LINUX.X64_213000_db_home.zip"
             
-            # Use scp to copy file from raptor to sauropod
-            scp_cmd = f"scp -P {ssh_port} -o StrictHostKeyChecking=no root@{raptor_ip}:{source_file} /home/oracle/"
+            # Use SFTP to upload file from local (raptor) to remote (sauropod)
+            if verbose:
+                logger.info(f"Uploading {source_file} to sauropod:{dest_file}")
             
+            upload_success = ssh.upload_file(source_file, dest_file)
+            
+            if not upload_success:
+                logger.error("Failed to upload Oracle installation archive")
+                return False
+            
+            # Set ownership to oracle user
             result = ssh.execute_command(
-                scp_cmd,
-                timeout=1800,  # 30 minutes for large file transfer
+                f"chown oracle:oinstall {dest_file}",
+                timeout=30,
                 print_output=verbose
             )
             
             if result['rc'] != 0:
-                logger.error(f"Failed to copy Oracle installation archive: {result['stderr']}")
+                logger.error(f"Failed to set ownership on Oracle archive: {result['stderr']}")
                 return False
             
             if verbose:
-                logger.info("✓ Oracle installation archive copied")
+                logger.info("✓ Oracle installation archive uploaded and ownership set")
             
             # Step 5: Unzip Oracle installation archive as oracle user
             if verbose:
