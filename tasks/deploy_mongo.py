@@ -298,10 +298,10 @@ def import_mongodb_sample_data(logger, verbose: bool = True) -> bool:
     
     # Build mongorestore command with --quiet flag if not verbose
     quiet_flag = "--quiet" if not verbose else ""
-    import_command = f'gunzip -c {archive_path} | mongorestore --archive --uri="$MONGO_URI" --nsInclude="*" {quiet_flag}'
     
-    # Source .mongo_env and execute import
-    full_command = f'bash -c "source /root/.mongo_env && {import_command}"'
+    # Source .mongo_env in the same shell session and execute import
+    # This ensures MONGO_URI is available for the mongorestore command
+    full_command = f'bash -c ". /root/.mongo_env && gunzip -c {archive_path} | mongorestore --archive --uri=\\"$MONGO_URI\\" --nsInclude=\\"*\\" {quiet_flag}"'
     
     result = execute_local_command(full_command, logger, verbose=verbose)
     
