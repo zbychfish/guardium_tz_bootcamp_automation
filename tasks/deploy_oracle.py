@@ -627,7 +627,8 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
             if verbose:
                 logger.info("Creating HR tablespace")
             
-            create_tablespace_cmd = """su - oracle -c 'export ORACLE_SID=ORCLCDB && echo "ALTER SESSION SET CONTAINER = ORCLPDB1; CREATE TABLESPACE hr_data DATAFILE '\''/u01/app/oracle/oradata/hr_data01.dbf'\'' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE 1G;" | sqlplus -s / as sysdba'"""
+            # Use proper quoting for SQL command
+            create_tablespace_cmd = """su - oracle -c "export ORACLE_SID=ORCLCDB && echo \\"ALTER SESSION SET CONTAINER = ORCLPDB1; CREATE TABLESPACE hr_data DATAFILE '/u01/app/oracle/oradata/ORCLCDB/ORCLPDB1/hr_data01.dbf' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE 1G;\\" | sqlplus -s / as sysdba" """
             
             result = ssh.execute_command(
                 create_tablespace_cmd,
