@@ -586,7 +586,9 @@ def execute_mysql_sql(
         mysql_cmd = f"mysql -u{username}"
         
         if password:
-            mysql_cmd += f" -p'{password}'"
+            # Escape single quotes in password and wrap in single quotes
+            escaped_password = password.replace("'", "'\\''")
+            mysql_cmd += f" -p'{escaped_password}'"
         
         if host != "localhost":
             mysql_cmd += f" -h{host}"
