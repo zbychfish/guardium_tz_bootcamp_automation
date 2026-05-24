@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Download Supporting Files Task
-Handles downloading and extracting supporting files from external sources
+Preparation for Services Deployment Task
+Handles system updates and downloading supporting files before service deployments
 """
 
 import sys
@@ -14,10 +14,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 from core import execute_commands, download_and_extract
 
 
-def download_supporting_files(logger, verbose: bool = True) -> bool:
+def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
     """
-    Download and extract supporting files from Box.
-    This should be executed as a separate stage before other deployments.
+    Prepare system for service deployments by:
+    1. Updating system packages (excluding kernel)
+    2. Downloading and extracting supporting files from Box
     
     Supporting files include:
     - MySQL database dumps (salesDB.sql)
@@ -33,10 +34,27 @@ def download_supporting_files(logger, verbose: bool = True) -> bool:
     """
     if verbose:
         logger.info("=" * 80)
-        logger.info("Downloading supporting files")
+        logger.info("Preparing system for services deployment")
         logger.info("=" * 80)
     
-    # Create necessary directories
+    # Step 1: Update system packages (excluding kernel)
+    if verbose:
+        logger.info("Step 1: Updating system packages (excluding kernel)")
+    
+    commands = [
+        "dnf update --exclude=kernel* -y"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("System update failed")
+        return False
+    
+    if verbose:
+        logger.info("✓ System packages updated successfully")
+    
+    # Step 2: Create necessary directories
+    if verbose:
+        logger.info("Step 2: Creating necessary directories")
+    
     commands = [
         "mkdir -p /opt/guardium_tz_bootcamp_automation/upload"
     ]
@@ -44,7 +62,13 @@ def download_supporting_files(logger, verbose: bool = True) -> bool:
         logger.error("Failed to create upload directory")
         return False
     
-    # Download and extract supporting files from Box
+    if verbose:
+        logger.info("✓ Directories created successfully")
+    
+    # Step 3: Download and extract supporting files from Box
+    if verbose:
+        logger.info("Step 3: Downloading supporting files from Box")
+    
     box_url = "https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip"
     target_dir = "/opt/guardium_tz_bootcamp_automation/upload/"
     
@@ -58,6 +82,8 @@ def download_supporting_files(logger, verbose: bool = True) -> bool:
     
     if verbose:
         logger.info("✓ Supporting files downloaded and extracted successfully")
+        logger.info("=" * 80)
+        logger.info("System preparation completed successfully")
         logger.info("=" * 80)
     
     return True

@@ -7,6 +7,7 @@ Main orchestration script for managing machine configuration tasks
 
 import sys
 import argparse
+import time
 from pathlib import Path
 from typing import List, Callable, Optional
 
@@ -20,7 +21,7 @@ from core.logger import setup_logger
 from tasks.setup_hosts import setup_hosts_locally, setup_hosts_on_remote_machine
 from tasks.deploy_mysql import deploy_mysql_on_raptor
 from tasks.deploy_mongo import deploy_mongo_on_raptor
-from tasks.download_supporting_files import download_supporting_files
+from tasks.preparation_for_services_deployment import preparation_for_services_deployment
 
 class AutomationOrchestrator:
     """
@@ -95,17 +96,30 @@ class AutomationOrchestrator:
         else:
             self.logger.info(f"➤  {task_id}")
         
+        start_time = time.time()
+        
         try:
             result = task_fn()
+            elapsed_time = time.time() - start_time
             self.state.mark_completed(task_id)
-            if self.verbose:
-                self.logger.info(f"✓  Completed: {task_id}")
+            
+            # Format elapsed time
+            if elapsed_time < 60:
+                time_str = f"{elapsed_time:.1f}s"
             else:
-                self.logger.info(f"✓  {task_id}")
+                minutes = int(elapsed_time // 60)
+                seconds = elapsed_time % 60
+                time_str = f"{minutes}m {seconds:.1f}s"
+            
+            if self.verbose:
+                self.logger.info(f"✓  Completed: {task_id} (took {time_str})")
+            else:
+                self.logger.info(f"✓  {task_id} ({time_str})")
             return True
             
         except Exception as e:
-            self.logger.error(f"✗  Failed: {task_id}")
+            elapsed_time = time.time() - start_time
+            self.logger.error(f"✗  Failed: {task_id} (after {elapsed_time:.1f}s)")
             self.logger.error(f"   Error: {str(e)}", exc_info=self.verbose)
             return False
     
@@ -120,6 +134,8 @@ class AutomationOrchestrator:
         Returns:
             True if all tasks completed successfully, False otherwise
         """
+        start_time = time.time()
+        
         self.logger.info("=" * 80)
         self.logger.info("Starting automation execution")
         self.logger.info(f"Total tasks registered: {len(self.tasks)}")
@@ -135,22 +151,45 @@ class AutomationOrchestrator:
             success = self.run_task(task_id, task_fn, description)
             
             if not success:
+                total_time = time.time() - start_time
                 self.logger.error("Task execution failed. Stopping.")
+                self.logger.error(f"Total execution time: {self._format_time(total_time)}")
                 return False
             
             # Stop at stage only if not in continue mode
             if not continue_mode and stop_at and task_id == stop_at:
+                total_time = time.time() - start_time
                 self.logger.info("=" * 80)
                 self.logger.info(f"✓ Reached stage checkpoint: {stop_at}")
                 self.logger.info("Initial setup phase completed successfully")
+                self.logger.info(f"Total execution time: {self._format_time(total_time)}")
                 self.logger.info("To continue with remaining tasks, run: python automation.py --continue")
                 self.logger.info("=" * 80)
                 return True
         
+        total_time = time.time() - start_time
         self.logger.info("=" * 80)
         self.logger.info("Automation execution completed successfully")
+        self.logger.info(f"Total execution time: {self._format_time(total_time)}")
         self.logger.info("=" * 80)
         return True
+    
+    def _format_time(self, seconds: float) -> str:
+        """
+        Format time in seconds to human-readable string.
+        
+        Args:
+            seconds: Time in seconds
+            
+        Returns:
+            Formatted time string (e.g., "1m 23.5s" or "45.2s")
+        """
+        if seconds < 60:
+            return f"{seconds:.1f}s"
+        else:
+            minutes = int(seconds // 60)
+            remaining_seconds = seconds % 60
+            return f"{minutes}m {remaining_seconds:.1f}s"
     
     def reset_state(self):
         """Reset state to start fresh."""
@@ -361,11 +400,11 @@ def main():
         else:
             logger.warning(f"Machine {machine_name} not found in configuration")
     
-    # Download supporting files (must be done before deployments)
+    # Prepare system for services deployment (update system and download supporting files)
     orchestrator.register_task(
-        task_id="download_supporting_files",
-        task_fn=lambda: download_supporting_files(logger, verbose=args.verbose),
-        description="Download and extract supporting files from Box (MySQL, MongoDB, etc.)"
+        task_id="preparation_for_services_deployment",
+        task_fn=lambda: preparation_for_services_deployment(logger, verbose=args.verbose),
+        description="Update system packages and download supporting files from Box"
     )
     
     # Deploy MySQL on raptor

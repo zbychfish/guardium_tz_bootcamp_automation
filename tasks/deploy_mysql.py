@@ -206,14 +206,6 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
 
-    # Update system
-    commands = [
-        "dnf update --exclude=kernel* -y"
-    ]
-    if not execute_commands(commands, logger, verbose):
-        logger.error("System update failed")
-        return False
-
     # Install MySQL server
     commands = [
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
