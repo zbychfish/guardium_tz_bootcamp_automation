@@ -258,12 +258,139 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
                 print_output=verbose
             )
             
+            # Oracle installer returns rc=6 for "Successfully Setup Software with warning(s)"
+            # This is acceptable - rc=0 is success, rc=6 is success with warnings
+            if result['rc'] not in [0, 6]:
+                logger.error(f"Oracle installer failed with return code {result['rc']}: {result['stderr']}")
+                return False
+            
+            if result['rc'] == 6:
+                if verbose:
+                    logger.info("⚠ Oracle installer completed with warnings (rc=6)")
+            else:
+                if verbose:
+                    logger.info("✓ Oracle installer completed successfully")
+            
+            # Step 8: Run post-installation root scripts
+            if verbose:
+                logger.info("Step 8: Running post-installation root scripts")
+            
+            root_scripts = [
+                "/u01/app/oraInventory/orainstRoot.sh",
+                "/u01/app/oracle/product/21c/dbhome_1/root.sh"
+            ]
+            
+            for script in root_scripts:
+                if verbose:
+                    logger.info(f"Executing {script}")
+                
+                result = ssh.execute_command(
+                    script,
+                    timeout=300,  # 5 minutes per script
+                    print_output=verbose
+                )
+                
+                if result['rc'] != 0:
+                    logger.error(f"Failed to execute {script}: {result['stderr']}")
+                    return False
+            
+            if verbose:
+                logger.info("✓ Post-installation root scripts completed")
+            
+            # Step 9: Configure Oracle listener
+            if verbose:
+                logger.info("Step 9: Configuring Oracle listener")
+            
+            netca_cmd = "su - oracle -c '$ORACLE_HOME/bin/netca -silent -responseFile $ORACLE_HOME/assistants/netca/netca.rsp'"
+            
+            result = ssh.execute_command(
+                netca_cmd,
+                timeout=600,  # 10 minutes
+                print_output=verbose
+            )
+            
             if result['rc'] != 0:
-                logger.error(f"Oracle installer failed: {result['stderr']}")
+                logger.error(f"Failed to configure Oracle listener: {result['stderr']}")
                 return False
             
             if verbose:
-                logger.info("✓ Oracle installer completed successfully")
+                logger.info("✓ Oracle listener configured")
+            
+            # Step 10: Create Oracle database
+            if verbose:
+                logger.info("Step 10: Creating Oracle database (this may take 20-40 minutes)")
+            
+            dbca_cmd = """su - oracle -c 'dbca -silent -createDatabase \
+  -templateName General_Purpose.dbc \
+  -gdbname ORCLCDB \
+  -sid ORCLCDB \
+  -createAsContainerDatabase true \
+  -numberOfPDBs 1 \
+  -pdbName ORCLPDB1 \
+  -sysPassword "Guardium123!" \
+  -systemPassword "Guardium123!" \
+  -pdbAdminPassword "Guardium123!" \
+  -characterSet AL32UTF8 \
+  -memoryMgmtType auto_sga \
+  -totalMemory 1500 \
+  -storageType FS \
+  -datafileDestination "/u01/app/oracle/oradata"'"""
+            
+            result = ssh.execute_command(
+                dbca_cmd,
+                timeout=3600,  # 60 minutes for database creation
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to create Oracle database: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ Oracle database created")
+            
+            # Step 11: Add ORACLE_SID to oracle user's .bashrc
+            if verbose:
+                logger.info("Step 11: Adding ORACLE_SID to oracle user environment")
+            
+            oracle_sid_export = "\nexport ORACLE_SID=ORCLCDB\n"
+            
+            result = ssh.execute_command(
+                f"su - oracle -c 'echo \"{oracle_sid_export}\" >> ~/.bashrc'",
+                timeout=30,
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to add ORACLE_SID to .bashrc: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ ORACLE_SID added to oracle user environment")
+            
+            # Step 12: Configure pluggable databases to auto-start
+            if verbose:
+                logger.info("Step 12: Configuring pluggable databases to auto-start")
+            
+            sqlplus_cmd = """su - oracle -c 'export ORACLE_SID=ORCLCDB && echo "ALTER PLUGGABLE DATABASE ALL SAVE STATE;" | sqlplus -s / as sysdba'"""
+            
+            result = ssh.execute_command(
+                sqlplus_cmd,
+                timeout=300,  # 5 minutes
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error(f"Failed to configure PDB auto-start: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("✓ Pluggable databases configured to auto-start")
+                logger.info("=" * 80)
+                logger.info("Oracle Database 21c installation completed successfully!")
+                logger.info("Database: ORCLCDB")
+                logger.info("PDB: ORCLPDB1")
+                logger.info("Passwords: Guardium123!")
                 logger.info("=" * 80)
             
             return True
