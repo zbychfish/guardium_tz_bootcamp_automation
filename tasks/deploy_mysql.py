@@ -36,7 +36,7 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
     if verbose:
         logger.info("Extracting temporary password from /var/log/mysqld.log")
     result = execute_local_command(
-        "grep 'temporary password' /var/log/mysqld.log",
+        "grep 'temporary password' /var/log/mysqld.log | sed 's/.*: //'",
         logger,
         verbose
     )
@@ -45,13 +45,12 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
         logger.error("Failed to extract temporary password from mysqld.log")
         return False
     
-    temp_password_match = re.search(r'temporary password.*:\s*(\S+)', result['stdout'])
-    if not temp_password_match:
+    temp_password = result['stdout'].strip()
+    
+    if not temp_password:
         logger.error("Could not parse temporary password from log")
-        logger.error(f"Log output: {result['stdout']}")
         return False
     
-    temp_password = temp_password_match.group(1)
     if verbose:
         logger.info("Temporary password extracted successfully")
     
