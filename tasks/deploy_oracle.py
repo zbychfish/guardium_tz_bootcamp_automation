@@ -603,9 +603,12 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
             if verbose:
                 logger.info("Updating password in hr_install.sql")
             
-            # Escape special characters in password for sed
-            escaped_password = root_password.replace('/', '\\/')
-            update_password_cmd = f"su - oracle -c \"sed -i 's/DEFINE pass = '<password>'/DEFINE pass = '{escaped_password}'/' /home/oracle/human_resources/hr_install.sql\""
+            # Escape special characters in password for sed and shell
+            # Replace / with \/ for sed, and escape other special characters
+            escaped_password = root_password.replace('\\', '\\\\').replace('/', '\\/').replace('&', '\\&').replace('!', '\\!')
+            
+            # Use single quotes around sed command to prevent shell interpretation
+            update_password_cmd = f"su - oracle -c 'sed -i \"s/DEFINE pass = .\\+/DEFINE pass = \\x27{escaped_password}\\x27/\" /home/oracle/human_resources/hr_install.sql'"
             
             result = ssh.execute_command(
                 update_password_cmd,
