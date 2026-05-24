@@ -261,6 +261,63 @@ fi
         return False
 
 
+def import_mongodb_sample_data(logger, verbose: bool = True) -> bool:
+    """
+    Import sample data into MongoDB from compressed archive.
+    Uses the MONGO_URI environment variable for connection.
+    
+    Args:
+        logger: Logger instance
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Importing MongoDB sample data")
+        logger.info("=" * 80)
+    
+    archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/sampledata.archive.gz"
+    
+    # Check if archive exists
+    check_result = execute_local_command(
+        f"test -f {archive_path}",
+        logger,
+        verbose=False
+    )
+    
+    if check_result['rc'] != 0:
+        logger.warning(f"Sample data archive not found: {archive_path}")
+        logger.warning("Skipping data import")
+        return True  # Not a critical error
+    
+    if verbose:
+        logger.info(f"Found sample data archive: {archive_path}")
+        logger.info("Importing data using mongorestore...")
+    
+    # Build mongorestore command with --quiet flag if not verbose
+    quiet_flag = "--quiet" if not verbose else ""
+    import_command = f'gunzip -c {archive_path} | mongorestore --archive --uri="$MONGO_URI" --nsInclude="*" {quiet_flag}'
+    
+    # Source .mongo_env and execute import
+    full_command = f'bash -c "source /root/.mongo_env && {import_command}"'
+    
+    result = execute_local_command(full_command, logger, verbose=verbose)
+    
+    if result['rc'] != 0:
+        logger.error("Failed to import MongoDB sample data")
+        if result['stderr']:
+            logger.error(f"Error: {result['stderr']}")
+        return False
+    
+    if verbose:
+        logger.info("✓ Sample data imported successfully")
+        logger.info("=" * 80)
+    
+    return True
+
+
 def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     """
     Deploy MongoDB on local machine (raptor).
@@ -284,50 +341,55 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     password = config.get_custom_variable('pwd')
     
     # Create MongoDB repository file
-    if not create_mongodb_repo_file(logger, verbose):
-        logger.error("Failed to create MongoDB repository file")
-        return False
+    # if not create_mongodb_repo_file(logger, verbose):
+    #     logger.error("Failed to create MongoDB repository file")
+    #     return False
     
-    # Install MongoDB
-    commands = [
-        "dnf install -y mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise",
-        "systemctl enable mongod",
-        "systemctl start mongod",
-        "sleep 5",  # Wait for MongoDB to be ready
-    ]
-    if not execute_commands(commands, logger, verbose):
-        logger.error("MongoDB installation failed")
-        return False
+    # # Install MongoDB
+    # commands = [
+    #     "dnf install -y mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise",
+    #     "systemctl enable mongod",
+    #     "systemctl start mongod",
+    #     "sleep 5",  # Wait for MongoDB to be ready
+    # ]
+    # if not execute_commands(commands, logger, verbose):
+    #     logger.error("MongoDB installation failed")
+    #     return False
     
-    # Verify MongoDB is running
-    if verbose:
-        logger.info("Verifying MongoDB is running...")
-    verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
-    if verify_result['rc'] != 0:
-        logger.error("MongoDB service is not running")
-        return False
+    # # Verify MongoDB is running
+    # if verbose:
+    #     logger.info("Verifying MongoDB is running...")
+    # verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
+    # if verify_result['rc'] != 0:
+    #     logger.error("MongoDB service is not running")
+    #     return False
     
-    # Create admin user (before enabling authorization)
-    if not create_mongodb_admin_user(password, logger, verbose):
-        logger.error("Failed to create MongoDB admin user")
-        return False
+    # # Create admin user (before enabling authorization)
+    # if not create_mongodb_admin_user(password, logger, verbose):
+    #     logger.error("Failed to create MongoDB admin user")
+    #     return False
     
-    # Enable authorization
-    if not enable_mongodb_authorization(logger, verbose):
-        logger.error("Failed to enable MongoDB authorization")
-        return False
+    # # Enable authorization
+    # if not enable_mongodb_authorization(logger, verbose):
+    #     logger.error("Failed to enable MongoDB authorization")
+    #     return False
     
-    # Restart MongoDB to apply authorization settings
-    commands = [
-        "systemctl restart mongod"
-    ]
-    if not execute_commands(commands, logger, verbose):
-        logger.error("Failed to restart MongoDB")
-        return False
+    # # Restart MongoDB to apply authorization settings
+    # commands = [
+    #     "systemctl restart mongod"
+    # ]
+    # if not execute_commands(commands, logger, verbose):
+    #     logger.error("Failed to restart MongoDB")
+    #     return False
     
     # Create .mongo_env file with connection URI
     if not create_mongo_env_file(password, logger, verbose):
         logger.error("Failed to create MongoDB environment file")
+        return False
+    
+    # Import sample data
+    if not import_mongodb_sample_data(logger, verbose):
+        logger.error("Failed to import MongoDB sample data")
         return False
 
     if verbose:
