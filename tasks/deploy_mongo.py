@@ -341,46 +341,46 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     password = config.get_custom_variable('pwd')
     
     # Create MongoDB repository file
-    # if not create_mongodb_repo_file(logger, verbose):
-    #     logger.error("Failed to create MongoDB repository file")
-    #     return False
+    if not create_mongodb_repo_file(logger, verbose):
+        logger.error("Failed to create MongoDB repository file")
+        return False
     
-    # # Install MongoDB
-    # commands = [
-    #     "dnf install -y mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise",
-    #     "systemctl enable mongod",
-    #     "systemctl start mongod",
-    #     "sleep 5",  # Wait for MongoDB to be ready
-    # ]
-    # if not execute_commands(commands, logger, verbose):
-    #     logger.error("MongoDB installation failed")
-    #     return False
+    # Install MongoDB
+    commands = [
+        "dnf install -y mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise",
+        "systemctl enable mongod",
+        "systemctl start mongod",
+        "sleep 5",  # Wait for MongoDB to be ready
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("MongoDB installation failed")
+        return False
     
-    # # Verify MongoDB is running
-    # if verbose:
-    #     logger.info("Verifying MongoDB is running...")
-    # verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
-    # if verify_result['rc'] != 0:
-    #     logger.error("MongoDB service is not running")
-    #     return False
+    # Verify MongoDB is running
+    if verbose:
+        logger.info("Verifying MongoDB is running...")
+    verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
+    if verify_result['rc'] != 0:
+        logger.error("MongoDB service is not running")
+        return False
     
-    # # Create admin user (before enabling authorization)
-    # if not create_mongodb_admin_user(password, logger, verbose):
-    #     logger.error("Failed to create MongoDB admin user")
-    #     return False
+    # Create admin user (before enabling authorization)
+    if not create_mongodb_admin_user(password, logger, verbose):
+        logger.error("Failed to create MongoDB admin user")
+        return False
     
-    # # Enable authorization
-    # if not enable_mongodb_authorization(logger, verbose):
-    #     logger.error("Failed to enable MongoDB authorization")
-    #     return False
+    # Enable authorization
+    if not enable_mongodb_authorization(logger, verbose):
+        logger.error("Failed to enable MongoDB authorization")
+        return False
     
-    # # Restart MongoDB to apply authorization settings
-    # commands = [
-    #     "systemctl restart mongod"
-    # ]
-    # if not execute_commands(commands, logger, verbose):
-    #     logger.error("Failed to restart MongoDB")
-    #     return False
+    # Restart MongoDB to apply authorization settings
+    commands = [
+        "systemctl restart mongod"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to restart MongoDB")
+        return False
     
     # Create .mongo_env file with connection URI
     if not create_mongo_env_file(password, logger, verbose):
