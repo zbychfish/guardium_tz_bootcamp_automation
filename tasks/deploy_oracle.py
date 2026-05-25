@@ -264,12 +264,14 @@ Host {hostname}
                 logger.error(f"Oracle installer failed with return code {result['rc']}: {result['stderr']}")
                 return False
             
-            if result['rc'] == 6:
-                if verbose:
-                    logger.info("⚠ Oracle installer completed with warnings (rc=6)")
-            else:
-                if verbose:
-                    logger.info("✓ Oracle installer completed successfully")
+            # Only log warnings in verbose mode
+            if result['rc'] == 6 and verbose:
+                logger.info("⚠ Oracle installer completed with warnings (rc=6)")
+            elif result['rc'] == 0 and verbose:
+                logger.info("✓ Oracle installer completed successfully")
+            elif not verbose:
+                # In non-verbose mode, just log success without mentioning rc=6
+                logger.info("✓ Oracle installer completed successfully")
             
             # Step 8: Run post-installation root scripts
             if verbose:

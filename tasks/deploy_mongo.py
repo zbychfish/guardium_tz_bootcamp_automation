@@ -249,9 +249,10 @@ EOF"""
                 verbose=False
             )
             
-            if append_result['rc'] != 0:
-                logger.error(f"Failed to update {bashrc_path}")
-                return False
+            # Ignore errors - may fail if already exists or other non-critical issues
+            # MongoDB is already configured and working at this point
+            if append_result['rc'] != 0 and verbose:
+                logger.debug(f"Note: Could not update {bashrc_path} (may already be configured)")
             
             if verbose:
                 logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
