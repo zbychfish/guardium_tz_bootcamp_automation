@@ -234,9 +234,17 @@ fi
             if verbose:
                 logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
             
-            # Append to .bashrc
+            # Use heredoc to append multi-line content to .bashrc
+            append_cmd = f"""cat >> {bashrc_path} << 'EOF'
+
+# Load MongoDB environment variables
+if [ -f /root/.mongo_env ]; then
+    . /root/.mongo_env
+fi
+EOF"""
+            
             append_result = execute_local_command(
-                f"echo '{bashrc_addition}' >> {bashrc_path}",
+                append_cmd,
                 logger,
                 verbose=False
             )
