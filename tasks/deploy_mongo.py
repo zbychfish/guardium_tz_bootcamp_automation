@@ -6,6 +6,7 @@ Handles MongoDB installation and configuration on local machine (raptor)
 """
 
 import sys
+import time
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -385,12 +386,27 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
         return False
     
     # Restart MongoDB to apply authorization settings
-    commands = [
-        "systemctl restart mongod"
-    ]
-    if not execute_commands(commands, logger, verbose):
-        logger.error("Failed to restart MongoDB")
-        return False
+    if verbose:
+        logger.info("Restarting MongoDB to apply authorization settings...")
+    
+    restart_result = execute_local_command("systemctl restart mongod", logger, verbose=verbose)
+    if restart_result['rc'] != 0:
+        logger.warning(f"MongoDB restart returned code {restart_result['rc']}, checking if service is running...")
+        # Verify MongoDB is actually running despite restart warning
+        verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
+        if verify_result['rc'] != 0:
+            logger.error("MongoDB service is not running after restart")
+            return False
+        if verbose:
+            logger.info("✓ MongoDB is running despite restart warning")
+    else:
+        if verbose:
+            logger.info("✓ MongoDB restarted successfully")
+    
+    # Wait for MongoDB to be ready
+    if verbose:
+        logger.info("Waiting for MongoDB to be ready...")
+    time.sleep(5)
     
     # Create .mongo_env file with connection URI
     if not create_mongo_env_file(password, logger, verbose):
