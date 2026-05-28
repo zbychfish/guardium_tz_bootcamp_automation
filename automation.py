@@ -45,6 +45,7 @@ class AutomationOrchestrator:
         self.config = ConfigLoader(config_file, machines_info_file)
         self.state = StateManager(state_file)
         self.tasks: List[tuple] = []
+        self.markers: set = set()  # Track marker tasks that don't save state
         self.verbose = verbose
         
         self.logger.info("Automation Orchestrator initialized")
@@ -59,7 +60,7 @@ class AutomationOrchestrator:
         else:
             self.logger.warning("No machines loaded from machines_info.json")
     
-    def register_task(self, task_id: str, task_fn: Callable, description: str = ""):
+    def register_task(self, task_id: str, task_fn: Callable, description: str = "", is_marker: bool = False):
         """
         Register a task for execution.
         
@@ -67,11 +68,14 @@ class AutomationOrchestrator:
             task_id: Unique task identifier
             task_fn: Function to execute for this task
             description: Human-readable task description
+            is_marker: If True, task is a logical marker and won't be saved to state
         """
-        self.tasks.append((task_id, task_fn, description))
-        self.logger.debug(f"Registered task: {task_id} - {description}")
+        self.tasks.append((task_id, task_fn, description, is_marker))
+        if is_marker:
+            self.markers.add(task_id)
+        self.logger.debug(f"Registered task: {task_id} - {description}" + (" [MARKER]" if is_marker else ""))
     
-    def run_task(self, task_id: str, task_fn: Callable, description: str = "") -> bool:
+    def run_task(self, task_id: str, task_fn: Callable, description: str = "", is_marker: bool = False) -> bool:
         """
         Execute a single task if not already completed.
         
@@ -79,15 +83,27 @@ class AutomationOrchestrator:
             task_id: Unique task identifier
             task_fn: Function to execute
             description: Task description for logging
+            is_marker: If True, task is a marker and won't be saved to state
             
         Returns:
             True if task executed successfully, False otherwise
         """
-        if self.state.is_completed(task_id):
+        # Markers are never skipped and never saved to state
+        if not is_marker and self.state.is_completed(task_id):
             if self.verbose:
                 self.logger.info(f"⏭  Skipping (already completed): {task_id}")
             else:
                 self.logger.info(f"⏭  {task_id}")
+            return True
+        
+        if is_marker:
+            # Markers are just logical checkpoints - log but don't execute
+            if self.verbose:
+                self.logger.info(f"🏁 Checkpoint: {task_id}")
+                if description:
+                    self.logger.info(f"   {description}")
+            else:
+                self.logger.info(f"🏁 {task_id}")
             return True
         
         if self.verbose:
@@ -102,7 +118,9 @@ class AutomationOrchestrator:
         try:
             result = task_fn()
             elapsed_time = time.time() - start_time
-            self.state.mark_completed(task_id)
+            # Only save to state if not a marker
+            if not is_marker:
+                self.state.mark_completed(task_id)
             
             # Format elapsed time
             if elapsed_time < 60:
@@ -148,8 +166,8 @@ class AutomationOrchestrator:
             self.logger.info("Mode: FULL - executing all tasks")
         self.logger.info("=" * 80)
         
-        for task_id, task_fn, description in self.tasks:
-            success = self.run_task(task_id, task_fn, description)
+        for task_id, task_fn, description, is_marker in self.tasks:
+            success = self.run_task(task_id, task_fn, description, is_marker)
             
             if not success:
                 total_time = time.time() - start_time
@@ -204,18 +222,21 @@ class AutomationOrchestrator:
         stage = self.config.get_custom_variable('stage')
         
         # Create task map for descriptions
-        task_map = {task_id: (desc, idx) for idx, (task_id, _, desc) in enumerate(self.tasks, 1)}
+        task_map = {task_id: (desc, idx, is_marker) for idx, (task_id, _, desc, is_marker) in enumerate(self.tasks, 1)}
         
         # Separate completed and pending tasks
         completed_tasks = []
         pending_tasks = []
         
-        for task_id, task_fn, desc in self.tasks:
+        for task_id, task_fn, desc, is_marker in self.tasks:
             idx = task_map[task_id][1]
-            if task_id in completed:
-                completed_tasks.append((task_id, desc, idx))
+            # Markers are never in completed state, always show as pending
+            if is_marker:
+                pending_tasks.append((task_id, desc, idx, is_marker))
+            elif task_id in completed:
+                completed_tasks.append((task_id, desc, idx, is_marker))
             else:
-                pending_tasks.append((task_id, desc, idx))
+                pending_tasks.append((task_id, desc, idx, is_marker))
         
         print("\n" + "=" * 80)
         print("AUTOMATION STATUS")
@@ -237,7 +258,7 @@ class AutomationOrchestrator:
             print("\n" + "─" * 80)
             print("✓ COMPLETED TASKS:")
             print("─" * 80)
-            for task_id, desc, idx in completed_tasks:
+            for task_id, desc, idx, is_marker in completed_tasks:
                 marker = "  ✓ "
                 if stage and task_id == stage:
                     marker = "  ✓ [STAGE] "
@@ -250,10 +271,13 @@ class AutomationOrchestrator:
             print("\n" + "─" * 80)
             print("⧗ PENDING TASKS (QUEUE):")
             print("─" * 80)
-            for task_id, desc, idx in pending_tasks:
-                marker = "  ○ "
-                if stage and task_id == stage:
+            for task_id, desc, idx, is_marker in pending_tasks:
+                if is_marker:
+                    marker = "  🏁 [MARKER] "
+                elif stage and task_id == stage:
                     marker = "  ○ [STAGE] "
+                else:
+                    marker = "  ○ "
                 print(f"{marker}[{idx}] {task_id}")
                 if desc:
                     print(f"      {desc}")
@@ -421,6 +445,18 @@ def main():
         description="Update system packages and download supporting files from Box"
     )
     
+    # Marker task: End of initial configuration phase
+    # This is a logical marker only - not saved to state, just defines where initial phase ends
+    # Use stage="initial_config" in machines_info.json to stop here
+    orchestrator.register_task(
+        task_id="initial_config",
+        task_fn=lambda: True,  # Marker - never executed
+        description="[MARKER] Initial configuration phase ends here - use --continue to proceed",
+        is_marker=True  # This task is not saved to state
+    )
+    
+    # Add more tasks here - they will be executed only when running with --continue flag
+
     # Deploy MySQL on raptor
     orchestrator.register_task(
         task_id="deploy_mysql_on_raptor",
@@ -441,17 +477,6 @@ def main():
         task_fn=lambda: deploy_oracle_on_sauropod(orchestrator.config, logger, verbose=args.verbose),
         description="Deploy and configure Oracle Database 21c on sauropod machine"
     )
-
-    # Marker task: End of initial configuration phase
-    # This task does nothing but serves as a checkpoint for stage mechanism
-    # Use stage="initial_config" in machines_info.json to stop here
-    orchestrator.register_task(
-        task_id="initial_config",
-        task_fn=lambda: True,  # Empty task - always succeeds
-        description="Initial configuration completed - checkpoint for stage mechanism"
-    )
-    
-    # Add more tasks here - they will be executed only when running with --continue flag
 
     # Handle special commands AFTER task registration
     if args.remove_task:
