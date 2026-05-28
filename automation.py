@@ -88,7 +88,7 @@ class AutomationOrchestrator:
         Returns:
             True if task executed successfully, False otherwise
         """
-        # Markers are never skipped and never saved to state
+        # Check if task is already completed (markers are never in completed state)
         if not is_marker and self.state.is_completed(task_id):
             if self.verbose:
                 self.logger.info(f"⏭  Skipping (already completed): {task_id}")
@@ -96,16 +96,17 @@ class AutomationOrchestrator:
                 self.logger.info(f"⏭  {task_id}")
             return True
         
+        # For markers, just log the checkpoint - they don't execute anything
         if is_marker:
-            # Markers are just logical checkpoints - log but don't execute
             if self.verbose:
-                self.logger.info(f"🏁 Checkpoint: {task_id}")
+                self.logger.info(f"🏁 Checkpoint reached: {task_id}")
                 if description:
                     self.logger.info(f"   {description}")
             else:
                 self.logger.info(f"🏁 {task_id}")
             return True
         
+        # Regular task execution
         if self.verbose:
             self.logger.info(f"➤  Running: {task_id}")
             if description:
@@ -118,9 +119,7 @@ class AutomationOrchestrator:
         try:
             result = task_fn()
             elapsed_time = time.time() - start_time
-            # Only save to state if not a marker
-            if not is_marker:
-                self.state.mark_completed(task_id)
+            self.state.mark_completed(task_id)
             
             # Format elapsed time
             if elapsed_time < 60:
@@ -167,6 +166,17 @@ class AutomationOrchestrator:
         self.logger.info("=" * 80)
         
         for task_id, task_fn, description, is_marker in self.tasks:
+            # Stop BEFORE marker if it's the stop_at point (not in continue mode)
+            if not continue_mode and stop_at and task_id == stop_at and is_marker:
+                total_time = time.time() - start_time
+                self.logger.info("=" * 80)
+                self.logger.info(f"🏁 Reached stage checkpoint: {stop_at}")
+                self.logger.info("Initial setup phase completed successfully")
+                self.logger.info(f"Total execution time: {self._format_time(total_time)}")
+                self.logger.info("To continue with remaining tasks, run: python automation.py --continue")
+                self.logger.info("=" * 80)
+                return True
+            
             success = self.run_task(task_id, task_fn, description, is_marker)
             
             if not success:
@@ -175,8 +185,9 @@ class AutomationOrchestrator:
                 self.logger.error(f"Total execution time: {self._format_time(total_time)}")
                 return False
             
-            # Stop at stage only if not in continue mode
-            if not continue_mode and stop_at and task_id == stop_at:
+            # Stop at stage only if not in continue mode and not a marker
+            # (markers are handled above before execution)
+            if not continue_mode and stop_at and task_id == stop_at and not is_marker:
                 total_time = time.time() - start_time
                 self.logger.info("=" * 80)
                 self.logger.info(f"✓ Reached stage checkpoint: {stop_at}")
