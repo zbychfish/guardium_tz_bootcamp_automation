@@ -261,8 +261,8 @@ def create_mongo_env_file(password: str, logger, verbose: bool = True) -> bool:
 #             if verbose:
 #                 logger.info(f"✓ {bashrc_path} already sources .mongo_env")
         
-        if verbose:
-            logger.info("=" * 80)
+#         if verbose:
+#             logger.info("=" * 80)
         
         return True
         
