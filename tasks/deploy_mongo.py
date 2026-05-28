@@ -343,13 +343,13 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    # if verbose:
-    #     logger.info("=" * 80)
-    #     logger.info("Starting MongoDB deployment on raptor")
-    #     logger.info("=" * 80)
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Starting MongoDB deployment on raptor")
+        logger.info("=" * 80)
     
-    # config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
-    # password = config.get_custom_variable('pwd')
+    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
+    password = config.get_custom_variable('pwd')
     
     # # Create MongoDB repository file
     # if not create_mongodb_repo_file(logger, verbose):
