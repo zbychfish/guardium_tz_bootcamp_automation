@@ -396,15 +396,15 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
         logger.error("MongoDB restart failed")
         return False
     
-    # Create .mongo_env file with connection URI
-    if not create_mongo_env_file(password, logger, verbose):
-        logger.error("Failed to create MongoDB environment file")
-        return False
-    
-    # # Import sample data
-    # if not import_mongodb_sample_data(logger, verbose):
-    #     logger.error("Failed to import MongoDB sample data")
+    # # Create .mongo_env file with connection URI
+    # if not create_mongo_env_file(password, logger, verbose):
+    #     logger.error("Failed to create MongoDB environment file")
     #     return False
+    
+    # Import sample data
+    if not import_mongodb_sample_data(logger, verbose):
+        logger.error("Failed to import MongoDB sample data")
+        return False
 
     if verbose:
         logger.info("=" * 80)
