@@ -456,18 +456,6 @@ def main():
         description="Update system packages and download supporting files from Box"
     )
     
-    # Marker task: End of initial configuration phase
-    # This is a logical marker only - not saved to state, just defines where initial phase ends
-    # Use stage="initial_config" in machines_info.json to stop here
-    orchestrator.register_task(
-        task_id="initial_config",
-        task_fn=lambda: True,  # Marker - never executed
-        description="[MARKER] Initial configuration phase ends here - use --continue to proceed",
-        is_marker=True  # This task is not saved to state
-    )
-    
-    # Add more tasks here - they will be executed only when running with --continue flag
-
     # Deploy MySQL on raptor
     orchestrator.register_task(
         task_id="deploy_mysql_on_raptor",
@@ -482,6 +470,18 @@ def main():
         description="Deploy and configure MongoDB on raptor machine"
     )
     
+    # Marker task: End of initial configuration phase
+    # This is a logical marker only - not saved to state, just defines where initial phase ends
+    # Use stage="initial_config" in machines_info.json to stop here
+    orchestrator.register_task(
+        task_id="initial_config",
+        task_fn=lambda: True,  # Marker - never executed
+        description="[MARKER] Initial configuration phase ends here - use --continue to proceed",
+        is_marker=True  # This task is not saved to state
+    )
+    
+    # Add more tasks here - they will be executed only when running with --continue flag
+
     # Deploy Oracle on sauropod
     orchestrator.register_task(
         task_id="deploy_oracle_on_sauropod",
