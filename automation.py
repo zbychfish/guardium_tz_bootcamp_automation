@@ -513,7 +513,7 @@ def main():
     
     # Validate stop_at task exists if specified (after all tasks are registered)
     if stop_at_task and not args.continue_mode:
-        task_ids = [task_id for task_id, _, _ in orchestrator.tasks]
+        task_ids = [task_id for task_id, _, _, _ in orchestrator.tasks]
         if stop_at_task not in task_ids:
             logger.error(f"Stage task '{stop_at_task}' not found in registered tasks")
             logger.error(f"Available task IDs: {', '.join(task_ids)}")
