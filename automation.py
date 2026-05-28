@@ -349,29 +349,13 @@ def main():
         verbose=args.verbose
     )
     
-    # Handle special commands
+    # Handle reset command immediately (before task registration)
     if args.reset:
         orchestrator.reset_state()
         return 0
     
-    if args.remove_task:
-        task_id = args.remove_task
-        if orchestrator.state.is_completed(task_id):
-            orchestrator.state.remove_task(task_id)
-            print(f"✓ Task '{task_id}' removed from completed state")
-            print(f"  Task will be re-executed on next run")
-        else:
-            print(f"✗ Task '{task_id}' is not in completed state")
-            print(f"\nCompleted tasks:")
-            for completed_task in orchestrator.state.get_completed_tasks():
-                print(f"  - {completed_task}")
-        return 0
-    
-    if args.status:
-        orchestrator.show_status()
-        return 0
-    
-    # Register your tasks here
+    # Register all tasks BEFORE handling other commands
+    # This ensures --status and --remove-task can see all registered tasks
     
     machines = orchestrator.config.get_machines()
     credentials = orchestrator.config.get_credentials()
@@ -468,6 +452,24 @@ def main():
     )
     
     # Add more tasks here - they will be executed only when running with --continue flag
+
+    # Handle special commands AFTER task registration
+    if args.remove_task:
+        task_id = args.remove_task
+        if orchestrator.state.is_completed(task_id):
+            orchestrator.state.remove_task(task_id)
+            print(f"✓ Task '{task_id}' removed from completed state")
+            print(f"  Task will be re-executed on next run")
+        else:
+            print(f"✗ Task '{task_id}' is not in completed state")
+            print(f"\nCompleted tasks:")
+            for completed_task in orchestrator.state.get_completed_tasks():
+                print(f"  - {completed_task}")
+        return 0
+    
+    if args.status:
+        orchestrator.show_status()
+        return 0
 
     # Determine stop_at parameter
     # Priority: --stop-at argument > stage from machines_info.json
