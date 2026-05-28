@@ -375,15 +375,15 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
         logger.error("MongoDB service is not running")
         return False
     
-    # Create admin user (before enabling authorization)
-    if not create_mongodb_admin_user(password, logger, verbose):
-        logger.error("Failed to create MongoDB admin user")
-        return False
-    
-    # # Enable authorization
-    # if not enable_mongodb_authorization(logger, verbose):
-    #     logger.error("Failed to enable MongoDB authorization")
+    # # Create admin user (before enabling authorization)
+    # if not create_mongodb_admin_user(password, logger, verbose):
+    #     logger.error("Failed to create MongoDB admin user")
     #     return False
+    
+    # Enable authorization
+    if not enable_mongodb_authorization(logger, verbose):
+        logger.error("Failed to enable MongoDB authorization")
+        return False
     
     # # Restart MongoDB to apply authorization settings
     # if verbose:
