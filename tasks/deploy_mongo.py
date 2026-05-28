@@ -197,7 +197,7 @@ def create_mongo_env_file(password: str, logger, verbose: bool = True) -> bool:
     
     # Create .mongo_env content
     mongo_env_path = "/root/.mongo_env"
-    mongo_env_content = f'export MONGO_URI="mongodb://admin:{encoded_password}@localhost:27017/admin"\n'
+    mongo_env_content = f"export MONGO_URI='mongodb://admin:{encoded_password}@localhost:27017/admin'\n"
     
     try:
         if verbose:
@@ -216,55 +216,55 @@ def create_mongo_env_file(password: str, logger, verbose: bool = True) -> bool:
             logger.info(f"✓ Created {mongo_env_path}")
         
         # Update .bashrc to source .mongo_env
-        bashrc_path = "/root/.bashrc"
-        bashrc_addition = """
-# Load MongoDB environment variables
-if [ -f /root/.mongo_env ]; then
-    . /root/.mongo_env
-fi
-"""
+#         bashrc_path = "/root/.bashrc"
+#         bashrc_addition = """
+# # Load MongoDB environment variables
+# if [ -f /root/.mongo_env ]; then
+#     . /root/.mongo_env
+# fi
+# """
         
-        # Check if .mongo_env is already sourced in .bashrc
-        check_result = execute_local_command(
-            f"grep -q '.mongo_env' {bashrc_path}",
-            logger,
-            verbose=False
-        )
+#         # Check if .mongo_env is already sourced in .bashrc
+#         check_result = execute_local_command(
+#             f"grep -q '.mongo_env' {bashrc_path}",
+#             logger,
+#             verbose=False
+#         )
         
-        if check_result['rc'] != 0:  # Not found, add it
-            if verbose:
-                logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
+#         if check_result['rc'] != 0:  # Not found, add it
+#             if verbose:
+#                 logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
             
-            # Use heredoc to append multi-line content to .bashrc
-            append_cmd = f"""cat >> {bashrc_path} << 'EOF'
+#             # Use heredoc to append multi-line content to .bashrc
+#             append_cmd = f"""cat >> {bashrc_path} << 'EOF'
 
-# Load MongoDB environment variables
-if [ -f /root/.mongo_env ]; then
-    . /root/.mongo_env
-fi
-EOF"""
+# # Load MongoDB environment variables
+# if [ -f /root/.mongo_env ]; then
+#     . /root/.mongo_env
+# fi
+# EOF"""
             
-            append_result = execute_local_command(
-                append_cmd,
-                logger,
-                verbose=False
-            )
+#             append_result = execute_local_command(
+#                 append_cmd,
+#                 logger,
+#                 verbose=False
+#             )
             
-            # Ignore errors - may fail if already exists or other non-critical issues
-            # MongoDB is already configured and working at this point
-            if append_result['rc'] != 0 and verbose:
-                logger.debug(f"Note: Could not update {bashrc_path} (may already be configured)")
+#             # Ignore errors - may fail if already exists or other non-critical issues
+#             # MongoDB is already configured and working at this point
+#             if append_result['rc'] != 0 and verbose:
+#                 logger.debug(f"Note: Could not update {bashrc_path} (may already be configured)")
             
-            if verbose:
-                logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
-        else:
-            if verbose:
-                logger.info(f"✓ {bashrc_path} already sources .mongo_env")
+#             if verbose:
+#                 logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
+#         else:
+#             if verbose:
+#                 logger.info(f"✓ {bashrc_path} already sources .mongo_env")
         
-        if verbose:
-            logger.info("=" * 80)
+#         if verbose:
+#             logger.info("=" * 80)
         
-        return True
+#         return True
         
     except Exception as e:
         logger.error(f"Failed to create MongoDB environment file: {e}")
@@ -380,38 +380,27 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     #     logger.error("Failed to create MongoDB admin user")
     #     return False
     
-    # Enable authorization
-    if not enable_mongodb_authorization(logger, verbose):
-        logger.error("Failed to enable MongoDB authorization")
-        return False
+    # # Enable authorization
+    # if not enable_mongodb_authorization(logger, verbose):
+    #     logger.error("Failed to enable MongoDB authorization")
+    #     return False
     
     # # Restart MongoDB to apply authorization settings
     # if verbose:
     #     logger.info("Restarting MongoDB to apply authorization settings...")
     
-    # restart_result = execute_local_command("systemctl restart mongod", logger, verbose=verbose)
-    # if restart_result['rc'] != 0:
-    #     logger.warning(f"MongoDB restart returned code {restart_result['rc']}, checking if service is running...")
-    #     # Verify MongoDB is actually running despite restart warning
-    #     verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
-    #     if verify_result['rc'] != 0:
-    #         logger.error("MongoDB service is not running after restart")
-    #         return False
-    #     if verbose:
-    #         logger.info("✓ MongoDB is running despite restart warning")
-    # else:
-    #     if verbose:
-    #         logger.info("✓ MongoDB restarted successfully")
+    commands = [
+        "systemctl restart mongod",
+        "sleep 5",  # Wait for MongoDB to be ready
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("MongoDB restart failed")
+        return False
     
-    # # Wait for MongoDB to be ready
-    # if verbose:
-    #     logger.info("Waiting for MongoDB to be ready...")
-    # time.sleep(5)
-    
-    # # Create .mongo_env file with connection URI
-    # if not create_mongo_env_file(password, logger, verbose):
-    #     logger.error("Failed to create MongoDB environment file")
-    #     return False
+    # Create .mongo_env file with connection URI
+    if not create_mongo_env_file(password, logger, verbose):
+        logger.error("Failed to create MongoDB environment file")
+        return False
     
     # # Import sample data
     # if not import_mongodb_sample_data(logger, verbose):
