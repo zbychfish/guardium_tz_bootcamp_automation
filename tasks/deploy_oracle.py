@@ -71,130 +71,130 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
             if verbose:
                 logger.info("✓ Connected to sauropod")
             
-            # Step 1: Install Oracle prerequisites
-            if verbose:
-                logger.info("Step 1: Installing Oracle prerequisites")
+            # # Step 1: Install Oracle prerequisites
+            # if verbose:
+            #     logger.info("Step 1: Installing Oracle prerequisites")
             
-            prereq_commands = [
-                "curl -o /tmp/oracle-database-preinstall-21c.rpm https://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64/getPackage/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm",
-                #"dnf install -y --nogpgcheck https://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64/getPackage/compat-openssl10-1.0.2o-4.el8_6.x86_64.rpm",
-                "dnf install -y --nogpgcheck /tmp/oracle-database-preinstall-21c.rpm"
+            # prereq_commands = [
+            #     "curl -o /tmp/oracle-database-preinstall-21c.rpm https://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64/getPackage/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm",
+            #     #"dnf install -y --nogpgcheck https://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64/getPackage/compat-openssl10-1.0.2o-4.el8_6.x86_64.rpm",
+            #     "dnf install -y --nogpgcheck /tmp/oracle-database-preinstall-21c.rpm"
+            # ]
+            
+            # results = ssh.execute_commands(
+            #     commands=prereq_commands,
+            #     timeout=600,
+            #     print_output=verbose,
+            #     stop_on_error=True
+            # )
+            
+            # failed = [r for r in results if r['rc'] != 0]
+            # if failed:
+            #     logger.error("Failed to install Oracle prerequisites")
+            #     return False
+            
+            # if verbose:
+            #     logger.info("✓ Oracle prerequisites installed")
+            
+            # Step 2: Create Oracle directories
+            if verbose:
+                logger.info("Step 2: Creating Oracle directories")
+            
+            dir_commands = [
+                "mkdir -p /u01/app/oracle/product/21c/dbhome_1",
+                "chown -R oracle:oinstall /u01",
+                "chmod -R 775 /u01"
             ]
             
             results = ssh.execute_commands(
-                commands=prereq_commands,
-                timeout=600,
+                commands=dir_commands,
+                timeout=60,
                 print_output=verbose,
                 stop_on_error=True
             )
             
             failed = [r for r in results if r['rc'] != 0]
             if failed:
-                logger.error("Failed to install Oracle prerequisites")
+                logger.error("Failed to create Oracle directories")
                 return False
             
             if verbose:
-                logger.info("✓ Oracle prerequisites installed")
+                logger.info("✓ Oracle directories created")
             
-            # Step 2: Create Oracle directories
-#             if verbose:
-#                 logger.info("Step 2: Creating Oracle directories")
+            # Step 3: Configure oracle user environment
+            if verbose:
+                logger.info("Step 3: Configuring oracle user environment")
             
-#             dir_commands = [
-#                 "mkdir -p /u01/app/oracle/product/21c/dbhome_1",
-#                 "chown -R oracle:oinstall /u01",
-#                 "chmod -R 775 /u01"
-#             ]
+            bashrc_content = """
+# Oracle environment variables
+export ORACLE_BASE=/u01/app/oracle
+export ORACLE_HOME=$ORACLE_BASE/product/21c/dbhome_1
+export PATH=$ORACLE_HOME/bin:$PATH
+"""
             
-#             results = ssh.execute_commands(
-#                 commands=dir_commands,
-#                 timeout=60,
-#                 print_output=verbose,
-#                 stop_on_error=True
-#             )
+            # Append to oracle's .bashrc
+            result = ssh.execute_command(
+                f"echo '{bashrc_content}' >> /home/oracle/.bashrc",
+                timeout=30,
+                print_output=verbose
+            )
             
-#             failed = [r for r in results if r['rc'] != 0]
-#             if failed:
-#                 logger.error("Failed to create Oracle directories")
-#                 return False
+            if result['rc'] != 0:
+                logger.error("Failed to configure oracle user environment")
+                return False
             
-#             if verbose:
-#                 logger.info("✓ Oracle directories created")
+            if verbose:
+                logger.info("✓ Oracle user environment configured")
             
-#             # Step 3: Configure oracle user environment
-#             if verbose:
-#                 logger.info("Step 3: Configuring oracle user environment")
+            # Step 4: Copy Oracle installation archive from raptor to sauropod
+            if verbose:
+                logger.info("Step 4: Copying Oracle installation archive from raptor to sauropod")
             
-#             bashrc_content = """
-# # Oracle environment variables
-# export ORACLE_BASE=/u01/app/oracle
-# export ORACLE_HOME=$ORACLE_BASE/product/21c/dbhome_1
-# export PATH=$ORACLE_HOME/bin:$PATH
-# """
+            source_file = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/LINUX.X64_213000_db_home.zip"
+            dest_file = "/home/oracle/LINUX.X64_213000_db_home.zip"
             
-#             # Append to oracle's .bashrc
-#             result = ssh.execute_command(
-#                 f"echo '{bashrc_content}' >> /home/oracle/.bashrc",
-#                 timeout=30,
-#                 print_output=verbose
-#             )
+            # Use SFTP to upload file from local (raptor) to remote (sauropod)
+            if verbose:
+                logger.info(f"Uploading {source_file} to sauropod:{dest_file}")
             
-#             if result['rc'] != 0:
-#                 logger.error("Failed to configure oracle user environment")
-#                 return False
+            upload_success = ssh.upload_file(source_file, dest_file)
             
-#             if verbose:
-#                 logger.info("✓ Oracle user environment configured")
+            if not upload_success:
+                logger.error("Failed to upload Oracle installation archive")
+                return False
             
-#             # Step 4: Copy Oracle installation archive from raptor to sauropod
-#             if verbose:
-#                 logger.info("Step 4: Copying Oracle installation archive from raptor to sauropod")
+            # Set ownership to oracle user
+            result = ssh.execute_command(
+                f"chown oracle:oinstall {dest_file}",
+                timeout=30,
+                print_output=verbose
+            )
             
-#             source_file = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/LINUX.X64_213000_db_home.zip"
-#             dest_file = "/home/oracle/LINUX.X64_213000_db_home.zip"
+            if result['rc'] != 0:
+                logger.error(f"Failed to set ownership on Oracle archive: {result['stderr']}")
+                return False
             
-#             # Use SFTP to upload file from local (raptor) to remote (sauropod)
-#             if verbose:
-#                 logger.info(f"Uploading {source_file} to sauropod:{dest_file}")
+            if verbose:
+                logger.info("✓ Oracle installation archive uploaded and ownership set")
             
-#             upload_success = ssh.upload_file(source_file, dest_file)
+            # Step 5: Unzip Oracle installation archive as oracle user
+            if verbose:
+                logger.info("Step 5: Extracting Oracle installation archive")
             
-#             if not upload_success:
-#                 logger.error("Failed to upload Oracle installation archive")
-#                 return False
+            unzip_cmd = "su - oracle -c 'unzip -q /home/oracle/LINUX.X64_213000_db_home.zip -d $ORACLE_HOME'"
             
-#             # Set ownership to oracle user
-#             result = ssh.execute_command(
-#                 f"chown oracle:oinstall {dest_file}",
-#                 timeout=30,
-#                 print_output=verbose
-#             )
+            result = ssh.execute_command(
+                unzip_cmd,
+                timeout=1800,  # 30 minutes for extraction
+                print_output=verbose
+            )
             
-#             if result['rc'] != 0:
-#                 logger.error(f"Failed to set ownership on Oracle archive: {result['stderr']}")
-#                 return False
+            if result['rc'] != 0:
+                logger.error(f"Failed to extract Oracle installation archive: {result['stderr']}")
+                return False
             
-#             if verbose:
-#                 logger.info("✓ Oracle installation archive uploaded and ownership set")
-            
-#             # Step 5: Unzip Oracle installation archive as oracle user
-#             if verbose:
-#                 logger.info("Step 5: Extracting Oracle installation archive")
-            
-#             unzip_cmd = "su - oracle -c 'unzip -q /home/oracle/LINUX.X64_213000_db_home.zip -d $ORACLE_HOME'"
-            
-#             result = ssh.execute_command(
-#                 unzip_cmd,
-#                 timeout=1800,  # 30 minutes for extraction
-#                 print_output=verbose
-#             )
-            
-#             if result['rc'] != 0:
-#                 logger.error(f"Failed to extract Oracle installation archive: {result['stderr']}")
-#                 return False
-            
-#             if verbose:
-#                 logger.info("✓ Oracle installation archive extracted")
+            if verbose:
+                logger.info("✓ Oracle installation archive extracted")
             
 #             # Step 6: Configure SSH for oracle user
 #             if verbose:
