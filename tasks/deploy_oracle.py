@@ -196,108 +196,108 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
 #             if verbose:
 #                 logger.info("✓ Oracle installation archive extracted")
             
-            # Step 6: Configure SSH for oracle user
-            if verbose:
-                logger.info("Step 6: Configuring SSH for oracle user")
-            
-            # Get hostname for SSH config
-            hostname_result = ssh.execute_command("hostname", timeout=30, print_output=False)
-            if hostname_result['rc'] != 0:
-                logger.error("Failed to get hostname")
-                return False
-            
-            hostname = hostname_result['stdout'].strip()
-            
-            # Create SSH config for oracle user
-            ssh_config_content = f"""Host localhost
-    Port 2223
-    StrictHostKeyChecking no
-Host {hostname}
-    Port 2223
-    StrictHostKeyChecking no
-"""
-            
-            # Create .ssh directory if it doesn't exist
-            ssh.execute_command("su - oracle -c 'mkdir -p ~/.ssh'", timeout=30, print_output=verbose)
-            
-            # Write SSH config
-            config_cmd = f"su - oracle -c 'cat >> ~/.ssh/config <<EOF\n{ssh_config_content}EOF'"
-            
-            result = ssh.execute_command(config_cmd, timeout=30, print_output=verbose)
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure SSH for oracle user: {result['stderr']}")
-                return False
-            
-            # Set proper permissions on SSH config
-            ssh.execute_command("su - oracle -c 'chmod 600 ~/.ssh/config'", timeout=30, print_output=verbose)
-            
-            if verbose:
-                logger.info("✓ SSH configured for oracle user")
-            
-#             # Step 7: Run Oracle installer
+#             # Step 6: Configure SSH for oracle user
 #             if verbose:
-#                 logger.info("Step 7: Running Oracle installer (this may take 15-30 minutes)")
+#                 logger.info("Step 6: Configuring SSH for oracle user")
             
-#             installer_cmd = """su - oracle -c 'cd $ORACLE_HOME && ./runInstaller -silent \
-#   oracle.install.option=INSTALL_DB_SWONLY \
-#   ORACLE_BASE=$ORACLE_BASE \
-#   ORACLE_HOME=$ORACLE_HOME \
-#   oracle.install.db.InstallEdition=EE \
-#   oracle.install.db.OSDBA_GROUP=dba \
-#   oracle.install.db.OSOPER_GROUP=dba \
-#   oracle.install.db.OSBACKUPDBA_GROUP=dba \
-#   oracle.install.db.OSDGDBA_GROUP=dba \
-#   oracle.install.db.OSKMDBA_GROUP=dba \
-#   oracle.install.db.OSRACDBA_GROUP=dba \
-#   -ignorePrereqFailure'"""
-            
-#             result = ssh.execute_command(
-#                 installer_cmd,
-#                 timeout=3600,  # 60 minutes for installation
-#                 print_output=verbose
-#             )
-            
-#             # Oracle installer returns rc=6 for "Successfully Setup Software with warning(s)"
-#             # This is acceptable - rc=0 is success, rc=6 is success with warnings
-#             if result['rc'] not in [0, 6]:
-#                 logger.error(f"Oracle installer failed with return code {result['rc']}: {result['stderr']}")
+#             # Get hostname for SSH config
+#             hostname_result = ssh.execute_command("hostname", timeout=30, print_output=False)
+#             if hostname_result['rc'] != 0:
+#                 logger.error("Failed to get hostname")
 #                 return False
             
-#             # Only log warnings in verbose mode
-#             if result['rc'] == 6 and verbose:
-#                 logger.info("⚠ Oracle installer completed with warnings (rc=6)")
-#             elif result['rc'] == 0 and verbose:
-#                 logger.info("✓ Oracle installer completed successfully")
-#             elif not verbose:
-#                 # In non-verbose mode, just log success without mentioning rc=6
-#                 logger.info("✓ Oracle installer completed successfully")
+#             hostname = hostname_result['stdout'].strip()
             
-#             # Step 8: Run post-installation root scripts
-#             if verbose:
-#                 logger.info("Step 8: Running post-installation root scripts")
+#             # Create SSH config for oracle user
+#             ssh_config_content = f"""Host localhost
+#     Port 2223
+#     StrictHostKeyChecking no
+# Host {hostname}
+#     Port 2223
+#     StrictHostKeyChecking no
+# """
             
-#             root_scripts = [
-#                 "/u01/app/oraInventory/orainstRoot.sh",
-#                 "/u01/app/oracle/product/21c/dbhome_1/root.sh"
-#             ]
+#             # Create .ssh directory if it doesn't exist
+#             ssh.execute_command("su - oracle -c 'mkdir -p ~/.ssh'", timeout=30, print_output=verbose)
             
-#             for script in root_scripts:
-#                 if verbose:
-#                     logger.info(f"Executing {script}")
-                
-#                 result = ssh.execute_command(
-#                     script,
-#                     timeout=300,  # 5 minutes per script
-#                     print_output=verbose
-#                 )
-                
-#                 if result['rc'] != 0:
-#                     logger.error(f"Failed to execute {script}: {result['stderr']}")
-#                     return False
+#             # Write SSH config
+#             config_cmd = f"su - oracle -c 'cat >> ~/.ssh/config <<EOF\n{ssh_config_content}EOF'"
+            
+#             result = ssh.execute_command(config_cmd, timeout=30, print_output=verbose)
+            
+#             if result['rc'] != 0:
+#                 logger.error(f"Failed to configure SSH for oracle user: {result['stderr']}")
+#                 return False
+            
+#             # Set proper permissions on SSH config
+#             ssh.execute_command("su - oracle -c 'chmod 600 ~/.ssh/config'", timeout=30, print_output=verbose)
             
 #             if verbose:
-#                 logger.info("✓ Post-installation root scripts completed")
+#                 logger.info("✓ SSH configured for oracle user")
+            
+            # Step 7: Run Oracle installer
+            if verbose:
+                logger.info("Step 7: Running Oracle installer (this may take 15-30 minutes)")
+            
+            installer_cmd = """su - oracle -c 'cd $ORACLE_HOME && ./runInstaller -silent \
+  oracle.install.option=INSTALL_DB_SWONLY \
+  ORACLE_BASE=$ORACLE_BASE \
+  ORACLE_HOME=$ORACLE_HOME \
+  oracle.install.db.InstallEdition=EE \
+  oracle.install.db.OSDBA_GROUP=dba \
+  oracle.install.db.OSOPER_GROUP=dba \
+  oracle.install.db.OSBACKUPDBA_GROUP=dba \
+  oracle.install.db.OSDGDBA_GROUP=dba \
+  oracle.install.db.OSKMDBA_GROUP=dba \
+  oracle.install.db.OSRACDBA_GROUP=dba \
+  -ignorePrereqFailure'"""
+            
+            result = ssh.execute_command(
+                installer_cmd,
+                timeout=3600,  # 60 minutes for installation
+                print_output=verbose
+            )
+            
+            # Oracle installer returns rc=6 for "Successfully Setup Software with warning(s)"
+            # This is acceptable - rc=0 is success, rc=6 is success with warnings
+            if result['rc'] not in [0, 6]:
+                logger.error(f"Oracle installer failed with return code {result['rc']}: {result['stderr']}")
+                return False
+            
+            # Only log warnings in verbose mode
+            if result['rc'] == 6 and verbose:
+                logger.info("⚠ Oracle installer completed with warnings (rc=6)")
+            elif result['rc'] == 0 and verbose:
+                logger.info("✓ Oracle installer completed successfully")
+            elif not verbose:
+                # In non-verbose mode, just log success without mentioning rc=6
+                logger.info("✓ Oracle installer completed successfully")
+            
+            # Step 8: Run post-installation root scripts
+            if verbose:
+                logger.info("Step 8: Running post-installation root scripts")
+            
+            root_scripts = [
+                "/u01/app/oraInventory/orainstRoot.sh",
+                "/u01/app/oracle/product/21c/dbhome_1/root.sh"
+            ]
+            
+            for script in root_scripts:
+                if verbose:
+                    logger.info(f"Executing {script}")
+                
+                result = ssh.execute_command(
+                    script,
+                    timeout=300,  # 5 minutes per script
+                    print_output=verbose
+                )
+                
+                if result['rc'] != 0:
+                    logger.error(f"Failed to execute {script}: {result['stderr']}")
+                    return False
+            
+            if verbose:
+                logger.info("✓ Post-installation root scripts completed")
             
 #             # Step 9: Configure Oracle listener
 #             if verbose:
