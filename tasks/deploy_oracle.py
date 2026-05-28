@@ -695,147 +695,147 @@ EOF
             if verbose:
                 logger.info("✓ Installation files cleaned up")
             
-#             # Step 20: Install SQLcl
-#             if verbose:
-#                 logger.info("Step 20: Installing SQLcl")
+            # Step 20: Install SQLcl
+            if verbose:
+                logger.info("Step 20: Installing SQLcl")
             
-#             # Install Java 11 if not present
-#             java_install_cmd = "dnf install -y java-11-openjdk"
-#             result = ssh.execute_command(
-#                 java_install_cmd,
-#                 timeout=300,
-#                 print_output=verbose
-#             )
+            # Install Java 11 if not present
+            java_install_cmd = "dnf install -y java-11-openjdk"
+            result = ssh.execute_command(
+                java_install_cmd,
+                timeout=300,
+                print_output=verbose
+            )
             
-#             if result['rc'] != 0:
-#                 logger.warning("Failed to install Java 11, SQLcl installation may fail")
+            if result['rc'] != 0:
+                logger.warning("Failed to install Java 11, SQLcl installation may fail")
             
-#             # Download and install SQLcl
-#             sqlcl_install_commands = [
-#                 "cd /tmp",
-#                 "curl -L -o sqlcl-latest.zip https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip",
-#                 "mkdir -p /opt/sqlcl",
-#                 "unzip -q -o sqlcl-latest.zip -d /opt/sqlcl",
-#                 "rm -f /tmp/sqlcl-latest.zip"
-#             ]
+            # Download and install SQLcl
+            sqlcl_install_commands = [
+                "cd /tmp",
+                "curl -L -o sqlcl-latest.zip https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip",
+                "mkdir -p /opt/sqlcl",
+                "unzip -q -o sqlcl-latest.zip -d /opt/sqlcl",
+                "rm -f /tmp/sqlcl-latest.zip"
+            ]
             
-#             results = ssh.execute_commands(
-#                 commands=sqlcl_install_commands,
-#                 timeout=600,
-#                 print_output=verbose,
-#                 stop_on_error=True
-#             )
+            results = ssh.execute_commands(
+                commands=sqlcl_install_commands,
+                timeout=600,
+                print_output=verbose,
+                stop_on_error=True
+            )
             
-#             failed = [r for r in results if r['rc'] != 0]
-#             if failed:
-#                 logger.warning("Failed to install SQLcl, but continuing...")
-#             else:
-#                 if verbose:
-#                     logger.info("✓ SQLcl installed")
+            failed = [r for r in results if r['rc'] != 0]
+            if failed:
+                logger.warning("Failed to install SQLcl, but continuing...")
+            else:
+                if verbose:
+                    logger.info("✓ SQLcl installed")
             
-#             # Step 21: Configure SQLcl for oracle user
-#             if verbose:
-#                 logger.info("Step 21: Configuring SQLcl for oracle user")
+            # Step 21: Configure SQLcl for oracle user
+            if verbose:
+                logger.info("Step 21: Configuring SQLcl for oracle user")
             
-#             # Add SQLcl to PATH in oracle's .bashrc
-#             sqlcl_bashrc_addition = """
-# # SQLcl PATH
-# export PATH=$PATH:/opt/sqlcl/sqlcl/bin
+            # Add SQLcl to PATH in oracle's .bashrc
+            sqlcl_bashrc_addition = """
+# SQLcl PATH
+export PATH=$PATH:/opt/sqlcl/sqlcl/bin
 
-# # SQLcl aliases
-# alias sql='sql /nolog'
+# SQLcl aliases
+alias sql='sql /nolog'
 
-# # SQLcl history settings
-# export SQLPATH=$HOME/.sqlcl
-# """
+# SQLcl history settings
+export SQLPATH=$HOME/.sqlcl
+"""
             
-#             # Check if SQLcl PATH is already in .bashrc
-#             check_sqlcl_cmd = "su - oracle -c 'grep -q \"/opt/sqlcl/sqlcl/bin\" ~/.bashrc'"
-#             check_result = ssh.execute_command(
-#                 check_sqlcl_cmd,
-#                 timeout=30,
-#                 print_output=False
-#             )
+            # Check if SQLcl PATH is already in .bashrc
+            check_sqlcl_cmd = "su - oracle -c 'grep -q \"/opt/sqlcl/sqlcl/bin\" ~/.bashrc'"
+            check_result = ssh.execute_command(
+                check_sqlcl_cmd,
+                timeout=30,
+                print_output=False
+            )
             
-#             if check_result['rc'] != 0:  # Not found, add it
-#                 # Use heredoc to append to .bashrc
-#                 append_sqlcl_cmd = """su - oracle -c "cat >> ~/.bashrc << 'EOF'
+            if check_result['rc'] != 0:  # Not found, add it
+                # Use heredoc to append to .bashrc
+                append_sqlcl_cmd = """su - oracle -c "cat >> ~/.bashrc << 'EOF'
 
-# # SQLcl PATH
-# export PATH=\\$PATH:/opt/sqlcl/sqlcl/bin
+# SQLcl PATH
+export PATH=\\$PATH:/opt/sqlcl/sqlcl/bin
 
-# # SQLcl aliases
-# alias sql='sql /nolog'
+# SQLcl aliases
+alias sql='sql /nolog'
 
-# # SQLcl history settings
-# export SQLPATH=\\$HOME/.sqlcl
-# EOF
-# " """
+# SQLcl history settings
+export SQLPATH=\\$HOME/.sqlcl
+EOF
+" """
                 
-#                 result = ssh.execute_command(
-#                     append_sqlcl_cmd,
-#                     timeout=60,
-#                     print_output=verbose
-#                 )
+                result = ssh.execute_command(
+                    append_sqlcl_cmd,
+                    timeout=60,
+                    print_output=verbose
+                )
                 
-#                 if result['rc'] != 0:
-#                     logger.warning("Failed to update oracle's .bashrc with SQLcl configuration")
-#                 else:
-#                     if verbose:
-#                         logger.info("✓ Added SQLcl to oracle's PATH")
+                if result['rc'] != 0:
+                    logger.warning("Failed to update oracle's .bashrc with SQLcl configuration")
+                else:
+                    if verbose:
+                        logger.info("✓ Added SQLcl to oracle's PATH")
             
-#             # Create .sqlcl directory and upload login.sql
-#             sqlcl_setup_commands = [
-#                 "su - oracle -c 'mkdir -p ~/.sqlcl'"
-#             ]
+            # Create .sqlcl directory and upload login.sql
+            sqlcl_setup_commands = [
+                "su - oracle -c 'mkdir -p ~/.sqlcl'"
+            ]
             
-#             results = ssh.execute_commands(
-#                 commands=sqlcl_setup_commands,
-#                 timeout=60,
-#                 print_output=verbose,
-#                 stop_on_error=False
-#             )
+            results = ssh.execute_commands(
+                commands=sqlcl_setup_commands,
+                timeout=60,
+                print_output=verbose,
+                stop_on_error=False
+            )
             
-#             # Upload login.sql configuration
-#             login_sql_path = Path(__file__).parent.parent / "automation_config_files" / "sqlcl_login.sql"
+            # Upload login.sql configuration
+            login_sql_path = Path(__file__).parent.parent / "automation_config_files" / "sqlcl_login.sql"
             
-#             if login_sql_path.exists():
-#                 remote_login_sql = "/tmp/sqlcl_login.sql"
-#                 upload_success = ssh.upload_file(str(login_sql_path), remote_login_sql)
+            if login_sql_path.exists():
+                remote_login_sql = "/tmp/sqlcl_login.sql"
+                upload_success = ssh.upload_file(str(login_sql_path), remote_login_sql)
                 
-#                 if upload_success:
-#                     # Copy to oracle's .sqlcl directory
-#                     copy_cmd = "su - oracle -c 'cp /tmp/sqlcl_login.sql ~/.sqlcl/login.sql && chmod 644 ~/.sqlcl/login.sql'"
-#                     result = ssh.execute_command(
-#                         copy_cmd,
-#                         timeout=60,
-#                         print_output=verbose
-#                     )
+                if upload_success:
+                    # Copy to oracle's .sqlcl directory
+                    copy_cmd = "su - oracle -c 'cp /tmp/sqlcl_login.sql ~/.sqlcl/login.sql && chmod 644 ~/.sqlcl/login.sql'"
+                    result = ssh.execute_command(
+                        copy_cmd,
+                        timeout=60,
+                        print_output=verbose
+                    )
                     
-#                     if result['rc'] == 0:
-#                         if verbose:
-#                             logger.info("✓ SQLcl login.sql configured")
-#                     else:
-#                         logger.warning("Failed to configure SQLcl login.sql")
-#                 else:
-#                     logger.warning("Failed to upload SQLcl login.sql")
-#             else:
-#                 logger.warning(f"SQLcl login.sql not found at {login_sql_path}")
+                    if result['rc'] == 0:
+                        if verbose:
+                            logger.info("✓ SQLcl login.sql configured")
+                    else:
+                        logger.warning("Failed to configure SQLcl login.sql")
+                else:
+                    logger.warning("Failed to upload SQLcl login.sql")
+            else:
+                logger.warning(f"SQLcl login.sql not found at {login_sql_path}")
             
-#             if verbose:
-#                 logger.info("=" * 80)
-#                 logger.info("Oracle Database 21c installation completed successfully!")
-#                 logger.info("Database: ORCLCDB")
-#                 logger.info("PDB: ORCLPDB1")
-#                 logger.info(f"Passwords: {root_password}")
-#                 logger.info("Network Configuration:")
-#                 logger.info("  - listener.ora: Configured on localhost:1521")
-#                 logger.info("  - tnsnames.ora: ORCLPDB1 service configured")
-#                 logger.info("  - sqlnet.ora: TNSNAMES, EZCONNECT enabled")
-#                 logger.info("Auto-start: Enabled in /etc/oratab")
-#                 logger.info("Sample Data: HR schema installed in hr_data tablespace")
-#                 logger.info("Tools: SQLcl installed and configured")
-#                 logger.info("=" * 80)
+            if verbose:
+                logger.info("=" * 80)
+                logger.info("Oracle Database 21c installation completed successfully!")
+                logger.info("Database: ORCLCDB")
+                logger.info("PDB: ORCLPDB1")
+                logger.info(f"Passwords: {root_password}")
+                logger.info("Network Configuration:")
+                logger.info("  - listener.ora: Configured on localhost:1521")
+                logger.info("  - tnsnames.ora: ORCLPDB1 service configured")
+                logger.info("  - sqlnet.ora: TNSNAMES, EZCONNECT enabled")
+                logger.info("Auto-start: Enabled in /etc/oratab")
+                logger.info("Sample Data: HR schema installed in hr_data tablespace")
+                logger.info("Tools: SQLcl installed and configured")
+                logger.info("=" * 80)
             
             return True
             

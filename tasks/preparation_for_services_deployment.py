@@ -86,6 +86,16 @@ def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
         logger.info("System preparation completed successfully")
         logger.info("=" * 80)
     
+    # Step 4: RH packages installation for different tasks
+    if verbose:
+        logger.info("Step 3: Downloading supporting files from Box")
+    commands = [
+        "dnf install unzip -y"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("System update failed")
+        return False
+    
     return True
 
 
