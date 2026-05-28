@@ -206,44 +206,73 @@ class AutomationOrchestrator:
         # Create task map for descriptions
         task_map = {task_id: (desc, idx) for idx, (task_id, _, desc) in enumerate(self.tasks, 1)}
         
+        # Separate completed and pending tasks
+        completed_tasks = []
+        pending_tasks = []
+        
+        for task_id, task_fn, desc in self.tasks:
+            idx = task_map[task_id][1]
+            if task_id in completed:
+                completed_tasks.append((task_id, desc, idx))
+            else:
+                pending_tasks.append((task_id, desc, idx))
+        
         print("\n" + "=" * 80)
         print("AUTOMATION STATUS")
         print("=" * 80)
         print(f"Total tasks: {total}")
-        print(f"Completed: {len(completed)}")
-        print(f"Remaining: {total - len(completed)}")
+        print(f"Completed: {len(completed_tasks)}")
+        print(f"Pending (in queue): {len(pending_tasks)}")
         
         if stage:
             print(f"\nStage checkpoint: {stage}")
             # Check if stage task is completed
             if stage in completed:
-                print(f"  ✓ Stage reached - run with --continue to proceed")
+                print(f"  ✓ Stage reached - run with --continue to proceed with pending tasks")
             else:
-                print(f"  ⧗ Stage not yet reached")
+                print(f"  ⧗ Stage not yet reached - will stop at this task")
         
-        print("\nCompleted tasks:")
-        for task_id in completed:
-            marker = "  ✓ "
-            if stage and task_id == stage:
-                marker = "  ✓ [STAGE] "
-            desc, idx = task_map.get(task_id, ("", 0))
-            if desc:
+        # Show completed tasks
+        if completed_tasks:
+            print("\n" + "─" * 80)
+            print("✓ COMPLETED TASKS:")
+            print("─" * 80)
+            for task_id, desc, idx in completed_tasks:
+                marker = "  ✓ "
+                if stage and task_id == stage:
+                    marker = "  ✓ [STAGE] "
                 print(f"{marker}[{idx}] {task_id}")
-                print(f"      {desc}")
-            else:
-                print(f"{marker}{task_id}")
+                if desc:
+                    print(f"      {desc}")
         
-        if total > len(completed):
-            print("\nRemaining tasks:")
-            for task_id, task_fn, desc in self.tasks:
-                if task_id not in completed:
-                    marker = "  ○ "
-                    if stage and task_id == stage:
-                        marker = "  ○ [STAGE] "
-                    idx = task_map[task_id][1]
-                    print(f"{marker}[{idx}] {task_id}")
-                    if desc:
-                        print(f"      {desc}")
+        # Show pending tasks (queue)
+        if pending_tasks:
+            print("\n" + "─" * 80)
+            print("⧗ PENDING TASKS (QUEUE):")
+            print("─" * 80)
+            for task_id, desc, idx in pending_tasks:
+                marker = "  ○ "
+                if stage and task_id == stage:
+                    marker = "  ○ [STAGE] "
+                print(f"{marker}[{idx}] {task_id}")
+                if desc:
+                    print(f"      {desc}")
+            
+            print("\n" + "─" * 80)
+            print("To execute pending tasks:")
+            if stage and stage not in completed:
+                print(f"  • Run: python automation.py")
+                print(f"    (will execute up to stage: {stage})")
+            elif stage and stage in completed:
+                print(f"  • Run: python automation.py --continue")
+                print(f"    (stage '{stage}' reached, continue with remaining tasks)")
+            else:
+                print(f"  • Run: python automation.py")
+                print(f"    (will execute all pending tasks)")
+        else:
+            print("\n" + "─" * 80)
+            print("✓ All tasks completed!")
+            print("─" * 80)
         
         print("=" * 80 + "\n")
 
@@ -422,6 +451,13 @@ def main():
         description="Deploy and configure MongoDB on raptor machine"
     )
     
+    # Deploy Oracle on sauropod
+    orchestrator.register_task(
+        task_id="deploy_oracle_on_sauropod",
+        task_fn=lambda: deploy_oracle_on_sauropod(orchestrator.config, logger, verbose=args.verbose),
+        description="Deploy and configure Oracle Database 21c on sauropod machine"
+    )
+
     # Marker task: End of initial configuration phase
     # This task does nothing but serves as a checkpoint for stage mechanism
     # Use stage="initial_config" in machines_info.json to stop here
@@ -432,13 +468,6 @@ def main():
     )
     
     # Add more tasks here - they will be executed only when running with --continue flag
-
-    # Deploy Oracle on sauropod
-    orchestrator.register_task(
-        task_id="deploy_oracle_on_sauropod",
-        task_fn=lambda: deploy_oracle_on_sauropod(orchestrator.config, logger, verbose=args.verbose),
-        description="Deploy and configure Oracle Database 21c on sauropod machine"
-    )
 
     # Determine stop_at parameter
     # Priority: --stop-at argument > stage from machines_info.json
