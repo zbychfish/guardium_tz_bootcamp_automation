@@ -215,50 +215,34 @@ def create_mongo_env_file(password: str, logger, verbose: bool = True) -> bool:
         if verbose:
             logger.info(f"✓ Created {mongo_env_path}")
         
-        # Update .bashrc to source .mongo_env
+        # Update .bashrc to source .mongo_env (without checking if exists)
         bashrc_path = "/root/.bashrc"
-        bashrc_addition = """
-# Load MongoDB environment variables
-if [ -f /root/.mongo_env ]; then
-    . /root/.mongo_env
-fi
-"""
         
-        # Check if .mongo_env is already sourced in .bashrc
-        check_result = execute_local_command(
-            f"grep -q '.mongo_env' {bashrc_path}",
-            logger,
-            verbose=False
-        )
+        if verbose:
+            logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
         
-        if check_result['rc'] != 0:  # Not found, add it
-            if verbose:
-                logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
-            
-            # Use heredoc to append multi-line content to .bashrc
-            append_cmd = f"""cat >> {bashrc_path} << 'EOF'
+        # Use heredoc to append multi-line content to .bashrc
+        append_cmd = f"""cat >> {bashrc_path} << 'EOF'
+
 # Load MongoDB environment variables
 if [ -f /root/.mongo_env ]; then
     . /root/.mongo_env
 fi
 EOF"""
-            
-            append_result = execute_local_command(
-                append_cmd,
-                logger,
-                verbose=False
-            )
-            
-            # Ignore errors - may fail if already exists or other non-critical issues
-            # MongoDB is already configured and working at this point
-            if append_result['rc'] != 0 and verbose:
-                logger.debug(f"Note: Could not update {bashrc_path} (may already be configured)")
-            
+        
+        append_result = execute_local_command(
+            append_cmd,
+            logger,
+            verbose=False
+        )
+        
+        if append_result['rc'] == 0:
             if verbose:
                 logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
         else:
+            # Non-critical - MongoDB is already configured and working
             if verbose:
-                logger.info(f"✓ {bashrc_path} already sources .mongo_env")
+                logger.debug(f"Note: Could not update {bashrc_path} (non-critical)")
         
         if verbose:
             logger.info("=" * 80)
