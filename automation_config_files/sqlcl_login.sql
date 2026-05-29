@@ -1,11 +1,12 @@
 -- SQLcl login configuration
 -- This file is automatically loaded when SQLcl starts
 
+-- Disable feedback during login script execution
+set feedback off
+set echo off
+
 -- Enable command history
 set history on
-
--- Show query execution time
-set timing on
 
 -- Better output formatting
 set sqlformat ansiconsole

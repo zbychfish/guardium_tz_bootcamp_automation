@@ -138,9 +138,9 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
             if verbose:
                 logger.info("✓ Oracle prerequisites installed")
             
-            # Step 2: Create Oracle directories
+            # Step 3: Create Oracle directories
             if verbose:
-                logger.info("Step 2: Creating Oracle directories")
+                logger.info("Step 3: Creating Oracle directories")
             
             dir_commands = [
                 "mkdir -p /u01/app/oracle/product/21c/dbhome_1",
@@ -163,21 +163,33 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
             if verbose:
                 logger.info("✓ Oracle directories created")
             
-            # Step 3: Configure oracle user environment
+            # Step 4: Configure oracle user environment
             if verbose:
-                logger.info("Step 3: Configuring oracle user environment")
+                logger.info("Step 4: Configuring oracle user environment")
             
-            bashrc_content = """
+            # Configure all environment variables in one place
+            bashrc_cmd = """su - oracle -c "cat >> ~/.bashrc << 'EOF'
+
 # Oracle environment variables
 export ORACLE_BASE=/u01/app/oracle
-export ORACLE_HOME=$ORACLE_BASE/product/21c/dbhome_1
-export PATH=$ORACLE_HOME/bin:$PATH
-"""
+export ORACLE_HOME=\\$ORACLE_BASE/product/21c/dbhome_1
+export ORACLE_SID=ORCLCDB
+export PATH=\\$ORACLE_HOME/bin:\\$PATH
+
+# SQLcl PATH
+export PATH=\\$PATH:/opt/sqlcl/sqlcl/bin
+
+# SQLcl aliases (removed /nolog to prompt for connection)
+alias sqlnolog='sql /nolog'
+
+# SQLcl history settings
+export SQLPATH=\\$HOME/.sqlcl
+EOF
+" """
             
-            # Append to oracle's .bashrc
             result = ssh.execute_command(
-                f"echo '{bashrc_content}' >> /home/oracle/.bashrc",
-                timeout=30,
+                bashrc_cmd,
+                timeout=60,
                 print_output=verbose
             )
             
@@ -188,9 +200,9 @@ export PATH=$ORACLE_HOME/bin:$PATH
             if verbose:
                 logger.info("✓ Oracle user environment configured")
             
-            # Step 4: Unzip Oracle installation archive as oracle user
+            # Step 5: Unzip Oracle installation archive as oracle user
             if verbose:
-                logger.info("Step 4: Extracting Oracle installation archive")
+                logger.info("Step 5: Extracting Oracle installation archive")
             
             unzip_cmd = "su - oracle -c 'unzip -q /tmp/LINUX.X64_213000_db_home.zip -d $ORACLE_HOME'"
             
@@ -207,9 +219,9 @@ export PATH=$ORACLE_HOME/bin:$PATH
             if verbose:
                 logger.info("✓ Oracle installation archive extracted")
             
-            # Step 5: Configure SSH for oracle user
+            # Step 6: Configure SSH for oracle user
             if verbose:
-                logger.info("Step 5: Configuring SSH for oracle user")
+                logger.info("Step 6: Configuring SSH for oracle user")
             
             # Get hostname for SSH config
             hostname_result = ssh.execute_command("hostname", timeout=30, print_output=False)
@@ -246,9 +258,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ SSH configured for oracle user")
             
-            # Step 6: Run Oracle installer
+            # Step 7: Run Oracle installer
             if verbose:
-                logger.info("Step 6: Running Oracle installer (this may take 15-30 minutes)")
+                logger.info("Step 7: Running Oracle installer (this may take 15-30 minutes)")
             
             installer_cmd = """su - oracle -c 'cd $ORACLE_HOME && ./runInstaller -silent \
   oracle.install.option=INSTALL_DB_SWONLY \
@@ -284,9 +296,9 @@ Host {hostname}
                 # In non-verbose mode, just log success without mentioning rc=6
                 logger.info("✓ Oracle installer completed successfully")
             
-            # Step 7: Run post-installation root scripts
+            # Step 8: Run post-installation root scripts
             if verbose:
-                logger.info("Step 7: Running post-installation root scripts")
+                logger.info("Step 8: Running post-installation root scripts")
             
             root_scripts = [
                 "/u01/app/oraInventory/orainstRoot.sh",
@@ -310,9 +322,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ Post-installation root scripts completed")
             
-            # Step 8: Configure Oracle listener
+            # Step 9: Configure Oracle listener
             if verbose:
-                logger.info("Step 8: Configuring Oracle listener")
+                logger.info("Step 9: Configuring Oracle listener")
             
             netca_cmd = "su - oracle -c '$ORACLE_HOME/bin/netca -silent -responseFile $ORACLE_HOME/assistants/netca/netca.rsp'"
             
@@ -329,9 +341,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ Oracle listener configured")
             
-            # Step 9: Create Oracle database
+            # Step 10: Create Oracle database
             if verbose:
-                logger.info("Step 9: Creating Oracle database (this may take 20-40 minutes)")
+                logger.info("Step 10: Creating Oracle database (this may take 20-40 minutes)")
             
             # Use password from custom_variables (pwd)
             dbca_cmd = f"""su - oracle -c 'dbca -silent -createDatabase \
@@ -363,28 +375,14 @@ Host {hostname}
             if verbose:
                 logger.info("✓ Oracle database created")
             
-            # Step 10: Add ORACLE_SID to oracle user's .bashrc
+            # Step 11: Verify oracle user environment (ORACLE_SID already configured in Step 4)
             if verbose:
-                logger.info("Step 10: Adding ORACLE_SID to oracle user environment")
+                logger.info("Step 11: Verifying oracle user environment")
+                logger.info("✓ Oracle user environment verified (configured in Step 4)")
             
-            oracle_sid_export = "\nexport ORACLE_SID=ORCLCDB\n"
-            
-            result = ssh.execute_command(
-                f"su - oracle -c 'echo \"{oracle_sid_export}\" >> ~/.bashrc'",
-                timeout=30,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to add ORACLE_SID to .bashrc: {result['stderr']}")
-                return False
-            
+            # Step 12: Configure pluggable databases to auto-start
             if verbose:
-                logger.info("✓ ORACLE_SID added to oracle user environment")
-            
-            # Step 11: Configure pluggable databases to auto-start
-            if verbose:
-                logger.info("Step 11: Configuring pluggable databases to auto-start")
+                logger.info("Step 12: Configuring pluggable databases to auto-start")
             
             sqlplus_cmd = """su - oracle -c 'export ORACLE_SID=ORCLCDB && echo "ALTER PLUGGABLE DATABASE ALL SAVE STATE;" | sqlplus -s / as sysdba'"""
             
@@ -401,9 +399,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ Pluggable databases configured to auto-start")
             
-            # Step 12: Upload and configure listener.ora
+            # Step 13: Upload and configure listener.ora
             if verbose:
-                logger.info("Step 12: Configuring listener.ora")
+                logger.info("Step 13: Configuring listener.ora")
             
             # Path to local config file
             listener_config_path = Path(__file__).parent.parent / "automation_config_files" / "listener.ora"
@@ -436,9 +434,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ listener.ora configured")
             
-            # Step 13: Upload and configure tnsnames.ora
+            # Step 14: Upload and configure tnsnames.ora
             if verbose:
-                logger.info("Step 13: Configuring tnsnames.ora")
+                logger.info("Step 14: Configuring tnsnames.ora")
             
             # Path to local config file
             tnsnames_config_path = Path(__file__).parent.parent / "automation_config_files" / "tnsnames.ora"
@@ -471,9 +469,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ tnsnames.ora configured")
             
-            # Step 14: Upload and configure sqlnet.ora
+            # Step 15: Upload and configure sqlnet.ora
             if verbose:
-                logger.info("Step 14: Configuring sqlnet.ora")
+                logger.info("Step 15: Configuring sqlnet.ora")
             
             # Path to local config file
             sqlnet_config_path = Path(__file__).parent.parent / "automation_config_files" / "sqlnet.ora"
@@ -506,9 +504,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ sqlnet.ora configured")
             
-            # Step 15: Restart Oracle listener to apply new configuration
+            # Step 16: Restart Oracle listener to apply new configuration
             if verbose:
-                logger.info("Step 15: Restarting Oracle listener")
+                logger.info("Step 16: Restarting Oracle listener")
             
             restart_listener_cmds = [
                 "su - oracle -c 'lsnrctl stop'",
@@ -530,9 +528,9 @@ Host {hostname}
             if verbose:
                 logger.info("✓ Oracle listener restarted with new configuration")
             
-            # Step 16: Configure /etc/oratab for auto-start
+            # Step 17: Configure /etc/oratab for auto-start
             if verbose:
-                logger.info("Step 16: Configuring /etc/oratab for database auto-start")
+                logger.info("Step 17: Configuring /etc/oratab for database auto-start")
             
             # Change the last field from N to Y to enable auto-start
             oratab_cmd = "sed -i 's/^ORCLCDB:\\(.*\\):N$/ORCLCDB:\\1:Y/' /etc/oratab"
@@ -561,9 +559,9 @@ Host {hostname}
             else:
                 logger.warning("Could not verify /etc/oratab configuration")
             
-            # Step 17: Install HR schema with sample data
+            # Step 18: Install HR schema with sample data
             if verbose:
-                logger.info("Step 17: Installing HR schema with sample data")
+                logger.info("Step 18: Installing HR schema with sample data")
             
             # Path to HR schema archive on raptor
             hr_archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/human_resources.tar.gz"
@@ -686,9 +684,9 @@ EOF
             if verbose:
                 logger.info("✓ HR schema installed")
             
-            # Step 18: Clean up installation files
+            # Step 19: Clean up installation files
             if verbose:
-                logger.info("Step 18: Cleaning up installation files")
+                logger.info("Step 19: Cleaning up installation files")
             
             cleanup_commands = [
                 "rm -f /tmp/LINUX.X64_213000_db_home.zip",
@@ -706,9 +704,9 @@ EOF
             if verbose:
                 logger.info("✓ Installation files cleaned up")
             
-            # Step 19: Install SQLcl
+            # Step 20: Install SQLcl
             if verbose:
-                logger.info("Step 19: Installing SQLcl")
+                logger.info("Step 20: Installing SQLcl")
             
             # Install Java 11 if not present
             java_install_cmd = "dnf install -y java-11-openjdk"
@@ -744,56 +742,13 @@ EOF
                 if verbose:
                     logger.info("✓ SQLcl installed")
             
-            # Step 20: Configure SQLcl for oracle user
+            # Step 21: Configure SQLcl for oracle user
             if verbose:
-                logger.info("Step 20: Configuring SQLcl for oracle user")
+                logger.info("Step 21: Configuring SQLcl for oracle user")
             
-            # Add SQLcl to PATH in oracle's .bashrc
-            sqlcl_bashrc_addition = """
-# SQLcl PATH
-export PATH=$PATH:/opt/sqlcl/sqlcl/bin
-
-# SQLcl aliases
-alias sql='sql /nolog'
-
-# SQLcl history settings
-export SQLPATH=$HOME/.sqlcl
-"""
-            
-            # Check if SQLcl PATH is already in .bashrc
-            check_sqlcl_cmd = "su - oracle -c 'grep -q \"/opt/sqlcl/sqlcl/bin\" ~/.bashrc'"
-            check_result = ssh.execute_command(
-                check_sqlcl_cmd,
-                timeout=30,
-                print_output=False
-            )
-            
-            if check_result['rc'] != 0:  # Not found, add it
-                # Use heredoc to append to .bashrc
-                append_sqlcl_cmd = """su - oracle -c "cat >> ~/.bashrc << 'EOF'
-
-# SQLcl PATH
-export PATH=\\$PATH:/opt/sqlcl/sqlcl/bin
-
-# SQLcl aliases
-alias sql='sql /nolog'
-
-# SQLcl history settings
-export SQLPATH=\\$HOME/.sqlcl
-EOF
-" """
-                
-                result = ssh.execute_command(
-                    append_sqlcl_cmd,
-                    timeout=60,
-                    print_output=verbose
-                )
-                
-                if result['rc'] != 0:
-                    logger.warning("Failed to update oracle's .bashrc with SQLcl configuration")
-                else:
-                    if verbose:
-                        logger.info("✓ Added SQLcl to oracle's PATH")
+            # SQLcl PATH and aliases already configured in Step 4
+            if verbose:
+                logger.info("✓ SQLcl configuration already in oracle's .bashrc (configured in Step 4)")
             
             # Create .sqlcl directory and upload login.sql
             sqlcl_setup_commands = [
@@ -832,6 +787,54 @@ EOF
                     logger.warning("Failed to upload SQLcl login.sql")
             else:
                 logger.warning(f"SQLcl login.sql not found at {login_sql_path}")
+            
+            # Configure .inputrc for proper Home/End key behavior
+            if verbose:
+                logger.info("Configuring readline for proper Home/End key behavior")
+            
+            inputrc_cmd = """su - oracle -c "cat > ~/.inputrc << 'EOF'
+# Readline configuration for proper key bindings
+# This fixes Home/End keys in SQLcl and other readline applications
+
+# Enable 8-bit input
+set meta-flag on
+set input-meta on
+set output-meta on
+set convert-meta off
+
+# Key bindings for Home/End keys
+\"\\e[1~\": beginning-of-line
+\"\\e[4~\": end-of-line
+\"\\e[7~\": beginning-of-line
+\"\\e[8~\": end-of-line
+\"\\eOH\": beginning-of-line
+\"\\eOF\": end-of-line
+\"\\e[H\": beginning-of-line
+\"\\e[F\": end-of-line
+
+# Key bindings for Delete key
+\"\\e[3~\": delete-char
+
+# Key bindings for arrow keys
+\"\\e[A\": history-search-backward
+\"\\e[B\": history-search-forward
+
+# Enable history search with Ctrl+R
+\"\\C-r\": reverse-search-history
+EOF
+" """
+            
+            result = ssh.execute_command(
+                inputrc_cmd,
+                timeout=60,
+                print_output=verbose
+            )
+            
+            if result['rc'] == 0:
+                if verbose:
+                    logger.info("✓ Readline configuration (.inputrc) created")
+            else:
+                logger.warning("Failed to create .inputrc configuration")
             
             if verbose:
                 logger.info("=" * 80)
