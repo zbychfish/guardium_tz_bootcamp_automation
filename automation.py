@@ -470,6 +470,13 @@ def main():
         description="Deploy and configure MongoDB on raptor machine"
     )
     
+    # Deploy Oracle on sauropod
+    orchestrator.register_task(
+        task_id="deploy_oracle_on_sauropod",
+        task_fn=lambda: deploy_oracle_on_sauropod(orchestrator.config, logger, verbose=args.verbose),
+        description="Deploy and configure Oracle Database 21c on sauropod machine"
+    )
+
     # Marker task: End of initial configuration phase
     # This is a logical marker only - not saved to state, just defines where initial phase ends
     # Use stage="initial_config" in machines_info.json to stop here
@@ -482,12 +489,6 @@ def main():
     
     # Add more tasks here - they will be executed only when running with --continue flag
 
-    # Deploy Oracle on sauropod
-    orchestrator.register_task(
-        task_id="deploy_oracle_on_sauropod",
-        task_fn=lambda: deploy_oracle_on_sauropod(orchestrator.config, logger, verbose=args.verbose),
-        description="Deploy and configure Oracle Database 21c on sauropod machine"
-    )
 
     # Handle special commands AFTER task registration
     if args.remove_task:
