@@ -793,34 +793,10 @@ EOF
                 logger.info("Configuring readline for proper Home/End key behavior")
             
             inputrc_cmd = """su - oracle -c "cat > ~/.inputrc << 'EOF'
-# Readline configuration for proper key bindings
-# This fixes Home/End keys in SQLcl and other readline applications
-
-# Enable 8-bit input
+# Basic readline settings
 set meta-flag on
 set input-meta on
-set output-meta on
 set convert-meta off
-
-# Key bindings for Home/End keys
-\"\\e[1~\": beginning-of-line
-\"\\e[4~\": end-of-line
-\"\\e[7~\": beginning-of-line
-\"\\e[8~\": end-of-line
-\"\\eOH\": beginning-of-line
-\"\\eOF\": end-of-line
-\"\\e[H\": beginning-of-line
-\"\\e[F\": end-of-line
-
-# Key bindings for Delete key
-\"\\e[3~\": delete-char
-
-# Key bindings for arrow keys
-\"\\e[A\": history-search-backward
-\"\\e[B\": history-search-forward
-
-# Enable history search with Ctrl+R
-\"\\C-r\": reverse-search-history
 EOF
 " """
             
