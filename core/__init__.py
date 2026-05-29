@@ -9,6 +9,7 @@ Core functionality for the machine automation framework
 from .state_manager import StateManager      # Track and persist task execution state
 from .config_loader import ConfigLoader      # Load and manage configuration from YAML and JSON
 from .ssh_client import SSHClient            # Execute commands on remote machines via SSH
+from .group_manager import GroupManager      # Manage logical groups of stages
 
 # Logging
 from .logger import setup_logger             # Configure logging for a module
@@ -39,6 +40,7 @@ from .utils import download_and_extract      # Download and extract ZIP in one s
 __all__ = [
     'StateManager',
     'ConfigLoader',
+    'GroupManager',
     'setup_logger',
     'get_logger',
     'SSHClient',

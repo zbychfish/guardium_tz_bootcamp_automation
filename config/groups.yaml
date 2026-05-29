@@ -1,0 +1,46 @@
+# Groups Configuration
+# Defines logical groups of stages that are executed together
+# Groups are executed in the order they appear in this file
+
+groups:
+  initial_preparation:
+    name: "Initial Preparation"
+    description: "Basic system setup and database deployments before marker creation"
+    auto_execute: true  # Executed automatically before marker
+    stages:
+      - name: setup_hosts
+        function: setup_hosts_task
+        module: tasks.setup_hosts
+        description: "Configure /etc/hosts, SSHD, and root password on all machines"
+      
+      - name: preparation_for_services_deployment
+        function: preparation_for_services_deployment_task
+        module: tasks.preparation_for_services_deployment
+        description: "Update system packages and download supporting files"
+      
+      - name: deploy_mysql_on_raptor
+        function: deploy_mysql_on_raptor_task
+        module: tasks.deploy_mysql
+        description: "Deploy MySQL on raptor"
+      
+      - name: deploy_mongo_on_raptor
+        function: deploy_mongo_on_raptor_task
+        module: tasks.deploy_mongo
+        description: "Deploy MongoDB on raptor"
+      
+      - name: deploy_oracle_on_sauropod
+        function: deploy_oracle_on_sauropod
+        module: tasks.deploy_oracle
+        description: "Deploy Oracle 21c on sauropod"
+
+  atap_lab:
+    name: "ATAP Lab"
+    description: "PostgreSQL deployment for ATAP training"
+    auto_execute: false  # Executed after marker, on demand
+    stages:
+      - name: deploy_postgres_on_raptor
+        function: deploy_postgres_on_raptor
+        module: tasks.deploy_postgres
+        description: "Deploy PostgreSQL 16 on raptor"
+
+# Made with Bob

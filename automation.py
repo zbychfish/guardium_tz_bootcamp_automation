@@ -2,14 +2,14 @@
 # -*- coding: utf-8 -*-
 """
 Machine Automation Framework
-Main orchestration script for managing machine configuration tasks
+Main orchestration script for managing machine configuration tasks using groups
 """
 
 import sys
 import argparse
 import time
 from pathlib import Path
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Dict, Any
 
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent / "core"))
@@ -17,39 +17,40 @@ sys.path.insert(0, str(Path(__file__).parent / "tasks"))
 
 from core.state_manager import StateManager
 from core.config_loader import ConfigLoader
+from core.group_manager import GroupManager
 from core.logger import setup_logger
-from tasks.setup_hosts import setup_hosts_locally, setup_hosts_on_remote_machine
-from tasks.deploy_mysql import deploy_mysql_on_raptor
-from tasks.deploy_mongo import deploy_mongo_on_raptor
-from tasks.deploy_oracle import deploy_oracle_on_sauropod
-from tasks.preparation_for_services_deployment import preparation_for_services_deployment
+
 
 class AutomationOrchestrator:
     """
     Main orchestrator for machine automation tasks.
-    Manages task execution, state tracking, and error handling.
+    Manages group and stage execution, state tracking, and error handling.
     """
     
-    def __init__(self, config_file: str = "config/config.yaml", state_file: str = "state.json",
-                 machines_info_file: str = "/root/machines_info.json", verbose: bool = False):
+    def __init__(self, config_file: str = "config/config.yaml", 
+                 groups_file: str = "config/groups.yaml",
+                 state_file: str = "state.json",
+                 machines_info_file: str = "/root/machines_info.json", 
+                 verbose: bool = False):
         """
         Initialize the orchestrator.
         
         Args:
             config_file: Path to configuration file
+            groups_file: Path to groups configuration file
             state_file: Path to state tracking file
             machines_info_file: Path to JSON file containing machine information
             verbose: Enable verbose logging
         """
         self.logger = setup_logger("AutomationOrchestrator")
         self.config = ConfigLoader(config_file, machines_info_file)
+        self.group_manager = GroupManager(Path(groups_file))
         self.state = StateManager(state_file)
-        self.tasks: List[tuple] = []
-        self.markers: set = set()  # Track marker tasks that don't save state
         self.verbose = verbose
         
         self.logger.info("Automation Orchestrator initialized")
         self.logger.info(f"Config: {config_file}")
+        self.logger.info(f"Groups: {groups_file}")
         self.logger.info(f"Machines Info: {machines_info_file}")
         self.logger.info(f"State: {state_file}")
         
@@ -59,143 +60,145 @@ class AutomationOrchestrator:
             self.logger.info(f"Loaded {len(machines)} machine(s): {', '.join(machines.keys())}")
         else:
             self.logger.warning("No machines loaded from machines_info.json")
+        
+        # Validate groups configuration
+        errors = self.group_manager.validate_groups()
+        if errors:
+            self.logger.error("Groups configuration validation failed:")
+            for group_name, group_errors in errors.items():
+                self.logger.error(f"  Group '{group_name}':")
+                for error in group_errors:
+                    self.logger.error(f"    - {error}")
+            raise ValueError("Invalid groups configuration")
     
-    def register_task(self, task_id: str, task_fn: Callable, description: str = "", is_marker: bool = False):
+    def run_stage(self, group_name: str, stage_info: Dict[str, str]) -> bool:
         """
-        Register a task for execution.
+        Execute a single stage within a group.
         
         Args:
-            task_id: Unique task identifier
-            task_fn: Function to execute for this task
-            description: Human-readable task description
-            is_marker: If True, task is a logical marker and won't be saved to state
-        """
-        self.tasks.append((task_id, task_fn, description, is_marker))
-        if is_marker:
-            self.markers.add(task_id)
-        self.logger.debug(f"Registered task: {task_id} - {description}" + (" [MARKER]" if is_marker else ""))
-    
-    def run_task(self, task_id: str, task_fn: Callable, description: str = "", is_marker: bool = False) -> bool:
-        """
-        Execute a single task if not already completed.
-        
-        Args:
-            task_id: Unique task identifier
-            task_fn: Function to execute
-            description: Task description for logging
-            is_marker: If True, task is a marker and won't be saved to state
+            group_name: Name of the group this stage belongs to
+            stage_info: Stage information dictionary
             
         Returns:
-            True if task executed successfully, False otherwise
+            True if stage executed successfully, False otherwise
         """
-        # Check if task is already completed (markers are never in completed state)
-        if not is_marker and self.state.is_completed(task_id):
+        stage_name = stage_info.get('name', 'unknown')
+        stage_key = f"{group_name}.{stage_name}"
+        
+        # Check if stage is already completed
+        if self.state.is_completed(stage_key):
             if self.verbose:
-                self.logger.info(f"⏭  Skipping (already completed): {task_id}")
+                self.logger.info(f"⏭  Skipping (already completed): {stage_name}")
             else:
-                self.logger.info(f"⏭  {task_id}")
+                self.logger.info(f"⏭  {stage_name}")
             return True
         
-        # For markers, just log the checkpoint - they don't execute anything
-        if is_marker:
-            if self.verbose:
-                self.logger.info(f"🏁 Checkpoint reached: {task_id}")
-                if description:
-                    self.logger.info(f"   {description}")
-            else:
-                self.logger.info(f"🏁 {task_id}")
-            return True
+        # Load and execute stage function
+        stage_fn = self.group_manager.load_stage_function(stage_info)
+        if not stage_fn:
+            self.logger.error(f"Failed to load stage function: {stage_name}")
+            return False
         
-        # Regular task execution
+        description = stage_info.get('description', '')
+        
         if self.verbose:
-            self.logger.info(f"➤  Running: {task_id}")
+            self.logger.info(f"➤  Running: {stage_name}")
             if description:
                 self.logger.info(f"   Description: {description}")
         else:
-            self.logger.info(f"➤  {task_id}")
+            self.logger.info(f"➤  {stage_name}")
         
         start_time = time.time()
         
         try:
-            result = task_fn()
+            # Call stage function with config and logger
+            result = stage_fn(self.config, self.logger, self.verbose)
             elapsed_time = time.time() - start_time
-            self.state.mark_completed(task_id)
             
-            # Format elapsed time
-            if elapsed_time < 60:
-                time_str = f"{elapsed_time:.1f}s"
+            if result:
+                self.state.mark_completed(stage_key)
+                time_str = self._format_time(elapsed_time)
+                
+                if self.verbose:
+                    self.logger.info(f"✓  Completed: {stage_name} (took {time_str})")
+                else:
+                    self.logger.info(f"✓  {stage_name} ({time_str})")
+                return True
             else:
-                minutes = int(elapsed_time // 60)
-                seconds = elapsed_time % 60
-                time_str = f"{minutes}m {seconds:.1f}s"
-            
-            if self.verbose:
-                self.logger.info(f"✓  Completed: {task_id} (took {time_str})")
-            else:
-                self.logger.info(f"✓  {task_id} ({time_str})")
-            return True
+                self.logger.error(f"✗  Failed: {stage_name} (returned False)")
+                return False
             
         except Exception as e:
             elapsed_time = time.time() - start_time
-            self.logger.error(f"✗  Failed: {task_id} (after {elapsed_time:.1f}s)")
+            self.logger.error(f"✗  Failed: {stage_name} (after {elapsed_time:.1f}s)")
             self.logger.error(f"   Error: {str(e)}", exc_info=self.verbose)
             return False
     
-    def run_all_tasks(self, stop_at: Optional[str] = None, continue_mode: bool = False) -> bool:
+    def run_group(self, group_name: str) -> bool:
         """
-        Execute all registered tasks in sequence.
+        Execute all stages in a group.
         
         Args:
-            stop_at: Optional task_id to stop execution at (from stage parameter)
-            continue_mode: If True, ignore stop_at and run all remaining tasks
+            group_name: Name of the group to execute
             
         Returns:
-            True if all tasks completed successfully, False otherwise
+            True if all stages completed successfully, False otherwise
+        """
+        group_info = self.group_manager.get_group_info(group_name)
+        if not group_info:
+            self.logger.error(f"Group not found: {group_name}")
+            return False
+        
+        self.logger.info("=" * 80)
+        self.logger.info(f"GROUP: {group_info.get('name', group_name)}")
+        if self.verbose and group_info.get('description'):
+            self.logger.info(f"Description: {group_info.get('description')}")
+        self.logger.info("=" * 80)
+        
+        stages = self.group_manager.get_group_stages(group_name)
+        
+        for stage_info in stages:
+            success = self.run_stage(group_name, stage_info)
+            if not success:
+                self.logger.error(f"Group '{group_name}' execution failed")
+                return False
+        
+        self.logger.info(f"✓ Group '{group_name}' completed successfully")
+        return True
+    
+    def run_all_groups(self, specific_groups: Optional[List[str]] = None) -> bool:
+        """
+        Execute groups in sequence.
+        
+        Args:
+            specific_groups: Optional list of specific groups to run. If None, runs auto_execute groups.
+            
+        Returns:
+            True if all groups completed successfully, False otherwise
         """
         start_time = time.time()
         
+        # Determine which groups to run
+        if specific_groups:
+            groups_to_run = specific_groups
+            mode = f"SPECIFIC GROUPS: {', '.join(specific_groups)}"
+        else:
+            groups_to_run = self.group_manager.get_auto_execute_groups()
+            mode = "AUTO-EXECUTE GROUPS (before marker)"
+        
         self.logger.info("=" * 80)
         self.logger.info("Starting automation execution")
-        self.logger.info(f"Total tasks registered: {len(self.tasks)}")
-        if continue_mode:
-            self.logger.info("Mode: CONTINUE - executing all remaining tasks")
-        elif stop_at:
-            self.logger.info(f"Mode: INITIAL - stopping at stage: {stop_at}")
-        else:
-            self.logger.info("Mode: FULL - executing all tasks")
+        self.logger.info(f"Mode: {mode}")
+        self.logger.info(f"Groups to execute: {len(groups_to_run)}")
         self.logger.info("=" * 80)
         
-        for task_id, task_fn, description, is_marker in self.tasks:
-            # Stop BEFORE marker if it's the stop_at point (not in continue mode)
-            if not continue_mode and stop_at and task_id == stop_at and is_marker:
-                total_time = time.time() - start_time
-                self.logger.info("=" * 80)
-                self.logger.info(f"🏁 Reached stage checkpoint: {stop_at}")
-                self.logger.info("Initial setup phase completed successfully")
-                self.logger.info(f"Total execution time: {self._format_time(total_time)}")
-                self.logger.info("To continue with remaining tasks, run: python automation.py --continue")
-                self.logger.info("=" * 80)
-                return True
-            
-            success = self.run_task(task_id, task_fn, description, is_marker)
-            
+        for group_name in groups_to_run:
+            success = self.run_group(group_name)
             if not success:
                 total_time = time.time() - start_time
-                self.logger.error("Task execution failed. Stopping.")
+                self.logger.error("Group execution failed. Stopping.")
                 self.logger.error(f"Total execution time: {self._format_time(total_time)}")
                 return False
-            
-            # Stop at stage only if not in continue mode and not a marker
-            # (markers are handled above before execution)
-            if not continue_mode and stop_at and task_id == stop_at and not is_marker:
-                total_time = time.time() - start_time
-                self.logger.info("=" * 80)
-                self.logger.info(f"✓ Reached stage checkpoint: {stop_at}")
-                self.logger.info("Initial setup phase completed successfully")
-                self.logger.info(f"Total execution time: {self._format_time(total_time)}")
-                self.logger.info("To continue with remaining tasks, run: python automation.py --continue")
-                self.logger.info("=" * 80)
-                return True
         
         total_time = time.time() - start_time
         self.logger.info("=" * 80)
@@ -205,15 +208,7 @@ class AutomationOrchestrator:
         return True
     
     def _format_time(self, seconds: float) -> str:
-        """
-        Format time in seconds to human-readable string.
-        
-        Args:
-            seconds: Time in seconds
-            
-        Returns:
-            Formatted time string (e.g., "1m 23.5s" or "45.2s")
-        """
+        """Format time in seconds to human-readable string."""
         if seconds < 60:
             return f"{seconds:.1f}s"
         else:
@@ -224,98 +219,55 @@ class AutomationOrchestrator:
     def reset_state(self):
         """Reset state to start fresh."""
         self.state.reset()
-        self.logger.info("State reset - all tasks will be re-executed")
+        self.logger.info("State reset - all stages will be re-executed")
     
     def show_status(self):
-        """Display current execution status with task descriptions."""
+        """Display current execution status."""
         completed = self.state.get_completed_tasks()
-        total = len(self.tasks)
-        stage = self.config.get_custom_variable('stage')
-        
-        # Create task map for descriptions
-        task_map = {task_id: (desc, idx, is_marker) for idx, (task_id, _, desc, is_marker) in enumerate(self.tasks, 1)}
-        
-        # Separate completed and pending tasks
-        completed_tasks = []
-        pending_tasks = []
-        
-        for task_id, task_fn, desc, is_marker in self.tasks:
-            idx = task_map[task_id][1]
-            # Markers are never in completed state, always show as pending
-            if is_marker:
-                pending_tasks.append((task_id, desc, idx, is_marker))
-            elif task_id in completed:
-                completed_tasks.append((task_id, desc, idx, is_marker))
-            else:
-                pending_tasks.append((task_id, desc, idx, is_marker))
         
         print("\n" + "=" * 80)
         print("AUTOMATION STATUS")
         print("=" * 80)
-        print(f"Total tasks: {total}")
-        print(f"Completed: {len(completed_tasks)}")
-        print(f"Pending (in queue): {len(pending_tasks)}")
         
-        if stage:
-            print(f"\nStage checkpoint: {stage}")
-            # Check if stage task is completed
-            if stage in completed:
-                print(f"  ✓ Stage reached - run with --continue to proceed with pending tasks")
-            else:
-                print(f"  ⧗ Stage not yet reached - will stop at this task")
+        all_groups = self.group_manager.list_groups()
         
-        # Show completed tasks
-        if completed_tasks:
-            print("\n" + "─" * 80)
-            print("✓ COMPLETED TASKS:")
-            print("─" * 80)
-            for task_id, desc, idx, is_marker in completed_tasks:
-                marker = "  ✓ "
-                if stage and task_id == stage:
-                    marker = "  ✓ [STAGE] "
-                print(f"{marker}[{idx}] {task_id}")
-                if desc:
-                    print(f"      {desc}")
-        
-        # Show pending tasks (queue)
-        if pending_tasks:
-            print("\n" + "─" * 80)
-            print("⧗ PENDING TASKS (QUEUE):")
-            print("─" * 80)
-            for task_id, desc, idx, is_marker in pending_tasks:
-                if is_marker:
-                    marker = "  🏁 [MARKER] "
-                elif stage and task_id == stage:
-                    marker = "  ○ [STAGE] "
-                else:
-                    marker = "  ○ "
-                print(f"{marker}[{idx}] {task_id}")
-                if desc:
-                    print(f"      {desc}")
+        for group_name in all_groups:
+            group_info = self.group_manager.get_group_info(group_name)
+            if not group_info:
+                continue
             
-            print("\n" + "─" * 80)
-            print("To execute pending tasks:")
-            if stage and stage not in completed:
-                print(f"  • Run: python automation.py")
-                print(f"    (will execute up to stage: {stage})")
-            elif stage and stage in completed:
-                print(f"  • Run: python automation.py --continue")
-                print(f"    (stage '{stage}' reached, continue with remaining tasks)")
-            else:
-                print(f"  • Run: python automation.py")
-                print(f"    (will execute all pending tasks)")
-        else:
-            print("\n" + "─" * 80)
-            print("✓ All tasks completed!")
-            print("─" * 80)
+            auto = "AUTO" if group_info.get('auto_execute') else "MANUAL"
+            print(f"\n[{auto}] {group_name}: {group_info.get('name')}")
+            print(f"  {group_info.get('description')}")
+            
+            stages = self.group_manager.get_group_stages(group_name)
+            completed_count = 0
+            
+            for stage_info in stages:
+                stage_name = stage_info.get('name')
+                stage_key = f"{group_name}.{stage_name}"
+                
+                if stage_key in completed:
+                    print(f"    ✓ {stage_name}")
+                    completed_count += 1
+                else:
+                    print(f"    ○ {stage_name}")
+            
+            print(f"  Progress: {completed_count}/{len(stages)} stages completed")
         
+        print("\n" + "=" * 80)
+        print(f"Total completed stages: {len(completed)}")
         print("=" * 80 + "\n")
+    
+    def list_groups(self):
+        """Display all available groups."""
+        self.group_manager.print_groups_summary()
 
 
 def main():
     """Main entry point for the automation framework."""
     parser = argparse.ArgumentParser(
-        description="Machine Automation Framework",
+        description="Machine Automation Framework with Groups",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
@@ -323,6 +275,12 @@ def main():
         "--config",
         default="config/config.yaml",
         help="Path to configuration file (default: config/config.yaml)"
+    )
+    
+    parser.add_argument(
+        "--groups-config",
+        default="config/groups.yaml",
+        help="Path to groups configuration file (default: config/groups.yaml)"
     )
     
     parser.add_argument(
@@ -338,15 +296,16 @@ def main():
     )
     
     parser.add_argument(
-        "--stop-at",
-        help="Stop execution at specified task ID (overrides stage from machines_info.json)"
+        "--group",
+        dest="groups",
+        action="append",
+        help="Execute specific group(s). Can be used multiple times."
     )
     
     parser.add_argument(
-        "--continue",
-        dest="continue_mode",
+        "--list-groups",
         action="store_true",
-        help="Continue execution of remaining tasks (ignores stage parameter)"
+        help="List all available groups and their stages"
     )
     
     parser.add_argument(
@@ -356,9 +315,9 @@ def main():
     )
     
     parser.add_argument(
-        "--remove-task",
-        metavar="TASK_ID",
-        help="Remove specific task from completed state (allows re-execution)"
+        "--remove-stage",
+        metavar="GROUP.STAGE",
+        help="Remove specific stage from completed state (format: group_name.stage_name)"
     )
     
     parser.add_argument(
@@ -371,160 +330,52 @@ def main():
         "--verbose",
         "-v",
         action="store_true",
-        help="Enable verbose output (show full task details and descriptions)"
+        help="Enable verbose output"
     )
     
     args = parser.parse_args()
     
     # Initialize orchestrator
-    orchestrator = AutomationOrchestrator(
-        config_file=args.config,
-        state_file=args.state,
-        machines_info_file=args.machines_info,
-        verbose=args.verbose
-    )
+    try:
+        orchestrator = AutomationOrchestrator(
+            config_file=args.config,
+            groups_file=args.groups_config,
+            state_file=args.state,
+            machines_info_file=args.machines_info,
+            verbose=args.verbose
+        )
+    except Exception as e:
+        print(f"Failed to initialize orchestrator: {e}")
+        return 1
     
-    # Handle reset command immediately (before task registration)
+    # Handle special commands
     if args.reset:
         orchestrator.reset_state()
         return 0
     
-    # Register all tasks BEFORE handling other commands
-    # This ensures --status and --remove-task can see all registered tasks
+    if args.list_groups:
+        orchestrator.list_groups()
+        return 0
     
-    machines = orchestrator.config.get_machines()
-    credentials = orchestrator.config.get_credentials()
-    logger = setup_logger("TaskRegistration")
-    
-    # Get root password from custom_variables (passed from manifest)
-    root_password = orchestrator.config.get_custom_variable('pwd')
-    if root_password:
-        logger.info("Root password found in custom_variables - will be set on all machines")
-    else:
-        logger.warning("No root password (pwd) found in custom_variables - password will not be changed")
-    
-    # Get stage from custom_variables (defines where to stop in initial run)
-    stage = orchestrator.config.get_custom_variable('stage')
-    if stage:
-        logger.info(f"Stage parameter found: '{stage}' - initial run will stop at this task")
-    else:
-        logger.info("No stage parameter found - will execute all tasks")
-    
-    # Setup /etc/hosts, SSHD, and root password on local machine (raptor)
-    orchestrator.register_task(
-        task_id="setup_local_raptor",
-        task_fn=lambda: setup_hosts_locally(
-            all_machines=machines,
-            logger=logger,
-            configure_sshd=True,
-            root_password=root_password,
-            verbose=args.verbose
-        ),
-        description="Setup /etc/hosts, SSHD, and root password on local machine (raptor)"
-    )
-    
-    # Setup /etc/hosts, SSHD, and root password on remote machines
-    # Get list of remote machines from config
-    remote_machines = orchestrator.config.get('tasks', {}).get('remote_machines', [])
-    logger.info(f"Remote machines to configure: {remote_machines}")
-    
-    for machine_name in remote_machines:
-        machine_info = orchestrator.config.get_machine(machine_name)
-        if machine_info:
-            orchestrator.register_task(
-                task_id=f"setup_remote_{machine_name}",
-                task_fn=lambda m=machine_name, mi=machine_info: setup_hosts_on_remote_machine(
-                    machine_name=m,
-                    machine_info=mi,
-                    all_machines=machines,
-                    credentials=credentials,
-                    logger=logger,
-                    use_private_ip=True,
-                    configure_sshd=True,
-                    root_password=root_password,
-                    verbose=args.verbose
-                ),
-                description=f"Setup /etc/hosts, SSHD, and root password on {machine_name}"
-            )
+    if args.remove_stage:
+        stage_key = args.remove_stage
+        if orchestrator.state.is_completed(stage_key):
+            orchestrator.state.remove_task(stage_key)
+            print(f"✓ Stage '{stage_key}' removed from completed state")
+            print(f"  Stage will be re-executed on next run")
         else:
-            logger.warning(f"Machine {machine_name} not found in configuration")
-    
-    # Prepare system for services deployment (update system and download supporting files)
-    orchestrator.register_task(
-        task_id="preparation_for_services_deployment",
-        task_fn=lambda: preparation_for_services_deployment(logger, verbose=args.verbose),
-        description="Update system packages and download supporting files from Box"
-    )
-    
-    # Deploy MySQL on raptor
-    orchestrator.register_task(
-        task_id="deploy_mysql_on_raptor",
-        task_fn=lambda: deploy_mysql_on_raptor(logger, verbose=args.verbose),
-        description="Deploy and configure MySQL on raptor machine"
-    )
-    
-    # Deploy MongoDB on raptor
-    orchestrator.register_task(
-        task_id="deploy_mongo_on_raptor",
-        task_fn=lambda: deploy_mongo_on_raptor(logger, verbose=args.verbose),
-        description="Deploy and configure MongoDB on raptor machine"
-    )
-    
-    # Deploy Oracle on sauropod
-    orchestrator.register_task(
-        task_id="deploy_oracle_on_sauropod",
-        task_fn=lambda: deploy_oracle_on_sauropod(orchestrator.config, logger, verbose=args.verbose),
-        description="Deploy and configure Oracle Database 21c on sauropod machine"
-    )
-
-    # Marker task: End of initial configuration phase
-    # This is a logical marker only - not saved to state, just defines where initial phase ends
-    # Use stage="initial_config" in machines_info.json to stop here
-    orchestrator.register_task(
-        task_id="initial_config",
-        task_fn=lambda: True,  # Marker - never executed
-        description="[MARKER] Initial configuration phase ends here - use --continue to proceed",
-        is_marker=True  # This task is not saved to state
-    )
-    
-    # Add more tasks here - they will be executed only when running with --continue flag
-
-
-    # Handle special commands AFTER task registration
-    if args.remove_task:
-        task_id = args.remove_task
-        if orchestrator.state.is_completed(task_id):
-            orchestrator.state.remove_task(task_id)
-            print(f"✓ Task '{task_id}' removed from completed state")
-            print(f"  Task will be re-executed on next run")
-        else:
-            print(f"✗ Task '{task_id}' is not in completed state")
-            print(f"\nCompleted tasks:")
-            for completed_task in orchestrator.state.get_completed_tasks():
-                print(f"  - {completed_task}")
+            print(f"✗ Stage '{stage_key}' is not in completed state")
+            print(f"\nCompleted stages:")
+            for completed_stage in orchestrator.state.get_completed_tasks():
+                print(f"  - {completed_stage}")
         return 0
     
     if args.status:
         orchestrator.show_status()
         return 0
-
-    # Determine stop_at parameter
-    # Priority: --stop-at argument > stage from machines_info.json
-    stop_at_task = args.stop_at if args.stop_at else stage
     
-    # Validate stop_at task exists if specified (after all tasks are registered)
-    if stop_at_task and not args.continue_mode:
-        task_ids = [task_id for task_id, _, _, _ in orchestrator.tasks]
-        if stop_at_task not in task_ids:
-            logger.error(f"Stage task '{stop_at_task}' not found in registered tasks")
-            logger.error(f"Available task IDs: {', '.join(task_ids)}")
-            return 1
-    
-    # Run all tasks
-    success = orchestrator.run_all_tasks(
-        stop_at=stop_at_task,
-        continue_mode=args.continue_mode
-    )
+    # Run groups
+    success = orchestrator.run_all_groups(specific_groups=args.groups)
     
     return 0 if success else 1
 

@@ -538,5 +538,69 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
         logger.error(f"Failed to setup {machine_name}: {str(e)}")
         return False
 
+def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
+    """
+    Wrapper function for group-based execution.
+    Sets up /etc/hosts, SSHD, and root password on all machines.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    machines = config.get_machines()
+    credentials = config.get_credentials()
+    root_password = config.get_custom_variable('pwd')
+    
+    # Setup local machine (raptor)
+    if verbose:
+        logger.info("Setting up local machine (raptor)")
+    
+    success = setup_hosts_locally(
+        all_machines=machines,
+        logger=logger,
+        configure_sshd=True,
+        root_password=root_password,
+        verbose=verbose
+    )
+    
+    if not success:
+        logger.error("Failed to setup local machine")
+        return False
+    
+    # Setup remote machines
+    remote_machines = config.get('tasks', {}).get('remote_machines', [])
+    
+    for machine_name in remote_machines:
+        machine_info = config.get_machine(machine_name)
+        if not machine_info:
+            logger.warning(f"Machine {machine_name} not found in configuration")
+            continue
+        
+        if verbose:
+            logger.info(f"Setting up remote machine: {machine_name}")
+        
+        success = setup_hosts_on_remote_machine(
+            machine_name=machine_name,
+            machine_info=machine_info,
+            all_machines=machines,
+            credentials=credentials,
+            logger=logger,
+            use_private_ip=True,
+            configure_sshd=True,
+            root_password=root_password,
+            verbose=verbose
+        )
+        
+        if not success:
+            logger.error(f"Failed to setup remote machine: {machine_name}")
+            return False
+    
+    return True
+
+
 
 # Made with Bob

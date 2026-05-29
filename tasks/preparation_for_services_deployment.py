@@ -100,3 +100,17 @@ def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
 
 
 # Made with Bob
+
+def preparation_for_services_deployment_task(config, logger, verbose: bool = True) -> bool:
+    """
+    Wrapper function for group-based execution.
+    
+    Args:
+        config: ConfigLoader instance (not used, for compatibility)
+        logger: Logger instance
+        verbose: Enable verbose logging
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    return preparation_for_services_deployment(logger, verbose)
