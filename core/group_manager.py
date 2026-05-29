@@ -173,6 +173,24 @@ class GroupManager:
         
         return all_stages
     
+    def find_stage_by_name(self, stage_name: str) -> Optional[tuple]:
+        """
+        Find a stage by its name across all groups.
+        
+        Args:
+            stage_name: Name of the stage to find
+            
+        Returns:
+            Tuple of (group_name, stage_info) or None if not found
+        """
+        for group_name in self.list_groups():
+            stages = self.get_group_stages(group_name)
+            for stage in stages:
+                if stage.get('name') == stage_name:
+                    return (group_name, stage)
+        
+        return None
+    
     def print_groups_summary(self):
         """Print a summary of all groups and their stages."""
         print("\n" + "=" * 80)

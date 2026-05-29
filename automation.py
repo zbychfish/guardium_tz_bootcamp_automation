@@ -166,6 +166,139 @@ class AutomationOrchestrator:
         self.logger.info(f"✓ Group '{group_name}' completed successfully")
         return True
     
+    def run_single_stage(self, stage_name: str) -> bool:
+        """
+        Execute a single stage by name, including all preceding stages in the same group.
+        This ensures dependencies are met.
+        
+        Args:
+            stage_name: Name of the stage to execute
+            
+        Returns:
+            True if stage executed successfully, False otherwise
+        """
+        # Find the stage in groups
+        result = self.group_manager.find_stage_by_name(stage_name)
+        
+        if not result:
+            self.logger.error(f"Stage '{stage_name}' not found in any group")
+            self.logger.info("\nAvailable stages:")
+            for group_name in self.group_manager.list_groups():
+                stages = self.group_manager.get_group_stages(group_name)
+                for stage in stages:
+                    self.logger.info(f"  - {stage.get('name')} (in group '{group_name}')")
+            return False
+        
+        group_name, target_stage_info = result
+        
+        self.logger.info("=" * 80)
+        self.logger.info(f"Executing stage: {stage_name}")
+        self.logger.info(f"From group: {group_name}")
+        self.logger.info(f"Note: All preceding stages in this group will be executed first")
+        self.logger.info("=" * 80)
+        
+        # Get all stages in the group
+        all_stages = self.group_manager.get_group_stages(group_name)
+        
+        # Find the index of target stage
+        target_index = -1
+        for i, stage in enumerate(all_stages):
+            if stage.get('name') == stage_name:
+                target_index = i
+                break
+        
+        if target_index == -1:
+            self.logger.error(f"Stage '{stage_name}' not found in group stages")
+            return False
+        
+        # Execute all stages up to and including the target stage
+        for i in range(target_index + 1):
+            stage = all_stages[i]
+            success = self.run_stage(group_name, stage)
+            if not success:
+                self.logger.error(f"Failed at stage '{stage.get('name')}', stopping execution")
+                return False
+        
+        self.logger.info("=" * 80)
+        self.logger.info(f"Stage '{stage_name}' and all dependencies completed successfully")
+        self.logger.info("=" * 80)
+        
+        return True
+    
+    def run_continue(self) -> bool:
+        """
+        Continue execution from current state - execute all remaining stages in all groups.
+        Executes stages in order across all groups, skipping already completed ones.
+        
+        Returns:
+            True if all stages completed successfully, False otherwise
+        """
+        start_time = time.time()
+        
+        self.logger.info("=" * 80)
+        self.logger.info("CONTINUE MODE: Executing all remaining stages")
+        self.logger.info("=" * 80)
+        
+        all_groups = self.group_manager.list_groups()
+        total_executed = 0
+        total_skipped = 0
+        
+        for group_name in all_groups:
+            group_info = self.group_manager.get_group_info(group_name)
+            if not group_info:
+                continue
+            
+            stages = self.group_manager.get_group_stages(group_name)
+            
+            # Check if any stage in this group needs execution
+            has_pending = False
+            for stage in stages:
+                stage_key = f"{group_name}.{stage.get('name')}"
+                if not self.state.is_completed(stage_key):
+                    has_pending = True
+                    break
+            
+            if not has_pending:
+                continue  # Skip this group entirely
+            
+            # Execute this group
+            self.logger.info("=" * 80)
+            self.logger.info(f"GROUP: {group_info.get('name', group_name)}")
+            self.logger.info("=" * 80)
+            
+            for stage_info in stages:
+                stage_name = stage_info.get('name')
+                stage_key = f"{group_name}.{stage_name}"
+                
+                if self.state.is_completed(stage_key):
+                    if self.verbose:
+                        self.logger.info(f"⏭  Skipping (already completed): {stage_name}")
+                    else:
+                        self.logger.info(f"⏭  {stage_name}")
+                    total_skipped += 1
+                    continue
+                
+                success = self.run_stage(group_name, stage_info)
+                if not success:
+                    total_time = time.time() - start_time
+                    self.logger.error(f"Stage '{stage_name}' failed. Stopping.")
+                    self.logger.error(f"Total execution time: {self._format_time(total_time)}")
+                    return False
+                
+                total_executed += 1
+            
+            self.logger.info(f"✓ Group '{group_name}' completed")
+        
+        total_time = time.time() - start_time
+        self.logger.info("=" * 80)
+        self.logger.info("CONTINUE MODE: All remaining stages completed successfully")
+        self.logger.info(f"Executed: {total_executed} stages")
+        self.logger.info(f"Skipped: {total_skipped} stages (already completed)")
+        self.logger.info(f"Total execution time: {self._format_time(total_time)}")
+        self.logger.info("=" * 80)
+        
+        return True
+    
     def run_all_groups(self, specific_groups: Optional[List[str]] = None) -> bool:
         """
         Execute groups in sequence.
@@ -303,6 +436,18 @@ def main():
     )
     
     parser.add_argument(
+        "--stage",
+        help="Execute a single stage by name (includes all preceding stages in the same group)"
+    )
+    
+    parser.add_argument(
+        "--continue",
+        dest="continue_mode",
+        action="store_true",
+        help="Continue execution from current state - execute all remaining stages in all groups"
+    )
+    
+    parser.add_argument(
         "--list-groups",
         action="store_true",
         help="List all available groups and their stages"
@@ -374,7 +519,17 @@ def main():
         orchestrator.show_status()
         return 0
     
-    # Run groups
+    # Continue mode - execute all remaining stages
+    if args.continue_mode:
+        success = orchestrator.run_continue()
+        return 0 if success else 1
+    
+    # Execute single stage if specified
+    if args.stage:
+        success = orchestrator.run_single_stage(args.stage)
+        return 0 if success else 1
+    
+    # Run groups (specific or auto-execute)
     success = orchestrator.run_all_groups(specific_groups=args.groups)
     
     return 0 if success else 1
