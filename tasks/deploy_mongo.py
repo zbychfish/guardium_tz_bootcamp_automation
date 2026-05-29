@@ -271,7 +271,7 @@ def import_mongodb_sample_data(logger, verbose: bool = True) -> bool:
         logger.info("Importing MongoDB sample data")
         logger.info("=" * 80)
     
-    archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/sampledata.archive.gz"
+    archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/mongo/sampledata.archive.gz"
     
     # Check if archive exists
     check_result = execute_local_command(

@@ -241,7 +241,7 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     
     commands = [
         'mysql -u root -e "CREATE DATABASE IF NOT EXISTS salesDB"',
-        "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/salesDB.sql"
+        "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/mysql/salesDB.sql"
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Failed to import salesDB database")

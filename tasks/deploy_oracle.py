@@ -76,9 +76,7 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
                 logger.info("Step 1: Installing Oracle prerequisites")
             
             prereq_commands = [
-                "curl -o /tmp/oracle-database-preinstall-21c.rpm https://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64/getPackage/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm",
-                #"dnf install -y --nogpgcheck https://yum.oracle.com/repo/OracleLinux/OL8/appstream/x86_64/getPackage/compat-openssl10-1.0.2o-4.el8_6.x86_64.rpm",
-                "dnf install -y --nogpgcheck /tmp/oracle-database-preinstall-21c.rpm"
+                "dnf install -y --nogpgcheck /opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm"
             ]
             
             results = ssh.execute_commands(
@@ -150,7 +148,7 @@ export PATH=$ORACLE_HOME/bin:$PATH
             if verbose:
                 logger.info("Step 4: Copying Oracle installation archive from raptor to sauropod")
             
-            source_file = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/LINUX.X64_213000_db_home.zip"
+            source_file = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/LINUX.X64_213000_db_home.zip"
             dest_file = "/home/oracle/LINUX.X64_213000_db_home.zip"
             
             # Use SFTP to upload file from local (raptor) to remote (sauropod)
@@ -555,7 +553,7 @@ Host {hostname}
                 logger.info("Step 18: Installing HR schema with sample data")
             
             # Path to HR schema archive on raptor
-            hr_archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/env_init/human_resources.tar.gz"
+            hr_archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/human_resources.tar.gz"
             hr_remote_path = "/home/oracle/human_resources.tar.gz"
             
             # Upload HR schema archive to sauropod
