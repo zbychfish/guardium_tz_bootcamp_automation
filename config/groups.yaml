@@ -12,17 +12,17 @@ groups:
         function: setup_hosts_task
         module: tasks.setup_hosts
         description: "Configure /etc/hosts, SSHD, and root password on all machines"
-
-  other_praparations:
-    name: "Other Tasks"
-    description: "test only"
-    auto_execute: false
-    stages:
+        
       - name: preparation_for_services_deployment
         function: preparation_for_services_deployment_task
         module: tasks.preparation_for_services_deployment
         description: "Update system packages and download supporting files"
-      
+
+  other_praparations:
+    name: "Other general tasks, standard database installation"
+    description: "test only"
+    auto_execute: true
+    stages:      
       - name: deploy_mysql_on_raptor
         function: deploy_mysql_on_raptor_task
         module: tasks.deploy_mysql

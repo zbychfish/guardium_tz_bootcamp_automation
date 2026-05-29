@@ -136,14 +136,27 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
             return False
         
         lines = []
+        network_added = False
+        
         with hba_path.open() as f:
             for line in f:
-                if line.strip().startswith("local") and "peer" in line:
-                    line = "local   all             all                                     ident\n"
-                elif line.strip().startswith("host") and "127.0.0.1/32" in line and "ident" in line:
+                stripped = line.strip()
+                
+                # Change local peer to ident
+                if stripped.startswith("local") and "peer" in line:
+                    lines.append("local   all             all                                     ident\n")
+                
+                # Replace host 127.0.0.1 ident with scram-sha-256 and add network line
+                elif stripped.startswith("host") and "127.0.0.1/32" in line and "ident" in line:
                     lines.append("host    all             all             127.0.0.1/32            scram-sha-256\n")
-                    line = f"host    all             all             {network}            scram-sha-256\n"
-                lines.append(line)
+                    if not network_added:
+                        lines.append(f"host    all             all             {network}            scram-sha-256\n")
+                        network_added = True
+                
+                # Keep other lines as-is (skip duplicates of what we already added)
+                elif not (stripped.startswith("host") and "127.0.0.1/32" in line and "scram-sha-256" in line):
+                    if not (stripped.startswith("host") and network in line):
+                        lines.append(line)
         
         hba_path.write_text("".join(lines))
         
