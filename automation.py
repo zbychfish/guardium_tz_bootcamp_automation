@@ -509,15 +509,32 @@ def main():
     
     if args.remove_stage:
         stage_key = args.remove_stage
-        if orchestrator.state.is_completed(stage_key):
+        completed_tasks = orchestrator.state.get_completed_tasks()
+        
+        # Try exact match first
+        if stage_key in completed_tasks:
             orchestrator.state.remove_task(stage_key)
             print(f"✓ Stage '{stage_key}' removed from completed state")
             print(f"  Stage will be re-executed on next run")
         else:
-            print(f"✗ Stage '{stage_key}' is not in completed state")
-            print(f"\nCompleted stages:")
-            for completed_stage in orchestrator.state.get_completed_tasks():
-                print(f"  - {completed_stage}")
+            # Try partial match (stage name without group prefix)
+            matching_tasks = [task for task in completed_tasks if task.endswith(f".{stage_key}")]
+            
+            if len(matching_tasks) == 1:
+                full_key = matching_tasks[0]
+                orchestrator.state.remove_task(full_key)
+                print(f"✓ Stage '{full_key}' removed from completed state")
+                print(f"  Stage will be re-executed on next run")
+            elif len(matching_tasks) > 1:
+                print(f"✗ Multiple stages match '{stage_key}':")
+                for task in matching_tasks:
+                    print(f"  - {task}")
+                print(f"\nPlease specify the full stage key (GROUP.STAGE)")
+            else:
+                print(f"✗ Stage '{stage_key}' is not in completed state")
+                print(f"\nCompleted stages:")
+                for completed_stage in completed_tasks:
+                    print(f"  - {completed_stage}")
         return 0
     
     if args.status:
