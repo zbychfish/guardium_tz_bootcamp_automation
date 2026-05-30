@@ -65,7 +65,10 @@ def connect_and_show_clock(
     
     # Use provided credentials or defaults
     if not user:
-        user = appliance_loader.get_default_user(appliance_type)
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"  # Fallback default
     
     if not password:
         logger.error(f"Password is required for appliance '{appliance_name}'")
@@ -73,7 +76,8 @@ def connect_and_show_clock(
     
     if not prompt_regex:
         # Try to get default prompt for type
-        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
         if not prompt_regex:
             logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
             return False
