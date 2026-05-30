@@ -564,7 +564,7 @@ def create_demo_user(
     
     Note: .client_secret file must exist (created by create_oauth_client stage)
     """
-    from core.guardium_api import create_guardium_api
+    from core.guardium_rest_api import create_guardium_api
     
     logger.info("=" * 80)
     logger.info("CREATE DEMO USER")
@@ -589,6 +589,10 @@ def create_demo_user(
         else:
             logger.error("demo_password not provided and pwd not found in custom_variables")
             return False
+    
+    # Type assertions for passwords (already validated above)
+    assert accessmgr_password is not None, "accessmgr_password should not be None"
+    assert demo_password is not None, "demo_password should not be None"
     
     try:
         # Create API instance
