@@ -93,8 +93,13 @@ def connect_and_show_clock(
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
     
-    # Create appliance client
+    # Create appliance client with debug enabled
     # Use None for initial_pattern - will nudge prompt and wait directly for prompt
+    logger.info(f"Creating appliance client with:")
+    logger.info(f"  host: {host}")
+    logger.info(f"  user: {user}")
+    logger.info(f"  prompt_regex: {prompt_regex}")
+    
     appliance = ApplianceClient(
         host=host,
         user=user,
@@ -103,7 +108,7 @@ def connect_and_show_clock(
         initial_pattern=None,
         timeout=60,
         strip_ansi=True,
-        debug=False
+        debug=True  # Enable debug to see what's happening
     )
     
     # Connect

@@ -155,10 +155,17 @@ class ApplianceClient:
         buf = ""
         deadline = time.time() + cmd_timeout
         
+        if self.debug:
+            print(f"[DEBUG] Waiting for regex: {regex.pattern} (timeout: {cmd_timeout}s)", file=sys.stderr)
+        
         while time.time() < deadline:
             if self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode(errors="replace")
                 buf += chunk
+                
+                if self.debug:
+                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk[:100])}", file=sys.stderr)
+                
                 if echo:
                     out = strip_ansi(chunk) if self.strip_ansi_flag else chunk
                     sys.stdout.write(out)
@@ -166,12 +173,19 @@ class ApplianceClient:
             
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
             if regex.search(buf_for_match):
+                if self.debug:
+                    print(f"[DEBUG] Regex matched! Buffer length: {len(buf)}", file=sys.stderr)
                 return buf
             
             if self.channel.closed:
+                if self.debug:
+                    print(f"[DEBUG] Channel closed", file=sys.stderr)
                 break
             
             time.sleep(0.05)
+        
+        if self.debug:
+            print(f"[DEBUG] Timeout! Buffer content: {repr(buf[:500])}", file=sys.stderr)
         
         raise TimeoutError(f"Timeout waiting for: {regex.pattern} (timeout: {cmd_timeout}s)")
     
