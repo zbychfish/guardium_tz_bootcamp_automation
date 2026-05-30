@@ -94,12 +94,13 @@ def connect_and_show_clock(
     logger.info(f"User: {user}")
     
     # Create appliance client
+    # Use None for initial_pattern - will nudge prompt and wait directly for prompt
     appliance = ApplianceClient(
         host=host,
         user=user,
         password=password,
         prompt_regex=prompt_regex,
-        initial_pattern="Last login",
+        initial_pattern=None,
         timeout=60,
         strip_ansi=True,
         debug=False
@@ -230,12 +231,13 @@ def initial_collector_settings(
     logger.info(f"User: {user}")
     
     # Create appliance client
+    # Use None for initial_pattern - will nudge prompt and wait directly for prompt
     appliance = ApplianceClient(
         host=host,
         user=user,
         password=password,
         prompt_regex=prompt_regex,
-        initial_pattern=None,  # Unconfigured collector may not show login banner
+        initial_pattern=None,
         timeout=120,
         strip_ansi=True,
         debug=False
