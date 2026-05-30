@@ -14,8 +14,10 @@ logger = get_logger(__name__)
 
 
 def connect_and_show_clock(
-    machines: Dict[str, Any],
-    appliance_name: str,
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None
@@ -24,8 +26,10 @@ def connect_and_show_clock(
     Connect to appliance and execute 'show system clock all' command
     
     Args:
-        machines: Dictionary of machine configurations (not used, kept for compatibility)
-        appliance_name: Name of appliance from appliances.yaml
+        config: ConfigLoader instance (not used, kept for compatibility)
+        logger: Logger instance
+        verbose: Enable verbose logging
+        appliance_name: Name of appliance from appliances.yaml (required)
         user: SSH username (optional, uses default from type if not provided)
         password: SSH password (required)
         prompt_regex: Prompt regex (optional, uses default from type if not provided)
@@ -43,6 +47,10 @@ def connect_and_show_clock(
               password: "your_password"
               prompt_regex: "guard\\.yourcompany\\.com>"  # Optional
     """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
     logger.info(f"Connecting to appliance: {appliance_name}")
     
     # Load appliance configuration
@@ -136,8 +144,10 @@ def connect_and_show_clock(
 
 
 def initial_collector_settings(
-    machines: Dict[str, Any],
-    collector_name: str,
+    config,
+    logger,
+    verbose: bool = True,
+    collector_name: Optional[str] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None
@@ -152,8 +162,10 @@ def initial_collector_settings(
     - Enables time synchronization
     
     Args:
-        machines: Dictionary of machine configurations (not used, kept for compatibility)
-        collector_name: Name of collector from appliances.yaml
+        config: ConfigLoader instance (not used, kept for compatibility)
+        logger: Logger instance
+        verbose: Enable verbose logging
+        collector_name: Name of collector from appliances.yaml (required)
         user: SSH username (optional, uses default if not provided)
         password: SSH password (required)
         prompt_regex: Prompt regex (optional, uses default for unconfigured collector)
@@ -171,6 +183,10 @@ def initial_collector_settings(
               password: "your_password"
               prompt_regex: "guard\\.yourcompany\\.com>"  # Optional
     """
+    if not collector_name:
+        logger.error("collector_name is required")
+        return False
+    
     logger.info(f"Configuring initial settings for collector: {collector_name}")
     
     # Load appliance configuration
