@@ -10,10 +10,11 @@ appliances:
     description: "Primary Guardium Collector"
   
   cm:
-    name: "cm"
+    name: "cm01"
     ip: "10.240.64.31"
     type: "cm"
     description: "Central Manager"
+    port: 22
   
 #   aggregator1:
 #     name: "aggregator1"

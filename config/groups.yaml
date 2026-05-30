@@ -58,7 +58,7 @@ groups:
         module: tasks.setup_appliances
         description: "Test appliance connectivity and show system clock"
         args:
-          appliance_name: "cm"  # Name from config/appliances.yaml
+          appliance_name: "cm01"  # Name from config/appliances.yaml
           password: "bootCamp321!"  # Replace with actual password
           prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
       
