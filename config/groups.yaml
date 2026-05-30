@@ -60,7 +60,7 @@ groups:
         args:
           appliance_name: "cm01"  # Name from config/appliances.yaml
           password: "bootCamp321!"  # Replace with actual password
-          prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
+          # prompt_regex: "cm01>"  # Optional - comment out to use default from appliances.yaml
       
       # - name: initial_collector_settings
       #   function: initial_collector_settings
