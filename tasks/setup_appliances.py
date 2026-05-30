@@ -79,8 +79,18 @@ def connect_and_show_clock(
         else:
             user = "cli"  # Fallback default
     
+    # Try to get password from custom_variables if not provided
+    if not password:
+        try:
+            password = config.get_custom_variable('cli_pwd')
+            if password:
+                logger.info("Using password from custom_variables (cli_pwd)")
+        except:
+            pass
+    
     if not password:
         logger.error(f"Password is required for appliance '{appliance_name}'")
+        logger.error("Provide password in args or set 'cli_pwd' in custom_variables")
         return False
     
     if not prompt_regex:
@@ -224,8 +234,18 @@ def initial_collector_settings(
     if not user:
         user = appliance_loader.get_default_user('collector')
     
+    # Try to get password from custom_variables if not provided
+    if not password:
+        try:
+            password = config.get_custom_variable('cli_pwd')
+            if password:
+                logger.info("Using password from custom_variables (cli_pwd)")
+        except:
+            pass
+    
     if not password:
         logger.error(f"Password is required for collector '{collector_name}'")
+        logger.error("Provide password in args or set 'cli_pwd' in custom_variables")
         return False
     
     if not prompt_regex:
@@ -321,3 +341,109 @@ def initial_collector_settings(
         logger.info("✓ Disconnected")
 
 # Made with Bob
+
+
+
+def read_license_keys(
+    config,
+    logger,
+    verbose: bool = True,
+    keys_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/keys"
+) -> bool:
+    """
+    Read and display license keys from raptor
+    
+    Reads .lkey files from specified directory:
+    - base.lkey (base license)
+    - append*.lkey (append licenses)
+    
+    Displays content in single-line format: base keys first, then append keys
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging
+        keys_directory: Path to directory with .lkey files
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Example in config/groups.yaml:
+        stages:
+          - name: read_license_keys
+            function: read_license_keys
+            module: tasks.setup_appliances
+            args:
+              keys_directory: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/keys"
+    """
+    import os
+    import glob
+    
+    logger.info(f"Reading license keys from: {keys_directory}")
+    
+    # Check if directory exists
+    if not os.path.exists(keys_directory):
+        logger.error(f"Directory not found: {keys_directory}")
+        return False
+    
+    # Find all .lkey files
+    lkey_files = glob.glob(os.path.join(keys_directory, "*.lkey"))
+    
+    if not lkey_files:
+        logger.error(f"No .lkey files found in {keys_directory}")
+        return False
+    
+    logger.info(f"Found {len(lkey_files)} license key file(s)")
+    
+    # Separate base and append keys
+    base_keys = []
+    append_keys = []
+    
+    for filepath in lkey_files:
+        filename = os.path.basename(filepath)
+        
+        try:
+            with open(filepath, 'r') as f:
+                content = f.read().strip()
+            
+            # Convert to single line (remove newlines)
+            single_line = content.replace('\n', '').replace('\r', '')
+            
+            if filename.startswith('base'):
+                base_keys.append((filename, single_line))
+            elif filename.startswith('append'):
+                append_keys.append((filename, single_line))
+            else:
+                logger.warning(f"Unknown key type: {filename}")
+                
+        except Exception as e:
+            logger.error(f"Error reading {filename}: {e}")
+            return False
+    
+    # Display keys in order: base first, then append
+    logger.info("=" * 80)
+    logger.info("LICENSE KEYS")
+    logger.info("=" * 80)
+    
+    # Display base keys
+    if base_keys:
+        logger.info("\nBASE LICENSE KEYS:")
+        for filename, content in sorted(base_keys):
+            logger.info(f"  {filename}:")
+            logger.info(f"    {content}")
+    else:
+        logger.warning("No base license keys found")
+    
+    # Display append keys
+    if append_keys:
+        logger.info("\nAPPEND LICENSE KEYS:")
+        for filename, content in sorted(append_keys):
+            logger.info(f"  {filename}:")
+            logger.info(f"    {content}")
+    else:
+        logger.info("No append license keys found")
+    
+    logger.info("=" * 80)
+    logger.info(f"Total: {len(base_keys)} base key(s), {len(append_keys)} append key(s)")
+    
+    return True

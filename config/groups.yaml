@@ -61,6 +61,13 @@ groups:
           appliance_name: "cm01"  # Name from config/appliances.yaml
           # prompt_regex: "cm01>"  # Optional - comment out to use default from appliances.yaml
       
+      - name: read_license_keys
+        function: read_license_keys
+        module: tasks.setup_appliances
+        description: "Read and display license keys from raptor"
+        args:
+          keys_directory: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/keys"
+      
       # - name: initial_collector_settings
       #   function: initial_collector_settings
       #   module: tasks.setup_appliances
