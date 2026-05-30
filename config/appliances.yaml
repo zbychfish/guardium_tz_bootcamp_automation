@@ -9,7 +9,7 @@ appliances:
     description: "Primary Guardium Collector"
   
   cm01:
-    ip: "10.240.0.165"
+    ip: "10.240.64.33"
     type: "cm"
     description: "Central Manager"
     port: 22
