@@ -225,8 +225,11 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     from pathlib import Path
     from .appliance_config_loader import ApplianceConfigLoader
     
+    # Get config directory from config_file path
+    config_dir = config.config_file.parent
+    
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config.config_dir)
+    appliance_loader = ApplianceConfigLoader(config_dir)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -239,8 +242,9 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     # Get CLIENT_SECRET from .client_secret file, custom_variables, or environment
     client_secret = None
     
-    # Try to read from .client_secret file first
-    secret_file = Path(config.project_root) / ".client_secret"
+    # Try to read from .client_secret file first (in project root - parent of config dir)
+    project_root = config.config_file.parent.parent
+    secret_file = project_root / ".client_secret"
     if secret_file.exists():
         try:
             with open(secret_file, 'r') as f:

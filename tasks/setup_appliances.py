@@ -392,8 +392,11 @@ def create_oauth_client(
     logger.info(f"CREATE OAUTH CLIENT: {client_id}")
     logger.info("=" * 80)
     
+    # Get config directory from config_file path
+    config_dir = config.config_file.parent
+    
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config.config_dir)
+    appliance_loader = ApplianceConfigLoader(config_dir)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -488,8 +491,9 @@ def create_oauth_client(
             logger.error(f"Response: {result}")
             return False
         
-        # Save client_secret to file
-        secret_file = Path(config.project_root) / ".client_secret"
+        # Save client_secret to file (in project root - parent of config dir)
+        project_root = config.config_file.parent.parent
+        secret_file = project_root / ".client_secret"
         try:
             with open(secret_file, 'w') as f:
                 f.write(client_secret)
