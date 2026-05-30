@@ -7,7 +7,7 @@ Adapted for guardium_tz_bootcamp_automation project
 
 import os
 import requests
-from typing import Optional
+from typing import Optional, Dict, Any
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -161,7 +161,6 @@ class GuardiumRestAPI:
             'disablePwdExpiry': 1 if disable_pwd_expiry else 0
         }
         
-        # Add optional parameters
         if email:
             data['email'] = email
         if country:
@@ -200,6 +199,70 @@ class GuardiumRestAPI:
         response.raise_for_status()
         
         return response.json()
+    def update_user(
+        self,
+        username: str,
+        password: Optional[str] = None,
+        confirm_password: Optional[str] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        email: Optional[str] = None,
+        country: Optional[str] = None,
+        disabled: Optional[bool] = None,
+        disable_pwd_expiry: Optional[bool] = None
+    ) -> dict:
+        """
+        Updates an existing user in Guardium.
+        
+        Args:
+            username: Username (required)
+            password: New password (optional)
+            confirm_password: Password confirmation (optional, must match password if provided)
+            first_name: First name (optional)
+            last_name: Last name (optional)
+            email: Email address (optional)
+            country: ISO 3166 2-letter country code (optional)
+            disabled: Whether user is disabled (optional)
+            disable_pwd_expiry: Whether to disable password expiry (optional)
+        
+        Returns:
+            Dictionary with API response
+        
+        Raises:
+            RuntimeError: If token has not been retrieved yet
+            requests.exceptions.RequestException: In case of HTTP error
+            ValueError: If password != confirm_password
+        """
+        if password and confirm_password and password != confirm_password:
+            raise ValueError("Password and confirmPassword must match")
+        
+        url = f'{self.base_url}/restAPI/user'
+        headers = self.get_headers()
+        
+        data: Dict[str, Any] = {'userName': username}
+        
+        if password:
+            data['password'] = password
+        if confirm_password:
+            data['confirmPassword'] = confirm_password
+        if first_name:
+            data['firstName'] = first_name
+        if last_name:
+            data['lastName'] = last_name
+        if email:
+            data['email'] = email
+        if country:
+            data['country'] = country
+        if disabled is not None:
+            data['disabled'] = 1 if disabled else 0
+        if disable_pwd_expiry is not None:
+            data['disablePwdExpiry'] = 1 if disable_pwd_expiry else 0
+        
+        response = requests.put(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
+
 
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':
@@ -239,12 +302,10 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     if not appliance_ip:
         raise ValueError(f"IP address not found for appliance '{appliance_name}'")
     
-    # Get CLIENT_SECRET from .client_secret file, custom_variables, or environment
     client_secret = None
-    
-    # Try to read from .client_secret file first (in project root - parent of config dir)
     project_root = config.config_file.parent.parent
     secret_file = project_root / ".client_secret"
+    
     if secret_file.exists():
         try:
             with open(secret_file, 'r') as f:
@@ -253,14 +314,12 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
         except Exception as e:
             logger.warning(f"Failed to read .client_secret file: {e}")
     
-    # Try to get from custom_variables if not found in file
     if not client_secret:
         custom_vars = config.get_custom_variables()
         if custom_vars and 'client_secret' in custom_vars:
             client_secret = custom_vars['client_secret']
             logger.info("Using CLIENT_SECRET from custom_variables")
     
-    # Try environment variable as last resort
     if not client_secret:
         client_secret = os.getenv('CLIENT_SECRET')
         if client_secret:
@@ -274,12 +333,9 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
             "  3. Environment variable CLIENT_SECRET"
         )
     
-    # Create base URL (Guardium REST API runs on port 8443)
     base_url = f"https://{appliance_ip}:8443"
-    
     logger.info(f"Creating Guardium REST API client for {appliance_name} ({appliance_ip}:8443)")
     
-    # Create and return API instance
     api = GuardiumRestAPI(
         base_url=base_url,
         client_id="BOOTCAMP",

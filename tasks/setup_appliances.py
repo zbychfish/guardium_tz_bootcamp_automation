@@ -392,10 +392,7 @@ def create_oauth_client(
     logger.info(f"CREATE OAUTH CLIENT: {client_id}")
     logger.info("=" * 80)
     
-    # Get path to appliances.yaml file
     appliances_file = config.config_file.parent / "appliances.yaml"
-    
-    # Load appliance configuration
     appliance_loader = ApplianceConfigLoader(appliances_file)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
@@ -491,7 +488,6 @@ def create_oauth_client(
             logger.error(f"Response: {result}")
             return False
         
-        # Save client_secret to file (in project root - parent of config dir)
         project_root = config.config_file.parent.parent
         secret_file = project_root / ".client_secret"
         try:
@@ -527,57 +523,15 @@ def create_demo_user(
     accessmgr_password: Optional[str] = None,
     demo_password: Optional[str] = None
 ) -> bool:
-    """
-    Create demo user in Guardium via REST API
     
-    Creates user 'demo' with admin privileges if it doesn't exist.
-    Uses REST API to:
-    1. Get token as accessmgr
-    2. List existing users
-    3. Create demo user if not exists
-    4. Assign roles: admin,cli,user,vulnerability-assess
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging
-        appliance_name: Name of appliance from appliances.yaml (default: cm01)
-        accessmgr_password: Password for accessmgr user (optional, uses cli_pwd from custom_variables)
-        demo_password: Password for demo user (optional, uses pwd from custom_variables)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example in config/groups.yaml:
-        stages:
-          - name: create_demo_user
-            function: create_demo_user
-            module: tasks.setup_appliances
-            args:
-              appliance_name: "cm01"
-              # accessmgr_password: "password"  # Optional if cli_pwd in custom_variables
-              # demo_password: "password"       # Optional if pwd in custom_variables
-    
-    Required custom_variables in machines_info.json:
-        {
-          "custom_variables": {
-            "cli_pwd": "accessmgr_password",  # Used for accessmgr
-            "pwd": "demo_password"            # Used for demo user
-          }
-        }
-    
-    Note: .client_secret file must exist (created by create_oauth_client stage)
-    """
     from core.guardium_rest_api import create_guardium_api
     
     logger.info("=" * 80)
     logger.info("CREATE DEMO USER")
     logger.info("=" * 80)
     
-    # Get passwords from parameters or custom_variables
     custom_vars = config.get_custom_variables()
     
-    # accessmgr password is same as cli_pwd
     if not accessmgr_password:
         if custom_vars and 'cli_pwd' in custom_vars:
             accessmgr_password = custom_vars['cli_pwd']
@@ -594,20 +548,16 @@ def create_demo_user(
             logger.error("demo_password not provided and pwd not found in custom_variables")
             return False
     
-    # Type assertions for passwords (already validated above)
-    assert accessmgr_password is not None, "accessmgr_password should not be None"
-    assert demo_password is not None, "demo_password should not be None"
+    assert accessmgr_password is not None
+    assert demo_password is not None
     
     try:
-        # Create API instance
         api = create_guardium_api(config, logger, appliance_name)
         
-        # Get token as accessmgr
         logger.info("Getting token as accessmgr...")
         token = api.get_token(username='accessmgr', password=accessmgr_password)
         logger.info("✓ Token obtained successfully")
         
-        # List existing users
         logger.info("\nListing existing users:")
         users = api.get_users()
         
@@ -615,7 +565,6 @@ def create_demo_user(
             status = "DISABLED" if u.get("disabled") == "true" else "ACTIVE"
             logger.info(f"  {u['user_name']:12} | {status}")
         
-        # Check if demo user exists
         demo_exists = any(u.get('user_name') == 'demo' for u in users)
         
         if not demo_exists:
@@ -648,8 +597,21 @@ def create_demo_user(
         token = api.get_token(username='demo', password=demo_password)
         logger.info("✓ Demo user login successful")
         
+        # Disable guardium account
+        logger.info("\n➜ Disabling guardium account...")
+        api.update_user(username='guardium', disabled=True)
+        logger.info("✓ guardium account disabled")
+        
+        # Disable guardcli2 to guardcli9 accounts
+        logger.info("\n➜ Disabling guardcli accounts...")
+        for cli_num in range(2, 10):  # guardcli2 to guardcli9
+            username = f"guardcli{cli_num}"
+            api.update_user(username=username, disabled=True)
+            logger.info(f"✓ {username} account disabled")
+        
         logger.info("=" * 80)
         logger.info("Demo user setup completed successfully")
+        logger.info("Disabled accounts: guardium, guardcli2-guardcli9")
         logger.info("=" * 80)
         
         return True
