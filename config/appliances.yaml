@@ -4,52 +4,48 @@
 
 appliances:
   collector1:
-    name: "collector1"
     ip: "10.10.9.239"
     type: "collector"
     description: "Primary Guardium Collector"
   
-  cm:
-    name: "cm01"
+  cm01:
     ip: "10.240.64.31"
     type: "cm"
     description: "Central Manager"
     port: 22
   
 #   aggregator1:
-#     name: "aggregator1"
 #     ip: "10.10.9.229"
 #     type: "aggregator"
 #     description: "Aggregator Node"
   
 #   appnode1:
-#     name: "appnode1"
 #     ip: "10.10.9.50"
 #     type: "appnode"
 #     description: "Application Node"
 
-# # Appliance type definitions with default prompts
-# # These can be overridden per appliance if needed
-# appliance_types:
-#   collector:
-#     default_user: "cli"
-#     default_prompt_unconfigured: "guard\\.yourcompany\\.com>"
-#     default_prompt_configured: "coll\\d+\\.gdemo\\.com>"
-#     description: "Guardium Data Collector"
+# Appliance type definitions with default prompts
+# Prompts support both formats: "name>" and "name.demo.guardium>"
+appliance_types:
+  collector:
+    default_user: "cli"
+    default_prompt_unconfigured: "[\\w-]+(\\.demo\\.guardium)?>"
+    default_prompt_configured: "[\\w-]+(\\.demo\\.guardium)?>"
+    description: "Guardium Data Collector"
   
-#   cm:
-#     default_user: "cli"
-#     default_prompt: "cm\\.gdemo\\.com>"
-#     description: "Central Manager"
+  cm:
+    default_user: "cli"
+    default_prompt: "[\\w-]+(\\.demo\\.guardium)?>"
+    description: "Central Manager"
   
-#   aggregator:
-#     default_user: "cli"
-#     default_prompt: "aggregator\\d*\\.gdemo\\.com>"
-#     description: "Aggregator"
+  aggregator:
+    default_user: "cli"
+    default_prompt: "[\\w-]+(\\.demo\\.guardium)?>"
+    description: "Aggregator"
   
-#   appnode:
-#     default_user: "cli"
-#     default_prompt: "appnode\\d*\\.gdemo\\.com>"
-#     description: "Application Node"
+  appnode:
+    default_user: "cli"
+    default_prompt: "[\\w-]+(\\.demo\\.guardium)?>"
+    description: "Application Node"
 
 # Made with Bob
