@@ -21,7 +21,7 @@ groups:
   other_praparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
-    auto_execute: true
+    auto_execute: false
     stages:      
       - name: deploy_mysql_on_raptor
         function: deploy_mysql_on_raptor_task
@@ -59,7 +59,6 @@ groups:
         description: "Test appliance connectivity and show system clock"
         args:
           appliance_name: "cm01"  # Name from config/appliances.yaml
-          password: "bootCamp321!"  # Replace with actual password
           # prompt_regex: "cm01>"  # Optional - comment out to use default from appliances.yaml
       
       # - name: initial_collector_settings

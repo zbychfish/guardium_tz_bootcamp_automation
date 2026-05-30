@@ -20,7 +20,8 @@ def connect_and_show_clock(
     appliance_name: Optional[str] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    prompt_regex: Optional[str] = None
+    prompt_regex: Optional[str] = None,
+    debug: bool = False
 ) -> bool:
     """
     Connect to appliance and execute 'show system clock all' command
@@ -93,12 +94,13 @@ def connect_and_show_clock(
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
     
-    # Create appliance client with debug enabled
+    # Create appliance client
     # Use None for initial_pattern - will nudge prompt and wait directly for prompt
-    logger.info(f"Creating appliance client with:")
-    logger.info(f"  host: {host}")
-    logger.info(f"  user: {user}")
-    logger.info(f"  prompt_regex: {prompt_regex}")
+    if debug:
+        logger.info(f"Creating appliance client with:")
+        logger.info(f"  host: {host}")
+        logger.info(f"  user: {user}")
+        logger.info(f"  prompt_regex: {prompt_regex}")
     
     appliance = ApplianceClient(
         host=host,
@@ -108,7 +110,7 @@ def connect_and_show_clock(
         initial_pattern=None,
         timeout=60,
         strip_ansi=True,
-        debug=True  # Enable debug to see what's happening
+        debug=debug  # Use debug parameter from args
     )
     
     # Connect
@@ -156,7 +158,8 @@ def initial_collector_settings(
     collector_name: Optional[str] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    prompt_regex: Optional[str] = None
+    prompt_regex: Optional[str] = None,
+    debug: bool = False
 ) -> bool:
     """
     Configure initial collector settings
@@ -237,6 +240,12 @@ def initial_collector_settings(
     
     # Create appliance client
     # Use None for initial_pattern - will nudge prompt and wait directly for prompt
+    if debug:
+        logger.info(f"Creating appliance client with:")
+        logger.info(f"  host: {host}")
+        logger.info(f"  user: {user}")
+        logger.info(f"  prompt_regex: {prompt_regex}")
+    
     appliance = ApplianceClient(
         host=host,
         user=user,
@@ -245,7 +254,7 @@ def initial_collector_settings(
         initial_pattern=None,
         timeout=120,
         strip_ansi=True,
-        debug=False
+        debug=debug  # Use debug parameter from args
     )
     
     # Connect
