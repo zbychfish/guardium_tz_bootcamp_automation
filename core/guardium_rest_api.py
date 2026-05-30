@@ -274,10 +274,10 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
             "  3. Environment variable CLIENT_SECRET"
         )
     
-    # Create base URL
-    base_url = f"https://{appliance_ip}"
+    # Create base URL (Guardium REST API runs on port 8443)
+    base_url = f"https://{appliance_ip}:8443"
     
-    logger.info(f"Creating Guardium REST API client for {appliance_name} ({appliance_ip})")
+    logger.info(f"Creating Guardium REST API client for {appliance_name} ({appliance_ip}:8443)")
     
     # Create and return API instance
     api = GuardiumRestAPI(
