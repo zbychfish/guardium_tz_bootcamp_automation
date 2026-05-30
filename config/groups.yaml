@@ -61,12 +61,22 @@ groups:
           appliance_name: "cm01"  # Name from config/appliances.yaml
           # prompt_regex: "cm01>"  # Optional - comment out to use default from appliances.yaml
       
-      - name: read_license_keys
-        function: read_license_keys
+      - name: create_oauth_client
+        function: create_oauth_client
         module: tasks.setup_appliances
-        description: "Read and display license keys from raptor"
+        description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          keys_directory: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/keys"
+          appliance_name: "cm01"
+          client_id: "BOOTCAMP"
+      
+      - name: create_demo_user
+        function: create_demo_user
+        module: tasks.setup_appliances
+        description: "Create demo user in Guardium via REST API"
+        args:
+          appliance_name: "cm01"  # Name from config/appliances.yaml
+          # accessmgr_password: "password"  # Optional if cli_pwd in custom_variables
+          # demo_password: "password"       # Optional if pwd in custom_variables
       
       # - name: initial_collector_settings
       #   function: initial_collector_settings

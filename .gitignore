@@ -68,4 +68,7 @@ upload/
 *.key
 id_rsa*
 
+# OAuth secrets
+.client_secret
+
 # Made with Bob

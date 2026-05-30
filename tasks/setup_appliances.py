@@ -343,107 +343,312 @@ def initial_collector_settings(
 # Made with Bob
 
 
-
-def read_license_keys(
+def create_oauth_client(
     config,
     logger,
     verbose: bool = True,
-    keys_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/keys"
+    appliance_name: str = "cm01",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    client_id: str = "BOOTCAMP",
+    debug: bool = False
 ) -> bool:
     """
-    Read and display license keys from raptor
+    Create OAuth client in Guardium and save client_secret to file
     
-    Reads .lkey files from specified directory:
-    - base.lkey (base license)
-    - append*.lkey (append licenses)
+    Creates OAuth client with specified client_id and saves the generated
+    client_secret to .client_secret file in project root.
     
-    Displays content in single-line format: base keys first, then append keys
+    Based on t_initial_cm_settings from guardium_bootcamp_automation.
     
     Args:
         config: ConfigLoader instance
         logger: Logger instance
         verbose: Enable verbose logging
-        keys_directory: Path to directory with .lkey files
+        appliance_name: Name of appliance from appliances.yaml (default: cm01)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        client_id: OAuth client ID (default: BOOTCAMP)
+        debug: Enable debug mode for SSH connection
     
     Returns:
         True if successful, False otherwise
     
     Example in config/groups.yaml:
         stages:
-          - name: read_license_keys
-            function: read_license_keys
+          - name: create_oauth_client
+            function: create_oauth_client
             module: tasks.setup_appliances
             args:
-              keys_directory: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/keys"
+              appliance_name: "cm01"
+              client_id: "BOOTCAMP"
     """
-    import os
-    import glob
+    import json
+    from pathlib import Path
     
-    logger.info(f"Reading license keys from: {keys_directory}")
+    logger.info("=" * 80)
+    logger.info(f"CREATE OAUTH CLIENT: {client_id}")
+    logger.info("=" * 80)
     
-    # Check if directory exists
-    if not os.path.exists(keys_directory):
-        logger.error(f"Directory not found: {keys_directory}")
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader(config.config_dir)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in config/appliances.yaml")
         return False
     
-    # Find all .lkey files
-    lkey_files = glob.glob(os.path.join(keys_directory, "*.lkey"))
-    
-    if not lkey_files:
-        logger.error(f"No .lkey files found in {keys_directory}")
-        return False
-    
-    logger.info(f"Found {len(lkey_files)} license key file(s)")
-    
-    # Separate base and append keys
-    base_keys = []
-    append_keys = []
-    
-    for filepath in lkey_files:
-        filename = os.path.basename(filepath)
-        
-        try:
-            with open(filepath, 'r') as f:
-                content = f.read().strip()
-            
-            # Convert to single line (remove newlines)
-            single_line = content.replace('\n', '').replace('\r', '')
-            
-            if filename.startswith('base'):
-                base_keys.append((filename, single_line))
-            elif filename.startswith('append'):
-                append_keys.append((filename, single_line))
-            else:
-                logger.warning(f"Unknown key type: {filename}")
-                
-        except Exception as e:
-            logger.error(f"Error reading {filename}: {e}")
+    # Get password from custom_variables if not provided
+    if not password:
+        custom_vars = config.get_custom_variables()
+        if custom_vars and 'cli_pwd' in custom_vars:
+            password = custom_vars['cli_pwd']
+            logger.info("Using password from custom_variables (cli_pwd)")
+        else:
+            logger.error("Password not provided and cli_pwd not found in custom_variables")
             return False
     
-    # Display keys in order: base first, then append
+    # Get default user if not provided
+    if not user:
+        user = appliance_loader.get_default_user(appliance_config.get('type', 'collector'))
+    
+    # Get default prompt if not provided
+    if not prompt_regex:
+        appliance_type = appliance_config.get('type', 'collector')
+        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
+    
+    appliance_ip = appliance_config.get('ip')
+    if not appliance_ip:
+        logger.error(f"IP address not found for appliance '{appliance_name}'")
+        return False
+    
+    if not password:
+        logger.error("Password is required")
+        return False
+    
+    if not prompt_regex:
+        logger.error("Prompt regex could not be determined")
+        return False
+    
+    logger.info(f"Connecting to {appliance_name} ({appliance_ip})...")
+    
+    # Create appliance client
+    client = ApplianceClient(
+        host=appliance_ip,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        timeout=120,
+        debug=debug
+    )
+    
+    try:
+        # Connect to appliance
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        logger.info("✓ Connected successfully")
+        
+        # List existing OAuth clients
+        logger.info(f"\nListing existing OAuth clients...")
+        result = client.execute_command("grdapi list_oauth_clients")
+        logger.info(result)
+        
+        # Delete existing client if exists
+        if f"Client Id: {client_id}" in result:
+            logger.info(f"\n➜ Deleting existing OAuth client '{client_id}'...")
+            result = client.execute_command(f"grdapi delete_oauth_clients client_id={client_id}")
+            logger.info("✓ Existing client deleted")
+        
+        # Create new OAuth client
+        logger.info(f"\n➜ Creating OAuth client '{client_id}'...")
+        result = client.execute_command(f'grdapi register_oauth_client client_id={client_id} grant_types="password"')
+        
+        # Parse client_secret from response
+        client_secret = None
+        for line in result.splitlines():
+            line = line.strip()
+            if line.startswith('{') and line.endswith('}'):
+                try:
+                    data = json.loads(line)
+                    client_secret = data.get('client_secret')
+                    if client_secret:
+                        logger.info(f"✓ OAuth client created successfully")
+                        logger.info(f"  Client ID: {client_id}")
+                        logger.info(f"  Client Secret: {client_secret[:10]}...")
+                        break
+                except json.JSONDecodeError:
+                    pass
+        
+        if not client_secret:
+            logger.error("Failed to extract client_secret from response")
+            logger.error(f"Response: {result}")
+            return False
+        
+        # Save client_secret to file
+        secret_file = Path(config.project_root) / ".client_secret"
+        try:
+            with open(secret_file, 'w') as f:
+                f.write(client_secret)
+            logger.info(f"\n✓ Client secret saved to: {secret_file}")
+            logger.info("  (This file is in .gitignore and will not be committed)")
+        except Exception as e:
+            logger.error(f"Failed to save client_secret to file: {e}")
+            return False
+        
+        logger.info("=" * 80)
+        logger.info("OAuth client setup completed successfully")
+        logger.info("=" * 80)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating OAuth client: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+        
+    finally:
+        client.disconnect()
+
+
+def create_demo_user(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: str = "cm01",
+    accessmgr_password: Optional[str] = None,
+    demo_password: Optional[str] = None
+) -> bool:
+    """
+    Create demo user in Guardium via REST API
+    
+    Creates user 'demo' with admin privileges if it doesn't exist.
+    Uses REST API to:
+    1. Get token as accessmgr
+    2. List existing users
+    3. Create demo user if not exists
+    4. Assign roles: admin,cli,user,vulnerability-assess
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging
+        appliance_name: Name of appliance from appliances.yaml (default: cm01)
+        accessmgr_password: Password for accessmgr user (optional, uses cli_pwd from custom_variables)
+        demo_password: Password for demo user (optional, uses pwd from custom_variables)
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Example in config/groups.yaml:
+        stages:
+          - name: create_demo_user
+            function: create_demo_user
+            module: tasks.setup_appliances
+            args:
+              appliance_name: "cm01"
+              # accessmgr_password: "password"  # Optional if cli_pwd in custom_variables
+              # demo_password: "password"       # Optional if pwd in custom_variables
+    
+    Required custom_variables in machines_info.json:
+        {
+          "custom_variables": {
+            "cli_pwd": "accessmgr_password",  # Used for accessmgr
+            "pwd": "demo_password"            # Used for demo user
+          }
+        }
+    
+    Note: .client_secret file must exist (created by create_oauth_client stage)
+    """
+    from core.guardium_api import create_guardium_api
+    
     logger.info("=" * 80)
-    logger.info("LICENSE KEYS")
+    logger.info("CREATE DEMO USER")
     logger.info("=" * 80)
     
-    # Display base keys
-    if base_keys:
-        logger.info("\nBASE LICENSE KEYS:")
-        for filename, content in sorted(base_keys):
-            logger.info(f"  {filename}:")
-            logger.info(f"    {content}")
-    else:
-        logger.warning("No base license keys found")
+    # Get passwords from parameters or custom_variables
+    custom_vars = config.get_custom_variables()
     
-    # Display append keys
-    if append_keys:
-        logger.info("\nAPPEND LICENSE KEYS:")
-        for filename, content in sorted(append_keys):
-            logger.info(f"  {filename}:")
-            logger.info(f"    {content}")
-    else:
-        logger.info("No append license keys found")
+    # accessmgr password is same as cli_pwd
+    if not accessmgr_password:
+        if custom_vars and 'cli_pwd' in custom_vars:
+            accessmgr_password = custom_vars['cli_pwd']
+            logger.info("Using accessmgr password from custom_variables (cli_pwd)")
+        else:
+            logger.error("accessmgr_password not provided and cli_pwd not found in custom_variables")
+            return False
     
-    logger.info("=" * 80)
-    logger.info(f"Total: {len(base_keys)} base key(s), {len(append_keys)} append key(s)")
+    if not demo_password:
+        if custom_vars and 'pwd' in custom_vars:
+            demo_password = custom_vars['pwd']
+            logger.info("Using demo password from custom_variables (pwd)")
+        else:
+            logger.error("demo_password not provided and pwd not found in custom_variables")
+            return False
     
+    try:
+        # Create API instance
+        api = create_guardium_api(config, logger, appliance_name)
+        
+        # Get token as accessmgr
+        logger.info("Getting token as accessmgr...")
+        token = api.get_token(username='accessmgr', password=accessmgr_password)
+        logger.info("✓ Token obtained successfully")
+        
+        # List existing users
+        logger.info("\nListing existing users:")
+        users = api.get_users()
+        
+        for u in users:
+            status = "DISABLED" if u.get("disabled") == "true" else "ACTIVE"
+            logger.info(f"  {u['user_name']:12} | {status}")
+        
+        # Check if demo user exists
+        demo_exists = any(u.get('user_name') == 'demo' for u in users)
+        
+        if not demo_exists:
+            logger.info("\n➜ Creating demo user...")
+            result = api.create_user(
+                username='demo',
+                password=demo_password,
+                confirm_password=demo_password,
+                first_name='User',
+                last_name='Demo',
+                email='demo@demo.training',
+                country='PL',
+                disabled=False,
+                disable_pwd_expiry=True
+            )
+            logger.info("✓ Demo user created successfully")
+            
+            logger.info("\n➜ Assigning roles to demo user...")
+            result = api.set_user_roles(
+                username='demo',
+                roles='admin,cli,user,vulnerability-assess'
+            )
+            logger.info("✓ Roles assigned: admin, cli, user, vulnerability-assess")
+            
+        else:
+            logger.info("\nℹ Demo user already exists")
+        
+        # Verify demo user can login
+        logger.info("\nVerifying demo user credentials...")
+        token = api.get_token(username='demo', password=demo_password)
+        logger.info("✓ Demo user login successful")
+        
+        logger.info("=" * 80)
+        logger.info("Demo user setup completed successfully")
+        logger.info("=" * 80)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating demo user: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
     return True
