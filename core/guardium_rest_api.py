@@ -225,11 +225,11 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     from pathlib import Path
     from .appliance_config_loader import ApplianceConfigLoader
     
-    # Get config directory from config_file path
-    config_dir = config.config_file.parent
+    # Get path to appliances.yaml file
+    appliances_file = config.config_file.parent / "appliances.yaml"
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config_dir)
+    appliance_loader = ApplianceConfigLoader(appliances_file)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:

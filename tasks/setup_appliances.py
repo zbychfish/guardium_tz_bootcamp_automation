@@ -392,11 +392,11 @@ def create_oauth_client(
     logger.info(f"CREATE OAUTH CLIENT: {client_id}")
     logger.info("=" * 80)
     
-    # Get config directory from config_file path
-    config_dir = config.config_file.parent
+    # Get path to appliances.yaml file
+    appliances_file = config.config_file.parent / "appliances.yaml"
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config_dir)
+    appliance_loader = ApplianceConfigLoader(appliances_file)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
