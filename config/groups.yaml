@@ -20,7 +20,7 @@ groups:
 
   other_praparations:
     name: "Other general tasks, standard database installation"
-    description: "test only"
+    description: "Bootcamp machines preparation"
     auto_execute: true
     stages:      
       - name: deploy_mysql_on_raptor
