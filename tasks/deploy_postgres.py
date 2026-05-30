@@ -82,12 +82,35 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
         if verbose:
             logger.info("Step 2: Configuring SSL certificate")
         
+        # Create SSL certificate with SAN for localhost and IP addresses
+        ssl_config = """[req]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_req
+prompt = no
+
+[req_distinguished_name]
+CN = raptor.demo.com
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = raptor.demo.com
+DNS.2 = localhost
+IP.1 = 127.0.0.1
+"""
+        
+        # Write SSL config to temp file
+        ssl_config_path = Path("/tmp/pgsql_ssl.conf")
+        ssl_config_path.write_text(ssl_config)
+        
         ssl_commands = [
             ["openssl", "req", "-new", "-x509", "-days", "365", "-nodes", "-text",
              "-out", "/var/lib/pgsql/data/pgsql.crt",
              "-keyout", "/var/lib/pgsql/data/pgsql.key",
-             "-subj", "/CN=raptor.demo.com"],
-            ["chown", "postgres:postgres", "/var/lib/pgsql/data/pgsql.crt", "/var/lib/pgsql/data/pgsql.key"]
+             "-config", "/tmp/pgsql_ssl.conf"],
+            ["chown", "postgres:postgres", "/var/lib/pgsql/data/pgsql.crt", "/var/lib/pgsql/data/pgsql.key"],
+            ["rm", "-f", "/tmp/pgsql_ssl.conf"]
         ]
         
         for cmd in ssl_commands:
@@ -137,26 +160,39 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
         
         lines = []
         network_added = False
+        in_replication_section = False
         
         with hba_path.open() as f:
             for line in f:
                 stripped = line.strip()
                 
-                # Change local peer to ident
-                if stripped.startswith("local") and "peer" in line:
+                # Detect replication section
+                if "replication" in stripped.lower() and ("# allow" in line.lower() or stripped.startswith("#")):
+                    in_replication_section = True
+                    lines.append(line)
+                    continue
+                
+                # In replication section - keep lines as-is
+                if in_replication_section:
+                    lines.append(line)
+                    continue
+                
+                # Before replication section - modify lines
+                
+                # Change local peer to ident (only for "all" database, not replication)
+                if stripped.startswith("local") and "all" in line and "peer" in line:
                     lines.append("local   all             all                                     ident\n")
                 
-                # Replace host 127.0.0.1 ident with scram-sha-256 and add network line
-                elif stripped.startswith("host") and "127.0.0.1/32" in line and "ident" in line:
+                # Replace host 127.0.0.1 ident with scram-sha-256 and add network line (only once)
+                elif stripped.startswith("host") and "all" in line and "127.0.0.1/32" in line and "ident" in line:
                     lines.append("host    all             all             127.0.0.1/32            scram-sha-256\n")
                     if not network_added:
                         lines.append(f"host    all             all             {network}            scram-sha-256\n")
                         network_added = True
                 
-                # Keep other lines as-is (skip duplicates of what we already added)
-                elif not (stripped.startswith("host") and "127.0.0.1/32" in line and "scram-sha-256" in line):
-                    if not (stripped.startswith("host") and network in line):
-                        lines.append(line)
+                # Keep other lines as-is
+                else:
+                    lines.append(line)
         
         hba_path.write_text("".join(lines))
         
