@@ -48,4 +48,27 @@ groups:
         module: tasks.deploy_postgres
         description: "Deploy PostgreSQL 16 on raptor"
 
+  setup_appliances:
+    name: "Setup Appliances"
+    description: "Configure Guardium appliances (collector, CM, etc.)"
+    auto_execute: false  # Executed on demand
+    stages:
+      - name: test_appliance_connection
+        function: connect_and_show_clock
+        module: tasks.setup_appliances
+        description: "Test appliance connectivity and show system clock"
+        args:
+          appliance_name: "collector1"  # Name from config/appliances.yaml
+          password: "your_password_here"  # Replace with actual password
+          prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
+      
+      - name: initial_collector_settings
+        function: initial_collector_settings
+        module: tasks.setup_appliances
+        description: "Configure initial collector settings (timezone, NTP, purge)"
+        args:
+          collector_name: "collector1"  # Name from config/appliances.yaml
+          password: "your_password_here"  # Replace with actual password
+          prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
+
 # Made with Bob

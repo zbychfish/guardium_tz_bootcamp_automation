@@ -1,0 +1,54 @@
+# Guardium Appliances Configuration
+# Define available appliances with their basic information
+# Credentials (user/password) are provided separately via environment variables or parameters
+
+appliances:
+  collector1:
+    name: "collector1"
+    ip: "10.10.9.239"
+    type: "collector"
+    description: "Primary Guardium Collector"
+  
+  cm:
+    name: "cm"
+    ip: "10.10.9.219"
+    type: "cm"
+    description: "Central Manager"
+  
+#   aggregator1:
+#     name: "aggregator1"
+#     ip: "10.10.9.229"
+#     type: "aggregator"
+#     description: "Aggregator Node"
+  
+#   appnode1:
+#     name: "appnode1"
+#     ip: "10.10.9.50"
+#     type: "appnode"
+#     description: "Application Node"
+
+# # Appliance type definitions with default prompts
+# # These can be overridden per appliance if needed
+# appliance_types:
+#   collector:
+#     default_user: "cli"
+#     default_prompt_unconfigured: "guard\\.yourcompany\\.com>"
+#     default_prompt_configured: "coll\\d+\\.gdemo\\.com>"
+#     description: "Guardium Data Collector"
+  
+#   cm:
+#     default_user: "cli"
+#     default_prompt: "cm\\.gdemo\\.com>"
+#     description: "Central Manager"
+  
+#   aggregator:
+#     default_user: "cli"
+#     default_prompt: "aggregator\\d*\\.gdemo\\.com>"
+#     description: "Aggregator"
+  
+#   appnode:
+#     default_user: "cli"
+#     default_prompt: "appnode\\d*\\.gdemo\\.com>"
+#     description: "Application Node"
+
+# Made with Bob

@@ -1,0 +1,65 @@
+# Example: Appliances Configuration in groups.yaml
+# 
+# Add appliance machines to your groups.yaml file under the machines section.
+# Each appliance needs: host, user, password, and prompt_regex
+
+# Example machines configuration:
+machines:
+  # Guardium Collector (unconfigured)
+  collector_unconfigured:
+    host: "10.10.9.239"
+    user: "cli"
+    password: "your_password_here"
+    prompt_regex: "guard\\.yourcompany\\.com>"
+    description: "Guardium Collector (before initial configuration)"
+  
+  # Guardium Collector (configured)
+  collector:
+    host: "10.10.9.239"
+    user: "cli"
+    password: "your_password_here"
+    prompt_regex: "coll1\\.gdemo\\.com>"
+    description: "Guardium Collector (after configuration)"
+  
+  # Central Manager
+  cm:
+    host: "10.10.9.219"
+    user: "cli"
+    password: "your_password_here"
+    prompt_regex: "cm\\.gdemo\\.com>"
+    description: "Guardium Central Manager"
+  
+  # Other machines (raptor, sauropod, etc.)
+  raptor:
+    host: "10.10.9.70"
+    user: "root"
+    password: "your_password_here"
+    description: "Database server"
+
+# Then use in groups:
+groups:
+  setup_appliances:
+    name: "Setup Appliances"
+    description: "Configure Guardium appliances"
+    auto_execute: false
+    stages:
+      - name: test_collector_connection
+        function: connect_and_show_clock
+        module: tasks.setup_appliances
+        description: "Test collector connectivity"
+        args:
+          appliance_ip: "10.10.9.239"
+      
+      - name: configure_collector
+        function: initial_collector_settings
+        module: tasks.setup_appliances
+        description: "Configure collector initial settings"
+        args:
+          collector_ip: "10.10.9.239"
+
+# Usage:
+# python automation.py --group setup_appliances
+# python automation.py --group setup_appliances --stage test_collector_connection
+# python automation.py --group setup_appliances --stage configure_collector
+
+# Made with Bob
