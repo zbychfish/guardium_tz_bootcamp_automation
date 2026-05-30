@@ -111,8 +111,13 @@ class AutomationOrchestrator:
         start_time = time.time()
         
         try:
-            # Call stage function with config and logger
-            result = stage_fn(self.config, self.logger, self.verbose)
+            # Get stage args if provided
+            stage_args = stage_info.get('args', {})
+            if not isinstance(stage_args, dict):
+                stage_args = {}
+            
+            # Call stage function with config, logger, verbose, and any additional args
+            result = stage_fn(self.config, self.logger, self.verbose, **stage_args)
             elapsed_time = time.time() - start_time
             
             if result:
