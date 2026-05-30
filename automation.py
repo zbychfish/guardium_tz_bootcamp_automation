@@ -20,6 +20,7 @@ from core.config_loader import ConfigLoader
 from core.group_manager import GroupManager
 from core.logger import setup_logger
 
+
 class AutomationOrchestrator:
     """
     Main orchestrator for machine automation tasks.
