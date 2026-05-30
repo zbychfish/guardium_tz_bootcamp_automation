@@ -58,17 +58,17 @@ groups:
         module: tasks.setup_appliances
         description: "Test appliance connectivity and show system clock"
         args:
-          appliance_name: "collector1"  # Name from config/appliances.yaml
-          password: "your_password_here"  # Replace with actual password
+          appliance_name: "cm"  # Name from config/appliances.yaml
+          password: "bootCamp321!"  # Replace with actual password
           prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
       
-      - name: initial_collector_settings
-        function: initial_collector_settings
-        module: tasks.setup_appliances
-        description: "Configure initial collector settings (timezone, NTP, purge)"
-        args:
-          collector_name: "collector1"  # Name from config/appliances.yaml
-          password: "your_password_here"  # Replace with actual password
-          prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
+      # - name: initial_collector_settings
+      #   function: initial_collector_settings
+      #   module: tasks.setup_appliances
+      #   description: "Configure initial collector settings (timezone, NTP, purge)"
+      #   args:
+      #     collector_name: "collector1"  # Name from config/appliances.yaml
+      #     password: "your_password_here"  # Replace with actual password
+      #     prompt_regex: "guard\\.yourcompany\\.com>"  # Optional, uses default if not provided
 
 # Made with Bob

@@ -11,7 +11,7 @@ appliances:
   
   cm:
     name: "cm"
-    ip: "10.10.9.219"
+    ip: "10.240.64.31"
     type: "cm"
     description: "Central Manager"
   
