@@ -280,6 +280,8 @@ class ApplianceClient:
             self.channel.recv(65535)
         
         # Send command with CR only (no LF)
+        if self.debug:
+            print(f"[DEBUG] Sending command: {command}", file=sys.stderr)
         self.channel.send((command + "\r").encode())
         
         confirmation_re = re.compile(confirmation_pattern)

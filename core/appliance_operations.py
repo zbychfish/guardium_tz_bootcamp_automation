@@ -715,28 +715,28 @@ def configure_system_settings(
         
         logger.info(f"Hostname: {hostname}")
         logger.info(f"Domain: {domain}")
+        
+        # ===== CONNECTION 1: Set hostname =====
+        logger.info(f"➜ Setting hostname to: {hostname}")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
-        # Create appliance client with 3 minute timeout
-        client = ApplianceClient(
+        client1 = ApplianceClient(
             host=host,
             user=user,
             password=password,
             prompt_regex=prompt_regex,
-            timeout=180,  # 3 minutes for hostname change operations
+            timeout=180,  # 3 minutes
             debug=debug
         )
         
-        if not client.connect():
+        if not client1.connect():
             logger.error(f"Failed to connect to {appliance_name}")
             return False
         
         logger.info(f"✓ Connected to {appliance_name}")
         
-        # Set hostname (Guardium CLI may ask for confirmation about newly cloned appliance)
-        logger.info(f"➜ Setting hostname to: {hostname}")
         try:
-            output = client.execute_command_with_confirmation(
+            output = client1.execute_command_with_confirmation(
                 command=f"store system hostname {hostname}",
                 confirmation_pattern=r"Is it a newly cloned appliance\s*\(y/n\)\?",
                 response="n"
@@ -746,34 +746,86 @@ def configure_system_settings(
             logger.info(f"✓ Hostname set to: {hostname}")
         except TimeoutError as e:
             logger.warning(f"Timeout during hostname change, verifying...")
-            # Verify if hostname was actually changed
-            verify_output = client.execute_command("show system hostname")
-            if hostname in verify_output:
-                logger.info(f"✓ Hostname successfully set to: {hostname} (verified after timeout)")
-            else:
-                logger.error(f"✗ Hostname change failed: {e}")
-                raise
+            try:
+                verify_output = client1.execute_command("show system hostname")
+                if hostname in verify_output:
+                    logger.info(f"✓ Hostname successfully set to: {hostname} (verified after timeout)")
+                else:
+                    logger.error(f"✗ Hostname change failed: {e}")
+                    client1.disconnect()
+                    return False
+            except:
+                logger.error(f"✗ Cannot verify hostname change: {e}")
+                client1.disconnect()
+                return False
         
-        # Set domain
+        client1.disconnect()
+        logger.info("✓ Disconnected after hostname change")
+        
+        # ===== CONNECTION 2: Set domain =====
         logger.info(f"➜ Setting domain to: {domain}")
+        logger.info(f"Connecting to {appliance_name} ({host})...")
+        
+        client2 = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            timeout=180,  # 3 minutes
+            debug=debug
+        )
+        
+        if not client2.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+        
+        logger.info(f"✓ Connected to {appliance_name}")
+        
         try:
-            output = client.execute_command(f"store system domain {domain}")
+            output = client2.execute_command(f"store system domain {domain}")
             if debug and output:
                 logger.info(f"  Command output: {output}")
             logger.info(f"✓ Domain set to: {domain}")
         except TimeoutError as e:
             logger.warning(f"Timeout during domain change, verifying...")
-            # Verify if domain was actually changed
-            verify_output = client.execute_command("show system domain")
-            if domain in verify_output:
-                logger.info(f"✓ Domain successfully set to: {domain} (verified after timeout)")
-            else:
-                logger.error(f"✗ Domain change failed: {e}")
-                raise
+            try:
+                verify_output = client2.execute_command("show system domain")
+                if domain in verify_output:
+                    logger.info(f"✓ Domain successfully set to: {domain} (verified after timeout)")
+                else:
+                    logger.error(f"✗ Domain change failed: {e}")
+                    client2.disconnect()
+                    return False
+            except:
+                logger.error(f"✗ Cannot verify domain change: {e}")
+                client2.disconnect()
+                return False
+        
+        client2.disconnect()
+        logger.info("✓ Disconnected after domain change")
+        
+        # ===== CONNECTION 3: Small disk + timeouts =====
+        logger.info("➜ Configuring small disk and timeouts...")
+        logger.info(f"Connecting to {appliance_name} ({host})...")
+        
+        client3 = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            timeout=60,  # Standard 60 seconds for these operations
+            debug=debug
+        )
+        
+        if not client3.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+        
+        logger.info(f"✓ Connected to {appliance_name}")
         
         # Enable small disk mode (requires "I agree" confirmation)
         logger.info("➜ Enabling small disk mode...")
-        output = client.execute_command_with_confirmation(
+        output = client3.execute_command_with_confirmation(
             command="store system small_disk",
             confirmation_pattern=r'Please type "I agree" to continue\.\s*Or enter to abort\.',
             response="I agree"
@@ -784,19 +836,19 @@ def configure_system_settings(
         
         # Configure GUI session timeout
         logger.info("➜ Configuring GUI session timeout (9999 minutes)...")
-        output = client.execute_command("store gui session_timeout 9999")
+        output = client3.execute_command("store gui session_timeout 9999")
         if debug and output:
             logger.info(f"  Command output: {output}")
         logger.info("✓ GUI session timeout set to 9999 minutes")
         
         # Configure CLI session timeout
         logger.info("➜ Configuring CLI session timeout (600 seconds)...")
-        output = client.execute_command("store timeout cli_session 600")
+        output = client3.execute_command("store timeout cli_session 600")
         if debug and output:
             logger.info(f"  Command output: {output}")
         logger.info("✓ CLI session timeout set to 600 seconds")
         
-        client.disconnect()
+        client3.disconnect()
         
         logger.info("=" * 80)
         logger.info(f"✓ System settings configured successfully")
