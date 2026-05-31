@@ -9,7 +9,10 @@ from typing import Dict, Any, Optional
 from core.logger import get_logger
 from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
-from core.appliance_operations import restart_appliance as core_restart_appliance
+from core.appliance_operations import (
+    restart_appliance as core_restart_appliance,
+    configure_hosts_resolving as core_configure_hosts
+)
 
 logger = get_logger(__name__)
 
@@ -767,4 +770,49 @@ def restart_appliance(
         debug=debug,
         wait_for_availability=wait_for_availability,
         wait_timeout=wait_timeout
+    )
+
+
+def configure_hosts_resolving(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure /etc/hosts resolving on Guardium appliance
+    
+    This is a wrapper function that calls the core configure_hosts_resolving function.
+    Kept for backward compatibility with existing stage definitions.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (unused, kept for compatibility)
+        appliance_name: Name of appliance from appliances.yaml (required)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        debug: Enable debug mode (default True)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    # Call the core function
+    return core_configure_hosts(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
     )

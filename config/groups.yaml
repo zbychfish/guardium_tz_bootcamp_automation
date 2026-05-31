@@ -89,16 +89,24 @@ groups:
         description: "Set unit type to manager via CLI"
         args:
           appliance_name: "cm01"
-          debug: true
+          debug: false
       
-      - name: restart_cm_after_setup
-        function: restart_appliance
+      - name: configure_hosts_resolving_on_cm
+        function: configure_hosts_resolving
         module: tasks.setup_appliances
-        description: "Restart CM appliance after initial setup"
+        description: "Configure /etc/hosts resolving for all machines from machines_info.json"
         args:
           appliance_name: "cm01"
           debug: true
-          wait_for_availability: true
-          wait_timeout: 600
+      
+      # - name: restart_cm_after_setup
+      #   function: restart_appliance
+      #   module: tasks.setup_appliances
+      #   description: "Restart CM appliance after initial setup"
+      #   args:
+      #     appliance_name: "cm01"
+      #     debug: true
+      #     wait_for_availability: true
+      #     wait_timeout: 600
 
 # Made with Bob

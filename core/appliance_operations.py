@@ -185,4 +185,190 @@ def restart_appliance(
         logger.error(traceback.format_exc())
         return False
 
+
+def configure_hosts_resolving(
+    config,
+    logger,
+    appliance_name: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure /etc/hosts resolving on Guardium appliance for all machines from machines_info.json
+    
+    Uses command: support store hosts <ip> <hostname>
+    
+    This is a reusable core function that can be called from any task.
+    
+    Args:
+        config: ConfigLoader instance (must have machines_info loaded)
+        logger: Logger instance
+        appliance_name: Name of appliance from appliances.yaml (required)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        debug: Enable debug mode (default True)
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Example:
+        from core.appliance_operations import configure_hosts_resolving
+        
+        success = configure_hosts_resolving(
+            config=config,
+            logger=logger,
+            appliance_name="cm01"
+        )
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"CONFIGURE HOSTS RESOLVING: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get user from config if not provided
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    # Get machines from config (loaded from machines_info.json)
+    machines = config.get('machines', {})
+    if not machines:
+        logger.warning("No machines found in config (machines_info.json may not be loaded)")
+        logger.info("=" * 80)
+        logger.info("No hosts to configure")
+        logger.info("=" * 80)
+        return True
+    
+    logger.info(f"Found {len(machines)} machines to configure")
+    
+    try:
+        # Connect to appliance
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Get existing hosts to avoid duplicates
+        logger.info("\n➜ Checking existing hosts configuration...")
+        existing_output = client.execute_command("support show hosts")
+        logger.info(f"Current hosts:\n{existing_output}")
+        
+        # Parse existing hosts (format: "ip hostname")
+        existing_hosts = set()
+        for line in existing_output.split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#') and ' ' in line:
+                parts = line.split()
+                if len(parts) >= 2:
+                    existing_hosts.add((parts[0], parts[1]))
+        
+        logger.info(f"Found {len(existing_hosts)} existing host entries")
+        
+        # Configure hosts for each machine
+        configured_count = 0
+        skipped_count = 0
+        
+        for machine_name, machine_config in machines.items():
+            ip = machine_config.get('host') or machine_config.get('public_ip')
+            fqdn = machine_config.get('fqdn', '')
+            
+            if not ip:
+                logger.warning(f"Skipping {machine_name}: no IP address")
+                continue
+            
+            # Use FQDN if available, otherwise use machine name
+            hostname = fqdn if fqdn else machine_name
+            
+            # Check if already exists
+            if (ip, hostname) in existing_hosts:
+                logger.info(f"  ⊘ Skipping {hostname} ({ip}) - already configured")
+                skipped_count += 1
+                continue
+            
+            # Add host entry
+            command = f"support store hosts {ip} {hostname}"
+            logger.info(f"  ➜ Adding: {hostname} ({ip})")
+            output = client.execute_command(command)
+            
+            if debug and output:
+                logger.info(f"     Output: {output}")
+            
+            configured_count += 1
+        
+        # Show final configuration
+        logger.info("\n➜ Final hosts configuration:")
+        final_output = client.execute_command("support show hosts")
+        logger.info(f"\n{final_output}")
+        
+        client.disconnect()
+        
+        logger.info("=" * 80)
+        logger.info(f"✓ Hosts resolving configured successfully")
+        logger.info(f"  - Configured: {configured_count} new entries")
+        logger.info(f"  - Skipped: {skipped_count} existing entries")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error configuring hosts resolving: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
 # Made with Bob
