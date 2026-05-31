@@ -716,8 +716,8 @@ def configure_system_settings(
         logger.info(f"Hostname: {hostname}")
         logger.info(f"Domain: {domain}")
         
-        # ===== CONNECTION 1: Set hostname =====
-        logger.info(f"➜ Setting hostname to: {hostname}")
+        # ===== CONNECTION 1: Set hostname and domain =====
+        logger.info(f"➜ Setting hostname and domain...")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
         client1 = ApplianceClient(
@@ -735,6 +735,8 @@ def configure_system_settings(
         
         logger.info(f"✓ Connected to {appliance_name}")
         
+        # Set hostname
+        logger.info(f"➜ Setting hostname to: {hostname}")
         try:
             output = client1.execute_command_with_confirmation(
                 command=f"store system hostname {hostname}",
@@ -746,63 +748,81 @@ def configure_system_settings(
             logger.info(f"✓ Hostname set to: {hostname}")
         except TimeoutError as e:
             logger.warning(f"Timeout during hostname change, verifying...")
+            client1.disconnect()
+            logger.info("Reconnecting to verify hostname...")
+            
+            # Reconnect to verify
+            verify_client = ApplianceClient(
+                host=host,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                timeout=60,
+                debug=debug
+            )
+            
+            if not verify_client.connect():
+                logger.error(f"✗ Cannot reconnect to verify hostname change")
+                return False
+            
             try:
-                verify_output = client1.execute_command("show system hostname")
+                verify_output = verify_client.execute_command("show system hostname")
+                
                 if hostname in verify_output:
                     logger.info(f"✓ Hostname successfully set to: {hostname} (verified after timeout)")
+                    # Keep this connection for domain
+                    client1 = verify_client
                 else:
                     logger.error(f"✗ Hostname change failed: {e}")
-                    client1.disconnect()
+                    verify_client.disconnect()
                     return False
-            except:
-                logger.error(f"✗ Cannot verify hostname change: {e}")
-                client1.disconnect()
+            except Exception as verify_error:
+                logger.error(f"✗ Cannot verify hostname change: {verify_error}")
+                verify_client.disconnect()
                 return False
         
-        client1.disconnect()
-        logger.info("✓ Disconnected after hostname change")
-        
-        # ===== CONNECTION 2: Set domain =====
+        # Set domain (using same connection)
         logger.info(f"➜ Setting domain to: {domain}")
-        logger.info(f"Connecting to {appliance_name} ({host})...")
-        
-        client2 = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            timeout=180,  # 3 minutes
-            debug=debug
-        )
-        
-        if not client2.connect():
-            logger.error(f"Failed to connect to {appliance_name}")
-            return False
-        
-        logger.info(f"✓ Connected to {appliance_name}")
-        
         try:
-            output = client2.execute_command(f"store system domain {domain}")
+            output = client1.execute_command(f"store system domain {domain}")
             if debug and output:
                 logger.info(f"  Command output: {output}")
             logger.info(f"✓ Domain set to: {domain}")
         except TimeoutError as e:
             logger.warning(f"Timeout during domain change, verifying...")
+            client1.disconnect()
+            logger.info("Reconnecting to verify domain...")
+            
+            # Reconnect to verify
+            verify_client = ApplianceClient(
+                host=host,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                timeout=60,
+                debug=debug
+            )
+            
+            if not verify_client.connect():
+                logger.error(f"✗ Cannot reconnect to verify domain change")
+                return False
+            
             try:
-                verify_output = client2.execute_command("show system domain")
+                verify_output = verify_client.execute_command("show system domain")
+                verify_client.disconnect()
+                
                 if domain in verify_output:
                     logger.info(f"✓ Domain successfully set to: {domain} (verified after timeout)")
                 else:
                     logger.error(f"✗ Domain change failed: {e}")
-                    client2.disconnect()
                     return False
-            except:
-                logger.error(f"✗ Cannot verify domain change: {e}")
-                client2.disconnect()
+            except Exception as verify_error:
+                logger.error(f"✗ Cannot verify domain change: {verify_error}")
+                verify_client.disconnect()
                 return False
         
-        client2.disconnect()
-        logger.info("✓ Disconnected after domain change")
+        client1.disconnect()
+        logger.info("✓ Disconnected after hostname and domain change")
         
         # ===== CONNECTION 3: Small disk + timeouts =====
         logger.info("➜ Configuring small disk and timeouts...")
