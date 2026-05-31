@@ -32,6 +32,15 @@ def current_test(
         
         api = create_guardium_api(config, logger, appliance_name)
         
+        logger.info("\n➜ Getting OAuth token with accessmgr credentials...")
+        accessmgr_password = config.get_custom_variable('cli_pwd')
+        if not accessmgr_password:
+            logger.error("accessmgr password not found in custom_variables (cli_pwd)")
+            return False
+        
+        token = api.get_token(username='accessmgr', password=accessmgr_password)
+        logger.info(f"✓ Token obtained: {token[:20]}...")
+        
         logger.info("\n➜ Getting current user list...")
         users = api.get_users()
         logger.info(f"Found {len(users)} users")
