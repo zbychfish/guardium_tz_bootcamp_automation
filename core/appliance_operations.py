@@ -21,36 +21,7 @@ def restart_appliance(
     wait_for_availability: bool = True,
     wait_timeout: int = 600
 ) -> bool:
-    """
-    Restart Guardium appliance with MySQL busy check
     
-    This is a reusable core function that can be called from any task.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        appliance_name: Name of appliance from appliances.yaml (required)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-        wait_for_availability: Wait for appliance to come back online (default True)
-        wait_timeout: Timeout for waiting in seconds (default 600 = 10 minutes)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example:
-        from core.appliance_operations import restart_appliance
-        
-        success = restart_appliance(
-            config=config,
-            logger=logger,
-            appliance_name="cm01",
-            wait_for_availability=True,
-            wait_timeout=600
-        )
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -195,34 +166,7 @@ def configure_hosts_resolving(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Configure /etc/hosts resolving on Guardium appliance for all machines from machines_info.json
     
-    Uses command: support store hosts <ip> <hostname>
-    
-    This is a reusable core function that can be called from any task.
-    
-    Args:
-        config: ConfigLoader instance (must have machines_info loaded)
-        logger: Logger instance
-        appliance_name: Name of appliance from appliances.yaml (required)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example:
-        from core.appliance_operations import configure_hosts_resolving
-        
-        success = configure_hosts_resolving(
-            config=config,
-            logger=logger,
-            appliance_name="cm01"
-        )
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -373,3 +317,169 @@ def configure_hosts_resolving(
         return False
 
 # Made with Bob
+
+
+def set_timezone(
+    config,
+    logger,
+    appliance_name: str,
+    timezone: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set timezone on Guardium appliance.
+    
+    Args:
+        config: Configuration object with machines_info
+        logger: Logger instance
+        appliance_name: Name of the appliance (e.g., 'cm', 'collector1')
+        timezone: Timezone to set (default: Europe/Warsaw or from machines_info.json)
+        user: SSH user (optional, uses config if not provided)
+        password: SSH password (optional, uses config if not provided)
+        prompt_regex: CLI prompt regex (optional, uses config if not provided)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        set_timezone(config, logger, 'cm')
+        set_timezone(config, logger, 'cm', timezone='America/New_York')
+    """
+    try:
+        if not appliance_name:
+            logger.error("appliance_name is required")
+            return False
+        
+        logger.info("=" * 80)
+        logger.info(f"SET TIMEZONE: {appliance_name}")
+        logger.info("=" * 80)
+        
+        # Load appliance configuration
+        appliance_loader = ApplianceConfigLoader()
+        appliance_config = appliance_loader.get_appliance(appliance_name)
+        
+        if not appliance_config:
+            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+            available = list(appliance_loader.get_all_appliances().keys())
+            logger.error(f"Available appliances: {', '.join(available)}")
+            return False
+        
+        appliance_type = appliance_config.get('type')
+        host = appliance_config.get('ip')
+        
+        if not host:
+            logger.error(f"No IP address configured for appliance '{appliance_name}'")
+            return False
+        
+        # Get user from config if not provided
+        if not user:
+            if appliance_type:
+                user = appliance_loader.get_default_user(appliance_type)
+            else:
+                user = "cli"
+        
+        # Get password from custom_variables if not provided
+        if not password:
+            password = config.get_custom_variable('cli_pwd')
+            if password:
+                logger.info("Using password from custom_variables (cli_pwd)")
+        
+        if not password:
+            logger.error("Password not provided and cli_pwd not found in custom_variables")
+            return False
+        
+        # Get prompt regex from config if not provided
+        if not prompt_regex:
+            if appliance_type:
+                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+            if not prompt_regex:
+                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+                return False
+        
+        # Determine timezone to use
+        target_timezone = timezone
+        if not target_timezone:
+            # Try to get from machines_info.json
+            machines_info = config.get('machines_info', {})
+            target_timezone = machines_info.get('timezone', 'Europe/Warsaw')
+        
+        logger.info(f"Target timezone: {target_timezone}")
+        logger.info(f"Connecting to {appliance_name} ({host})...")
+        
+        # Create appliance client
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+        
+        logger.info(f"✓ Connected to {appliance_name}")
+        
+        # Check current timezone
+        logger.info("➜ Checking current timezone...")
+        output = client.execute_command("show system clock all")
+        
+        if not output:
+            logger.error("Failed to get current timezone")
+            client.disconnect()
+            return False
+        
+        # Parse current timezone (last line of output)
+        current_timezone = output.strip().splitlines()[-1]
+        logger.info(f"  Current timezone: {current_timezone}")
+        
+        # Check if timezone needs to be changed
+        if current_timezone == target_timezone:
+            logger.info(f"✓ Timezone already set to {target_timezone}")
+            client.disconnect()
+            return True
+        
+        # Change timezone
+        logger.info(f"➜ Changing timezone from {current_timezone} to {target_timezone}...")
+        command = f"store system clock timezone {target_timezone}"
+        
+        output = client.execute_command_with_confirmation(
+            command=command,
+            response="y",
+            confirmation_pattern=r"Do you want to proceed\?\s*\(y/n\)\s*"
+        )
+        
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        
+        # Verify new timezone
+        logger.info("➜ Verifying new timezone...")
+        output = client.execute_command("show system clock all")
+        
+        if output:
+            new_timezone = output.strip().splitlines()[-1]
+            logger.info(f"  New timezone: {new_timezone}")
+            
+            if new_timezone == target_timezone:
+                logger.info(f"✓ Timezone successfully changed to {target_timezone}")
+            else:
+                logger.warning(f"⚠ Timezone verification failed. Expected: {target_timezone}, Got: {new_timezone}")
+        
+        client.disconnect()
+        
+        logger.info("=" * 80)
+        logger.info(f"✓ Timezone configuration completed")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting timezone: {str(e)}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False

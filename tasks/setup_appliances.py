@@ -816,3 +816,62 @@ def configure_hosts_resolving(
         prompt_regex=prompt_regex,
         debug=debug
     )
+
+
+
+def set_timezone(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    timezone: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set timezone on Guardium appliance
+    
+    This is a wrapper function that calls the core set_timezone function.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (unused, kept for compatibility)
+        appliance_name: Name of appliance from appliances.yaml (required)
+        timezone: Timezone to set (optional, defaults to Europe/Warsaw or from machines_info.json)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        debug: Enable debug mode (default True)
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Example usage in groups.yaml:
+        stages:
+          - name: set_timezone
+            function: set_timezone
+            params:
+              appliance_name: cm
+              # timezone: America/New_York  # Optional, defaults to Europe/Warsaw
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    # Import here to avoid circular dependency
+    from core.appliance_operations import set_timezone as core_set_timezone
+    
+    # Call the core function
+    return core_set_timezone(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        timezone=timezone,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )

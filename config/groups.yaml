@@ -91,6 +91,15 @@ groups:
           appliance_name: "cm01"
           debug: false
       
+      - name: set_timezone_on_cm
+        function: set_timezone
+        module: tasks.setup_appliances
+        description: "Set timezone on CM appliance (defaults to Europe/Warsaw or from machines_info.json)"
+        args:
+          appliance_name: "cm01"
+          # timezone: "America/New_York"  # Optional - defaults to Europe/Warsaw or from machines_info.json
+          debug: true
+      
       - name: configure_hosts_resolving_on_cm
         function: configure_hosts_resolving
         module: tasks.setup_appliances
