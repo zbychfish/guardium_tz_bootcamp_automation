@@ -353,6 +353,80 @@ class ApplianceClient:
         lines = output_region.splitlines()
         return "\n".join(lines)
     
+    def execute_command_simple_confirmation(
+        self,
+        command: str,
+        confirmation_text: str,
+        response: str,
+        timeout: int = 60
+    ) -> str:
+        """
+        Execute command with simple text-based confirmation.
+        
+        This method:
+        1. Sends the command
+        2. Waits for confirmation_text to appear in output
+        3. Sends the response
+        4. Waits for prompt to return
+        
+        Args:
+            command: Command to execute
+            confirmation_text: Text to wait for (e.g. "I agree")
+            response: Response to send when confirmation_text appears
+            timeout: Timeout in seconds (default: 60)
+        
+        Returns:
+            Full command output
+        
+        Raises:
+            RuntimeError: If not connected
+            TimeoutError: If timeout reached
+        """
+        if not self.channel:
+            raise RuntimeError("Not connected")
+        
+        # Step 1: Send command
+        self.channel.send((command + "\r").encode())
+        
+        # Step 2: Wait for confirmation text to appear
+        buf = ""
+        deadline = time.time() + timeout
+        confirmation_found = False
+        
+        while time.time() < deadline:
+            if self.channel.recv_ready():
+                chunk = self.channel.recv(65535).decode(errors="replace")
+                buf += chunk
+                
+                if self.debug:
+                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk)}", file=sys.stderr)
+            
+            # Check if confirmation text appeared
+            if confirmation_text in buf and not confirmation_found:
+                if self.debug:
+                    print(f"[DEBUG] Found '{confirmation_text}' in output, sending response '{response}'", file=sys.stderr)
+                
+                # Step 3: Wait a bit to ensure prompt is complete, then send response
+                time.sleep(0.2)
+                self.channel.send((response + "\r").encode())
+                confirmation_found = True
+            
+            # Step 4: Check if prompt returned
+            if confirmation_found and self.prompt_re.search(buf):
+                if self.debug:
+                    print(f"[DEBUG] Prompt detected, command completed", file=sys.stderr)
+                break
+            
+            if self.channel.closed:
+                raise RuntimeError("Channel closed")
+            
+            time.sleep(0.01)
+        else:
+            raise TimeoutError(f"Timeout waiting for command completion (timeout: {timeout}s)")
+        
+        # Return full output
+        return buf
+    
     def disconnect(self):
         """Close SSH connection"""
         try:

@@ -794,11 +794,21 @@ def configure_system_settings(
             logger.info("Reconnecting to verify domain...")
             
             # Reconnect to verify
+            # Use configured prompt_regex (it should match the new hostname.domain format)
+            if appliance_type:
+                configured_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True)
+            else:
+                configured_prompt = None
+            
+            if not configured_prompt:
+                logger.error("Cannot determine configured prompt regex")
+                return False
+            
             verify_client = ApplianceClient(
                 host=host,
                 user=user,
                 password=password,
-                prompt_regex=prompt_regex,
+                prompt_regex=configured_prompt,
                 timeout=60,
                 debug=debug
             )
@@ -809,106 +819,61 @@ def configure_system_settings(
             
             try:
                 verify_output = verify_client.execute_command("show system domain")
-                verify_client.disconnect()
                 
                 if domain in verify_output:
                     logger.info(f"✓ Domain successfully set to: {domain} (verified after timeout)")
+                    # Keep this connection for remaining operations
+                    client1 = verify_client
                 else:
                     logger.error(f"✗ Domain change failed: {e}")
+                    verify_client.disconnect()
                     return False
             except Exception as verify_error:
                 logger.error(f"✗ Cannot verify domain change: {verify_error}")
                 verify_client.disconnect()
                 return False
         
-        client1.disconnect()
-        logger.info("✓ Disconnected after hostname and domain change")
-        
-        # ===== CONNECTION 3: Small disk + timeouts =====
+        # Continue using same connection (client1) for remaining operations
         logger.info("➜ Configuring small disk and timeouts...")
-        logger.info(f"Connecting to {appliance_name} ({host})...")
-        
-        # Use configured prompt_regex (it should match the new hostname.domain format)
-        if appliance_type:
-            configured_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True)
-        else:
-            configured_prompt = None
-        
-        if not configured_prompt:
-            logger.error("Cannot determine configured prompt regex")
-            return False
-        
-        logger.info(f"Using configured prompt regex: {configured_prompt}")
-        
-        client3 = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=configured_prompt,
-            timeout=60,  # Standard 60 seconds for these operations
-            debug=debug
-        )
-        
-        if not client3.connect():
-            logger.error(f"Failed to connect to {appliance_name}")
-            return False
-        
-        logger.info(f"✓ Connected to {appliance_name}")
         
         # Enable small disk mode (requires "I agree" confirmation)
         logger.info("➜ Enabling small disk mode...")
-        
-        if not client3.channel:
-            raise RuntimeError("No channel available")
-        
-        # Step 1: Send command
-        client3.channel.send(b"store system small_disk\r")
-        
-        # Step 2: Wait for "I agree" text to appear
-        import time
-        buf = ""
-        deadline = time.time() + 60
-        i_agree_found = False
-        
-        while time.time() < deadline:
-            if client3.channel.recv_ready():
-                chunk = client3.channel.recv(65535).decode(errors="replace")
-                buf += chunk
-                if debug:
-                    logger.info(f"  Received: {repr(chunk)}")
-            
-            # Check if "I agree" text appeared
-            if "I agree" in buf and not i_agree_found:
-                logger.info("  Found 'I agree' prompt, sending response...")
-                # Step 3: Send "I agree" + ENTER
-                time.sleep(0.2)  # Wait a bit to ensure prompt is complete
-                client3.channel.send(b"I agree\r")
-                i_agree_found = True
-            
-            # Step 4: Check if prompt returned
-            if i_agree_found and client3.prompt_re.search(buf):
-                logger.info("✓ Small disk mode enabled")
-                break
-            
-            time.sleep(0.01)
-        else:
-            raise TimeoutError("Timeout waiting for small_disk command completion")
+        output = client1.execute_command_simple_confirmation(
+            command="store system small_disk",
+            confirmation_text="I agree",
+            response="I agree",
+            timeout=60
+        )
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info("✓ Small disk mode enabled")
         
         # Configure GUI session timeout
         logger.info("➜ Configuring GUI session timeout (9999 minutes)...")
-        output = client3.execute_command("store gui session_timeout 9999")
+        output = client1.execute_command("store gui session_timeout 9999")
         if debug and output:
             logger.info(f"  Command output: {output}")
         logger.info("✓ GUI session timeout set to 9999 minutes")
         
         # Configure CLI session timeout
         logger.info("➜ Configuring CLI session timeout (600 seconds)...")
-        output = client3.execute_command("store timeout cli_session 600")
+        output = client1.execute_command("store timeout cli_session 600")
         if debug and output:
             logger.info(f"  Command output: {output}")
         logger.info("✓ CLI session timeout set to 600 seconds")
         
-        client3.disconnect()
+        # Restart GUI to apply changes
+        logger.info("➜ Restarting GUI...")
+        output = client1.execute_command_with_confirmation(
+            command="restart gui",
+            confirmation_pattern=r"Are you sure you want to restart GUI\s*\(y/n\)\?",
+            response="y"
+        )
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info("✓ GUI restarted")
+        
+        client1.disconnect()
         
         logger.info("=" * 80)
         logger.info(f"✓ System settings configured successfully")
