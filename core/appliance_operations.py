@@ -581,13 +581,13 @@ def configure_ntp(
         logger.info(f"NTP servers: {' '.join(ntp_servers)}")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
-        # Create appliance client
+        # Create appliance client with 5 minute timeout for hostname change
         client = ApplianceClient(
             host=host,
             user=user,
             password=password,
             prompt_regex=prompt_regex,
-            timeout=120,
+            timeout=300,  # 5 minutes for hostname change operations
             debug=debug
         )
         
