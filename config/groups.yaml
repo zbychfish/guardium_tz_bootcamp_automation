@@ -52,15 +52,7 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     auto_execute: false  # Executed on demand
-    stages:
-      # - name: test_appliance_connection
-      #   function: connect_and_show_clock
-      #   module: tasks.setup_appliances
-      #   description: "Test appliance connectivity and show system clock"
-      #   args:
-      #     appliance_name: "cm01"  # Name from config/appliances.yaml
-      # prompt_regex: "cm01>"  # Optional - comment out to use default from appliances.yaml
-      
+    stages:     
       - name: create_oauth_client
         function: create_oauth_client
         module: tasks.setup_appliances
@@ -89,7 +81,7 @@ groups:
         description: "Set unit type to manager via CLI"
         args:
           appliance_name: "cm01"
-          debug: false
+          debug: true
       
       - name: set_timezone_on_cm
         function: set_timezone
@@ -98,6 +90,15 @@ groups:
         args:
           appliance_name: "cm01"
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
+          debug: true
+      
+      - name: configure_ntp_on_cm
+        function: configure_ntp
+        module: tasks.setup_appliances
+        description: "Configure NTP servers and enable time synchronization on CM"
+        args:
+          appliance_name: "cm01"
+          # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
           debug: true
       
       - name: configure_hosts_resolving_on_cm

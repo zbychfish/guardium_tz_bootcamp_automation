@@ -16,131 +16,6 @@ from core.appliance_operations import (
 
 logger = get_logger(__name__)
 
-
-def connect_and_show_clock(
-    config,
-    logger,
-    verbose: bool = True,
-    appliance_name: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = False
-) -> bool:
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    logger.info(f"Connecting to appliance: {appliance_name}")
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    # Get appliance details
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Use provided credentials or defaults
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"  # Fallback default
-    
-    # Try to get password from custom_variables if not provided
-    if not password:
-        try:
-            password = config.get_custom_variable('cli_pwd')
-            if password:
-                logger.info("Using password from custom_variables (cli_pwd)")
-        except:
-            pass
-    
-    if not password:
-        logger.error(f"Password is required for appliance '{appliance_name}'")
-        logger.error("Provide password in args or set 'cli_pwd' in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        # Try to get default prompt for type
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
-    # Create appliance client
-    # Use None for initial_pattern - will nudge prompt and wait directly for prompt
-    if debug:
-        logger.info(f"Creating appliance client with:")
-        logger.info(f"  host: {host}")
-        logger.info(f"  user: {user}")
-        logger.info(f"  prompt_regex: {prompt_regex}")
-    
-    appliance = ApplianceClient(
-        host=host,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        initial_pattern=None,
-        timeout=60,
-        strip_ansi=True,
-        debug=debug  # Use debug parameter from args
-    )
-    
-    # Connect
-    logger.info(f"Establishing SSH connection to {host}...")
-    if not appliance.connect():
-        logger.error(f"Failed to connect to appliance at {host}")
-        return False
-    
-    logger.info("✓ Connected successfully")
-    
-    try:
-        # Execute command
-        logger.info("Executing command: show system clock all")
-        output = appliance.execute_command("show system clock all")
-        
-        logger.info("Command output:")
-        logger.info("-" * 60)
-        for line in output.splitlines():
-            logger.info(line)
-        logger.info("-" * 60)
-        
-        # Parse timezone
-        lines = output.strip().splitlines()
-        if lines:
-            timezone = lines[-1].strip()
-            logger.info(f"Current timezone: {timezone}")
-        
-        logger.info("✓ Command executed successfully")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error executing command: {e}")
-        return False
-        
-    finally:
-        logger.info("Disconnecting from appliance...")
-        appliance.disconnect()
-        logger.info("✓ Disconnected")
-
-
 def initial_collector_settings(
     config,
     logger,
@@ -151,37 +26,7 @@ def initial_collector_settings(
     prompt_regex: Optional[str] = None,
     debug: bool = False
 ) -> bool:
-    """
-    Configure initial collector settings
-    
-    Performs initial configuration on a Guardium collector:
-    - Disables purge
-    - Sets timezone to Europe/Warsaw
-    - Configures NTP servers
-    - Enables time synchronization
-    
-    Args:
-        config: ConfigLoader instance (not used, kept for compatibility)
-        logger: Logger instance
-        verbose: Enable verbose logging
-        collector_name: Name of collector from appliances.yaml (required)
-        user: SSH username (optional, uses default if not provided)
-        password: SSH password (required)
-        prompt_regex: Prompt regex (optional, uses default for unconfigured collector)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example in config/groups.yaml:
-        stages:
-          - name: configure_collector
-            function: initial_collector_settings
-            module: tasks.setup_appliances
-            args:
-              collector_name: "collector1"
-              password: "your_password"
-              prompt_regex: "guard\\.yourcompany\\.com>"  # Optional
-    """
+
     if not collector_name:
         logger.error("collector_name is required")
         return False
@@ -334,37 +179,7 @@ def create_oauth_client(
     client_id: str = "BOOTCAMP",
     debug: bool = False
 ) -> bool:
-    """
-    Create OAuth client in Guardium and save client_secret to file
-    
-    Creates OAuth client with specified client_id and saves the generated
-    client_secret to .client_secret file in project root.
-    
-    Based on t_initial_cm_settings from guardium_bootcamp_automation.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging
-        appliance_name: Name of appliance from appliances.yaml (default: cm01)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        client_id: OAuth client ID (default: BOOTCAMP)
-        debug: Enable debug mode for SSH connection
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example in config/groups.yaml:
-        stages:
-          - name: create_oauth_client
-            function: create_oauth_client
-            module: tasks.setup_appliances
-            args:
-              appliance_name: "cm01"
-              client_id: "BOOTCAMP"
-    """
+
     import json
     from pathlib import Path
     
@@ -606,22 +421,7 @@ def set_unit_type_manager(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Set unit type to manager using CLI command 'store unit type manager'
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging
-        appliance_name: Name of appliance from appliances.yaml (required)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (required)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-    
-    Returns:
-        True if successful, False otherwise
-    """
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -734,27 +534,7 @@ def restart_appliance(
     wait_for_availability: bool = True,
     wait_timeout: int = 600
 ) -> bool:
-    """
-    Restart Guardium appliance with MySQL busy check
-    
-    This is a wrapper function that calls the core restart_appliance function.
-    Kept for backward compatibility with existing stage definitions.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (unused, kept for compatibility)
-        appliance_name: Name of appliance from appliances.yaml (required)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-        wait_for_availability: Wait for appliance to come back online (default True)
-        wait_timeout: Timeout for waiting in seconds (default 600 = 10 minutes)
-    
-    Returns:
-        True if successful, False otherwise
-    """
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -772,7 +552,6 @@ def restart_appliance(
         wait_timeout=wait_timeout
     )
 
-
 def configure_hosts_resolving(
     config,
     logger,
@@ -783,25 +562,7 @@ def configure_hosts_resolving(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Configure /etc/hosts resolving on Guardium appliance
-    
-    This is a wrapper function that calls the core configure_hosts_resolving function.
-    Kept for backward compatibility with existing stage definitions.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (unused, kept for compatibility)
-        appliance_name: Name of appliance from appliances.yaml (required)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-    
-    Returns:
-        True if successful, False otherwise
-    """
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -817,8 +578,6 @@ def configure_hosts_resolving(
         debug=debug
     )
 
-
-
 def set_timezone(
     config,
     logger,
@@ -830,33 +589,7 @@ def set_timezone(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Set timezone on Guardium appliance
-    
-    This is a wrapper function that calls the core set_timezone function.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (unused, kept for compatibility)
-        appliance_name: Name of appliance from appliances.yaml (required)
-        timezone: Timezone to set (optional, defaults to Europe/Warsaw or from machines_info.json)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example usage in groups.yaml:
-        stages:
-          - name: set_timezone
-            function: set_timezone
-            params:
-              appliance_name: cm
-              # timezone: America/New_York  # Optional, defaults to Europe/Warsaw
-    """
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -870,6 +603,37 @@ def set_timezone(
         logger=logger,
         appliance_name=appliance_name,
         timezone=timezone,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
+
+def configure_ntp(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    ntp_servers: Optional[list] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    # Import here to avoid circular dependency
+    from core.appliance_operations import configure_ntp as core_configure_ntp
+    
+    # Call the core function
+    return core_configure_ntp(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        ntp_servers=ntp_servers,
         user=user,
         password=password,
         prompt_regex=prompt_regex,

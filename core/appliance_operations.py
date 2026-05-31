@@ -5,7 +5,7 @@ Appliance Operations - Reusable functions for Guardium appliance operations
 """
 
 import time
-from typing import Optional
+from typing import Optional, List
 from .appliance_client import ApplianceClient
 from .appliance_config_loader import ApplianceConfigLoader
 
@@ -480,6 +480,158 @@ def set_timezone(
         
     except Exception as e:
         logger.error(f"Error setting timezone: {str(e)}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+
+
+def configure_ntp(
+    config,
+    logger,
+    appliance_name: str,
+    ntp_servers: Optional[List[str]] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure NTP servers and enable time synchronization on Guardium appliance.
+    
+    Args:
+        config: Configuration object with machines_info
+        logger: Logger instance
+        appliance_name: Name of the appliance (e.g., 'cm', 'collector1')
+        ntp_servers: List of NTP servers (default: ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org'])
+        user: SSH user (optional, uses config if not provided)
+        password: SSH password (optional, uses config if not provided)
+        prompt_regex: CLI prompt regex (optional, uses config if not provided)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        configure_ntp(config, logger, 'cm')
+        configure_ntp(config, logger, 'cm', ntp_servers=['time.google.com', 'time.cloudflare.com'])
+    """
+    try:
+        if not appliance_name:
+            logger.error("appliance_name is required")
+            return False
+        
+        logger.info("=" * 80)
+        logger.info(f"CONFIGURE NTP: {appliance_name}")
+        logger.info("=" * 80)
+        
+        # Load appliance configuration
+        appliance_loader = ApplianceConfigLoader()
+        appliance_config = appliance_loader.get_appliance(appliance_name)
+        
+        if not appliance_config:
+            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+            available = list(appliance_loader.get_all_appliances().keys())
+            logger.error(f"Available appliances: {', '.join(available)}")
+            return False
+        
+        appliance_type = appliance_config.get('type')
+        host = appliance_config.get('ip')
+        
+        if not host:
+            logger.error(f"No IP address configured for appliance '{appliance_name}'")
+            return False
+        
+        # Get user from config if not provided
+        if not user:
+            if appliance_type:
+                user = appliance_loader.get_default_user(appliance_type)
+            else:
+                user = "cli"
+        
+        # Get password from custom_variables if not provided
+        if not password:
+            password = config.get_custom_variable('cli_pwd')
+            if password:
+                logger.info("Using password from custom_variables (cli_pwd)")
+        
+        if not password:
+            logger.error("Password not provided and cli_pwd not found in custom_variables")
+            return False
+        
+        # Get prompt regex from config if not provided
+        if not prompt_regex:
+            if appliance_type:
+                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+            if not prompt_regex:
+                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+                return False
+        
+        # Determine NTP servers to use
+        if not ntp_servers:
+            # Try to get from machines_info.json
+            machines_info = config.get('machines_info', {})
+            ntp_servers = machines_info.get('ntp_servers', ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org'])
+        
+        # Ensure ntp_servers is a list
+        if not isinstance(ntp_servers, list):
+            ntp_servers = ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org']
+        
+        logger.info(f"NTP servers: {' '.join(ntp_servers)}")
+        logger.info(f"Connecting to {appliance_name} ({host})...")
+        
+        # Create appliance client
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            timeout=60,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+        
+        logger.info(f"✓ Connected to {appliance_name}")
+        
+        # Configure NTP servers
+        logger.info("➜ Configuring NTP servers...")
+        ntp_command = f"store system time_server hostname {' '.join(ntp_servers)}"
+        output = client.execute_command(ntp_command)
+        
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        
+        logger.info(f"✓ NTP servers configured: {' '.join(ntp_servers)}")
+        
+        # Enable time synchronization
+        logger.info("➜ Enabling time synchronization...")
+        output = client.execute_command("store system time_server state on")
+        
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        
+        logger.info("✓ Time synchronization enabled")
+        
+        # Verify configuration
+        logger.info("➜ Verifying NTP configuration...")
+        output = client.execute_command("show system time_server")
+        
+        if output:
+            logger.info(f"  NTP configuration:\n{output}")
+        
+        client.disconnect()
+        
+        logger.info("=" * 80)
+        logger.info(f"✓ NTP configuration completed")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error configuring NTP: {str(e)}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
