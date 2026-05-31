@@ -3,26 +3,21 @@
 # Credentials (user/password) are provided separately via environment variables or parameters
 
 appliances:
-  collector1:
-    ip: "10.10.9.239"
+  coll1:
+    ip: "10.240.64.35"
     type: "collector"
     description: "Primary Guardium Collector"
   
-  cm01:
-    ip: "10.240.64.33"
+  cm02:
+    ip: "10.240.64.37"
     type: "cm"
     description: "Central Manager"
     port: 22
-  
-#   aggregator1:
-#     ip: "10.10.9.229"
-#     type: "aggregator"
-#     description: "Aggregator Node"
-  
-#   appnode1:
-#     ip: "10.10.9.50"
-#     type: "appnode"
-#     description: "Application Node"
+   
+  appnode1:
+    ip: "10.240.64.36"
+    type: "appnode"
+    description: "Application Node"
 
 # Appliance type definitions with default prompts
 # Prompts support both formats: "name>" and "name.demo.guardium>"
