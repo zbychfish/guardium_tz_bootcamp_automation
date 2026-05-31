@@ -299,6 +299,11 @@ class ApplianceClient:
             
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
             
+            # Debug: show what we're matching against
+            if self.debug and (not confirmed) and len(buf_for_match) > 0:
+                print(f"[DEBUG] Checking buffer for confirmation pattern...", file=sys.stderr)
+                print(f"[DEBUG] Buffer (last 200 chars): {repr(buf_for_match[-200:])}", file=sys.stderr)
+            
             # Handle confirmation once when detected
             if (not confirmed) and confirmation_re.search(buf_for_match):
                 if self.debug:
