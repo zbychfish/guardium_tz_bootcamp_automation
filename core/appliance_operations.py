@@ -410,12 +410,13 @@ def set_timezone(
         logger.info(f"Target timezone: {target_timezone}")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
-        # Create appliance client
+        # Create appliance client with longer timeout for timezone change
         client = ApplianceClient(
             host=host,
             user=user,
             password=password,
             prompt_regex=prompt_regex,
+            timeout=120,  # Longer timeout as timezone change restarts services
             debug=debug
         )
         
@@ -454,10 +455,11 @@ def set_timezone(
         )
         
         if debug and output:
-            logger.info(f"  Command output: {output}")
+            logger.info(f"  Command output:\n{output}")
         
-        # Verify new timezone
+        # Verify new timezone (wait a moment for services to restart)
         logger.info("➜ Verifying new timezone...")
+        time.sleep(1)  # Give services time to restart
         output = client.execute_command("show system clock all")
         
         if output:

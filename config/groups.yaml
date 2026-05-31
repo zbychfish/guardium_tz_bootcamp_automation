@@ -97,7 +97,7 @@ groups:
         description: "Set timezone on CM appliance (defaults to Europe/Warsaw or from machines_info.json)"
         args:
           appliance_name: "cm01"
-          # timezone: "America/New_York"  # Optional - defaults to Europe/Warsaw or from machines_info.json
+          timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
           debug: true
       
       - name: configure_hosts_resolving_on_cm
