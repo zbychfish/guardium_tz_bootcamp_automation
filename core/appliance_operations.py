@@ -652,7 +652,7 @@ def configure_system_settings(
 ) -> bool:
     """
     Configure system settings on Guardium appliance:
-    - Hostname (from appliances.yaml with suffix removed)
+    - Hostname (removes '-suffix' from appliance_name)
     - Domain (default: demo.guardium)
     - Small disk mode
     - Session timeouts (GUI: 9999, CLI: 600)
@@ -660,8 +660,8 @@ def configure_system_settings(
     Args:
         config: Configuration object
         logger: Logger instance
-        appliance_name: Name of the appliance (e.g., 'cm', 'collector1')
-        hostname: Hostname to set (optional, uses appliance_name with suffix removed if not provided)
+        appliance_name: Name of the appliance (e.g., 'cm02-suffix', 'coll1-suffix')
+        hostname: Hostname to set (optional, removes '-suffix' from appliance_name if not provided)
         domain: Domain to set (default: demo.guardium)
         user: SSH user (optional, uses config if not provided)
         password: SSH password (optional, uses config if not provided)
@@ -672,8 +672,8 @@ def configure_system_settings(
         bool: True if successful, False otherwise
     
     Example:
-        configure_system_settings(config, logger, 'cm01')
-        configure_system_settings(config, logger, 'cm01', hostname='cm', domain='example.com')
+        configure_system_settings(config, logger, 'cm02-suffix')  # Sets hostname to 'cm02'
+        configure_system_settings(config, logger, 'coll1-suffix', hostname='collector1', domain='example.com')
     """
     try:
         if not appliance_name:
@@ -726,11 +726,11 @@ def configure_system_settings(
                 logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
                 return False
         
-        # Determine hostname - remove suffix from appliance_name
+        # Determine hostname - remove suffix after dash
         if not hostname:
-            # Remove common suffixes like 01, 02, _1, _2, etc.
+            # Remove suffix after dash (e.g., coll1-suffix -> coll1, cm02-suffix -> cm02)
             import re
-            hostname = re.sub(r'[_-]?\d+$', '', appliance_name)
+            hostname = re.sub(r'-suffix$', '', appliance_name)
             logger.info(f"Using hostname from appliance_name: {appliance_name} -> {hostname}")
         
         # Determine domain
