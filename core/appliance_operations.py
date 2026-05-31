@@ -830,7 +830,9 @@ def configure_system_settings(
         
         # Update prompt_regex to match new hostname.domain format
         import re
-        new_prompt_regex = rf"{re.escape(hostname)}(\.{re.escape(domain.replace('.', r'\.'))})?>"
+        escaped_hostname = re.escape(hostname)
+        escaped_domain = re.escape(domain)
+        new_prompt_regex = rf"{escaped_hostname}(\.{escaped_domain})?>"
         logger.info(f"Using updated prompt regex: {new_prompt_regex}")
         
         client3 = ApplianceClient(
