@@ -650,31 +650,7 @@ def configure_system_settings(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Configure system settings on Guardium appliance:
-    - Hostname (removes '-suffix' from appliance_name)
-    - Domain (default: demo.guardium)
-    - Small disk mode
-    - Session timeouts (GUI: 9999, CLI: 600)
     
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance (e.g., 'cm02-suffix', 'coll1-suffix')
-        hostname: Hostname to set (optional, removes '-suffix' from appliance_name if not provided)
-        domain: Domain to set (default: demo.guardium)
-        user: SSH user (optional, uses config if not provided)
-        password: SSH password (optional, uses config if not provided)
-        prompt_regex: CLI prompt regex (optional, uses config if not provided)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        configure_system_settings(config, logger, 'cm02-suffix')  # Sets hostname to 'cm02'
-        configure_system_settings(config, logger, 'coll1-suffix', hostname='collector1', domain='example.com')
-    """
     try:
         if not appliance_name:
             logger.error("appliance_name is required")
@@ -741,13 +717,13 @@ def configure_system_settings(
         logger.info(f"Domain: {domain}")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
-        # Create appliance client with 5 minute timeout
+        # Create appliance client with 3 minute timeout
         client = ApplianceClient(
             host=host,
             user=user,
             password=password,
             prompt_regex=prompt_regex,
-            timeout=300,  # 5 minutes for hostname change operations
+            timeout=180,  # 3 minutes for hostname change operations
             debug=debug
         )
         
@@ -759,21 +735,41 @@ def configure_system_settings(
         
         # Set hostname (Guardium CLI may ask for confirmation about newly cloned appliance)
         logger.info(f"➜ Setting hostname to: {hostname}")
-        output = client.execute_command_with_confirmation(
-            command=f"store system hostname {hostname}",
-            confirmation_pattern=r"Is it a newly cloned appliance\s*\(y/n\)\?",
-            response="n"
-        )
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info(f"✓ Hostname set to: {hostname}")
+        try:
+            output = client.execute_command_with_confirmation(
+                command=f"store system hostname {hostname}",
+                confirmation_pattern=r"Is it a newly cloned appliance\s*\(y/n\)\?",
+                response="n"
+            )
+            if debug and output:
+                logger.info(f"  Command output: {output}")
+            logger.info(f"✓ Hostname set to: {hostname}")
+        except TimeoutError as e:
+            logger.warning(f"Timeout during hostname change, verifying...")
+            # Verify if hostname was actually changed
+            verify_output = client.execute_command("show system hostname")
+            if hostname in verify_output:
+                logger.info(f"✓ Hostname successfully set to: {hostname} (verified after timeout)")
+            else:
+                logger.error(f"✗ Hostname change failed: {e}")
+                raise
         
         # Set domain
         logger.info(f"➜ Setting domain to: {domain}")
-        output = client.execute_command(f"store system domain {domain}")
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info(f"✓ Domain set to: {domain}")
+        try:
+            output = client.execute_command(f"store system domain {domain}")
+            if debug and output:
+                logger.info(f"  Command output: {output}")
+            logger.info(f"✓ Domain set to: {domain}")
+        except TimeoutError as e:
+            logger.warning(f"Timeout during domain change, verifying...")
+            # Verify if domain was actually changed
+            verify_output = client.execute_command("show system domain")
+            if domain in verify_output:
+                logger.info(f"✓ Domain successfully set to: {domain} (verified after timeout)")
+            else:
+                logger.error(f"✗ Domain change failed: {e}")
+                raise
         
         # Enable small disk mode (requires "I agree" confirmation)
         logger.info("➜ Enabling small disk mode...")
