@@ -23,31 +23,7 @@ def connect_and_show_clock(
     prompt_regex: Optional[str] = None,
     debug: bool = False
 ) -> bool:
-    """
-    Connect to appliance and execute 'show system clock all' command
     
-    Args:
-        config: ConfigLoader instance (not used, kept for compatibility)
-        logger: Logger instance
-        verbose: Enable verbose logging
-        appliance_name: Name of appliance from appliances.yaml (required)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (required)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example in config/groups.yaml:
-        stages:
-          - name: test_collector
-            function: connect_and_show_clock
-            module: tasks.setup_appliances
-            args:
-              appliance_name: "collector1"
-              password: "your_password"
-              prompt_regex: "guard\\.yourcompany\\.com>"  # Optional
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -561,10 +537,6 @@ def create_demo_user(
         logger.info("\nListing existing users:")
         users = api.get_users()
         
-        for u in users:
-            status = "DISABLED" if u.get("disabled") == "true" else "ACTIVE"
-            logger.info(f"  {u['user_name']:12} | {status}")
-        
         demo_exists = any(u.get('user_name') == 'demo' for u in users)
         
         if not demo_exists:
@@ -622,3 +594,6 @@ def create_demo_user(
         logger.error(traceback.format_exc())
         return False
     return True
+
+
+
