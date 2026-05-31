@@ -735,7 +735,7 @@ def configure_system_settings(
         
         # Determine domain
         if not domain:
-            domain = "gdemo.com"
+            domain = "demo.guardium"
         
         logger.info(f"Hostname: {hostname}")
         logger.info(f"Domain: {domain}")
