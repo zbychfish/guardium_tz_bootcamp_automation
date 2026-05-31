@@ -639,3 +639,67 @@ def configure_ntp(
         prompt_regex=prompt_regex,
         debug=debug
     )
+
+
+
+def configure_system_settings(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    hostname: Optional[str] = None,
+    domain: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure system settings on Guardium appliance
+    
+    This is a wrapper function that calls the core configure_system_settings function.
+    Configures: hostname, domain, small_disk, session timeouts.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (unused, kept for compatibility)
+        appliance_name: Name of appliance from appliances.yaml (required)
+        hostname: Hostname to set (optional, uses appliance_name with suffix removed)
+        domain: Domain to set (optional, defaults to demo.guardium)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        debug: Enable debug mode (default True)
+    
+    Returns:
+        True if successful, False otherwise
+    
+    Example usage in groups.yaml:
+        stages:
+          - name: configure_system_settings
+            function: configure_system_settings
+            params:
+              appliance_name: cm01  # Will use hostname 'cm' (suffix removed)
+              # hostname: cm  # Optional - override hostname
+              # domain: example.com  # Optional - override domain
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    # Import here to avoid circular dependency
+    from core.appliance_operations import configure_system_settings as core_configure_system_settings
+    
+    # Call the core function
+    return core_configure_system_settings(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        hostname=hostname,
+        domain=domain,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )

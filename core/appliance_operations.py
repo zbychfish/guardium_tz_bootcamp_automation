@@ -636,3 +636,177 @@ def configure_ntp(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
+
+
+def configure_system_settings(
+    config,
+    logger,
+    appliance_name: str,
+    hostname: Optional[str] = None,
+    domain: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure system settings on Guardium appliance:
+    - Hostname (from appliances.yaml with suffix removed)
+    - Domain (default: demo.guardium)
+    - Small disk mode
+    - Session timeouts (GUI: 9999, CLI: 600)
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance (e.g., 'cm', 'collector1')
+        hostname: Hostname to set (optional, uses appliance_name with suffix removed if not provided)
+        domain: Domain to set (default: demo.guardium)
+        user: SSH user (optional, uses config if not provided)
+        password: SSH password (optional, uses config if not provided)
+        prompt_regex: CLI prompt regex (optional, uses config if not provided)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        configure_system_settings(config, logger, 'cm01')
+        configure_system_settings(config, logger, 'cm01', hostname='cm', domain='example.com')
+    """
+    try:
+        if not appliance_name:
+            logger.error("appliance_name is required")
+            return False
+        
+        logger.info("=" * 80)
+        logger.info(f"CONFIGURE SYSTEM SETTINGS: {appliance_name}")
+        logger.info("=" * 80)
+        
+        # Load appliance configuration
+        appliance_loader = ApplianceConfigLoader()
+        appliance_config = appliance_loader.get_appliance(appliance_name)
+        
+        if not appliance_config:
+            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+            available = list(appliance_loader.get_all_appliances().keys())
+            logger.error(f"Available appliances: {', '.join(available)}")
+            return False
+        
+        appliance_type = appliance_config.get('type')
+        host = appliance_config.get('ip')
+        
+        if not host:
+            logger.error(f"No IP address configured for appliance '{appliance_name}'")
+            return False
+        
+        # Get user from config if not provided
+        if not user:
+            if appliance_type:
+                user = appliance_loader.get_default_user(appliance_type)
+            else:
+                user = "cli"
+        
+        # Get password from custom_variables if not provided
+        if not password:
+            password = config.get_custom_variable('cli_pwd')
+            if password:
+                logger.info("Using password from custom_variables (cli_pwd)")
+        
+        if not password:
+            logger.error("Password not provided and cli_pwd not found in custom_variables")
+            return False
+        
+        # Get prompt regex from config if not provided
+        if not prompt_regex:
+            if appliance_type:
+                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+            if not prompt_regex:
+                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+                return False
+        
+        # Determine hostname - remove suffix from appliance_name
+        if not hostname:
+            # Remove common suffixes like 01, 02, _1, _2, etc.
+            import re
+            hostname = re.sub(r'[_-]?\d+$', '', appliance_name)
+            logger.info(f"Using hostname from appliance_name: {appliance_name} -> {hostname}")
+        
+        # Determine domain
+        if not domain:
+            domain = "demo.guardium"
+        
+        logger.info(f"Hostname: {hostname}")
+        logger.info(f"Domain: {domain}")
+        logger.info(f"Connecting to {appliance_name} ({host})...")
+        
+        # Create appliance client
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            timeout=60,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+        
+        logger.info(f"✓ Connected to {appliance_name}")
+        
+        # Set hostname
+        logger.info(f"➜ Setting hostname to: {hostname}")
+        output = client.execute_command(f"store system hostname {hostname}")
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info(f"✓ Hostname set to: {hostname}")
+        
+        # Set domain
+        logger.info(f"➜ Setting domain to: {domain}")
+        output = client.execute_command(f"store system domain {domain}")
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info(f"✓ Domain set to: {domain}")
+        
+        # Enable small disk mode
+        logger.info("➜ Enabling small disk mode...")
+        output = client.execute_command("store system small_disk")
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info("✓ Small disk mode enabled")
+        
+        # Configure GUI session timeout
+        logger.info("➜ Configuring GUI session timeout (9999 minutes)...")
+        output = client.execute_command("store gui session_timeout 9999")
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info("✓ GUI session timeout set to 9999 minutes")
+        
+        # Configure CLI session timeout
+        logger.info("➜ Configuring CLI session timeout (600 seconds)...")
+        output = client.execute_command("store timeout cli_session 600")
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info("✓ CLI session timeout set to 600 seconds")
+        
+        client.disconnect()
+        
+        logger.info("=" * 80)
+        logger.info(f"✓ System settings configured successfully")
+        logger.info(f"  - Hostname: {hostname}")
+        logger.info(f"  - Domain: {domain}")
+        logger.info(f"  - Small disk: enabled")
+        logger.info(f"  - GUI timeout: 9999 min")
+        logger.info(f"  - CLI timeout: 600 sec")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error configuring system settings: {str(e)}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False

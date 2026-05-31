@@ -83,6 +83,16 @@ groups:
           appliance_name: "cm01"
           debug: true
       
+      - name: configure_system_settings_on_cm
+        function: configure_system_settings
+        module: tasks.setup_appliances
+        description: "Configure hostname, domain, small_disk, and session timeouts"
+        args:
+          appliance_name: "cm01"
+          # hostname: "cm"  # Optional - defaults to appliance_name with suffix removed
+          # domain: "demo.guardium"  # Optional - defaults to demo.guardium
+          debug: true
+      
       - name: set_timezone_on_cm
         function: set_timezone
         module: tasks.setup_appliances
@@ -109,14 +119,14 @@ groups:
           appliance_name: "cm01"
           debug: true
       
-      # - name: restart_cm_after_setup
-      #   function: restart_appliance
-      #   module: tasks.setup_appliances
-      #   description: "Restart CM appliance after initial setup"
-      #   args:
-      #     appliance_name: "cm01"
-      #     debug: true
-      #     wait_for_availability: true
-      #     wait_timeout: 600
+      - name: restart_cm_after_setup
+        function: restart_appliance
+        module: tasks.setup_appliances
+        description: "Restart CM appliance after initial setup"
+        args:
+          appliance_name: "cm01"
+          debug: true
+          wait_for_availability: true
+          wait_timeout: 600
 
 # Made with Bob
