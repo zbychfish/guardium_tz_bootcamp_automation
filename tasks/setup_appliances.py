@@ -564,22 +564,19 @@ def create_demo_user(
         else:
             logger.info("\nℹ Demo user already exists")
         
-        # Verify demo user can login
-        logger.info("\nVerifying demo user credentials...")
-        token = api.get_token(username='demo', password=demo_password)
-        logger.info("✓ Demo user login successful")
-        
-        # Disable guardium account
         logger.info("\n➜ Disabling guardium account...")
         api.update_user(username='guardium', disabled=True)
         logger.info("✓ guardium account disabled")
         
-        # Disable guardcli2 to guardcli9 accounts
         logger.info("\n➜ Disabling guardcli accounts...")
-        for cli_num in range(2, 10):  # guardcli2 to guardcli9
+        for cli_num in range(2, 10):
             username = f"guardcli{cli_num}"
             api.update_user(username=username, disabled=True)
             logger.info(f"✓ {username} account disabled")
+        
+        logger.info("\nVerifying demo user credentials...")
+        token = api.get_token(username='demo', password=demo_password)
+        logger.info("✓ Demo user login successful")
         
         logger.info("=" * 80)
         logger.info("Demo user setup completed successfully")
