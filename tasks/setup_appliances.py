@@ -594,3 +594,115 @@ def create_demo_user(
 
 
 
+
+
+
+def set_unit_type_manager(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set unit type to manager using CLI command 'store unit type manager'
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging
+        appliance_name: Name of appliance from appliances.yaml (required)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (required)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        debug: Enable debug mode (default True)
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"SET UNIT TYPE MANAGER: {appliance_name}")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    logger.info(f"Prompt regex: {prompt_regex}")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        logger.info("\n➜ Executing: store unit type manager")
+        output = client.execute_command("store unit type manager")
+        logger.info(f"Command output:\n{output}")
+        
+        client.disconnect()
+        
+        logger.info("=" * 80)
+        logger.info("Unit type set to manager successfully")
+        logger.info("=" * 80)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting unit type: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
