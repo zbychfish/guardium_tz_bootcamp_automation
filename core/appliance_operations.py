@@ -587,7 +587,7 @@ def configure_ntp(
             user=user,
             password=password,
             prompt_regex=prompt_regex,
-            timeout=60,
+            timeout=120,
             debug=debug
         )
         
@@ -775,9 +775,13 @@ def configure_system_settings(
             logger.info(f"  Command output: {output}")
         logger.info(f"✓ Domain set to: {domain}")
         
-        # Enable small disk mode
+        # Enable small disk mode (requires "I agree" confirmation)
         logger.info("➜ Enabling small disk mode...")
-        output = client.execute_command("store system small_disk")
+        output = client.execute_command_with_confirmation(
+            command="store system small_disk",
+            confirmation_pattern=r'Please type "I agree" to continue\.\s*Or enter to abort\.',
+            response="I agree"
+        )
         if debug and output:
             logger.info(f"  Command output: {output}")
         logger.info("✓ Small disk mode enabled")
