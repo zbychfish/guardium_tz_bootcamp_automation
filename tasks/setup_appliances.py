@@ -696,8 +696,21 @@ def set_unit_type_manager(
         
         client.disconnect()
         
+        # Verify success
+        if "success: true" not in output:
+            logger.error("Command did not return 'success: true'")
+            logger.error("This indicates the command failed")
+            return False
+        
+        if "GUI restart succeeded" not in output:
+            logger.error("Command did not return 'GUI restart succeeded'")
+            logger.error("This indicates the GUI restart failed")
+            return False
+        
         logger.info("=" * 80)
-        logger.info("Unit type set to manager successfully")
+        logger.info("✓ Unit type set to manager successfully")
+        logger.info("✓ Verified: success: true")
+        logger.info("✓ Verified: GUI restart succeeded")
         logger.info("=" * 80)
         
         return True
