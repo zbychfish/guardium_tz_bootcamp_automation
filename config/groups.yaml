@@ -58,7 +58,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           client_id: "BOOTCAMP"
       
       # - name: current_test
@@ -73,14 +73,14 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm01"  # Name from config/appliances.yaml
+          appliance_name: "cm02"  # Name from config/appliances.yaml
       
       - name: set_unit_type_manager
         function: set_unit_type_manager
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           debug: true
       
       - name: configure_system_settings_on_cm
@@ -88,7 +88,7 @@ groups:
         module: tasks.setup_appliances
         description: "Configure hostname, domain, small_disk, and session timeouts"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           # hostname: "cm"  # Optional - defaults to appliance_name with suffix removed
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
           debug: true
@@ -98,7 +98,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set timezone on CM appliance (defaults to Europe/Warsaw or from machines_info.json)"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
           debug: true
       
@@ -107,7 +107,7 @@ groups:
         module: tasks.setup_appliances
         description: "Configure NTP servers and enable time synchronization on CM"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
           debug: true
       
@@ -116,7 +116,7 @@ groups:
         module: tasks.setup_appliances
         description: "Configure /etc/hosts resolving for all machines from machines_info.json"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           debug: true
       
       - name: restart_cm_after_setup
@@ -124,7 +124,7 @@ groups:
         module: tasks.setup_appliances
         description: "Restart CM appliance after initial setup"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           debug: true
           wait_for_availability: true
           wait_timeout: 600
