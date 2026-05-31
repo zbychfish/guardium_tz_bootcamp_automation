@@ -89,7 +89,7 @@ groups:
         description: "Configure hostname, domain, small_disk, and session timeouts on ALL appliances (CM → Collectors → AppNodes)"
         args:
           # hostname: "custom"  # Optional - override hostname for all appliances
-          # domain: "demo.guardium"  # Optional - defaults to demo.guardium
+          # domain: "gdemo.com"  # Optional - defaults to gdemo.com
           debug: true
       
       - name: set_timezone_on_cm
