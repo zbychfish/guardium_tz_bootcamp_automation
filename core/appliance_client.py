@@ -352,3 +352,100 @@ class ApplianceClient:
                 print(f"[ERROR] Disconnect error: {e}", file=sys.stderr)
 
 # Made with Bob
+
+
+    def execute_restart_with_check(
+        self,
+        command: str = "restart system",
+        confirmation_pattern: str = r"Are you sure you want to restart the system\s*\(y/n\)\?",
+        busy_pattern: str = r"MYSQL is busy updating the database",
+        confirm_idle: float = 0.2
+    ) -> str:
+        """
+        Execute system restart with condition - checks if MySQL is busy.
+        
+        Args:
+            command: Restart command
+            confirmation_pattern: Regex pattern for confirmation prompt
+            busy_pattern: Regex pattern for MySQL busy message
+            confirm_idle: Wait time for idle before sending response
+        
+        Returns:
+            Message about operation result
+        """
+        if not self.channel:
+            raise RuntimeError("Not connected")
+        
+        time.sleep(0.03)
+        while self.channel.recv_ready():
+            self.channel.recv(65535)
+        
+        self.channel.send((command + "\r").encode())
+        
+        confirmation_re = re.compile(confirmation_pattern)
+        busy_re = re.compile(busy_pattern)
+        buf = ""
+        deadline = time.time() + self.timeout
+        confirmed = False
+        
+        while time.time() < deadline:
+            if self.channel.recv_ready():
+                chunk = self.channel.recv(65535).decode(errors="replace")
+                buf += chunk
+            
+            buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
+            
+            if (not confirmed) and confirmation_re.search(buf_for_match):
+                idle_deadline = time.time() + confirm_idle
+                while time.time() < deadline:
+                    if self.channel.recv_ready():
+                        chunk = self.channel.recv(65535).decode(errors="replace")
+                        buf += chunk
+                        idle_deadline = time.time() + confirm_idle
+                    if time.time() >= idle_deadline:
+                        break
+                    time.sleep(0.01)
+                
+                buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
+                
+                if busy_re.search(buf_for_match):
+                    if self.debug:
+                        print("[DEBUG] MySQL busy detected, sending 'n'", file=sys.stderr)
+                    self.channel.send(b"n\r")
+                    confirmed = True
+                    time.sleep(0.02)
+                    
+                    try:
+                        self._read_until_regex(self.prompt_re, echo=False)
+                    except TimeoutError:
+                        pass
+                    
+                    return "Restart rejected - MySQL is busy updating the database"
+                else:
+                    if self.debug:
+                        print("[DEBUG] No busy detected, sending 'y' - system will restart", file=sys.stderr)
+                    self.channel.send(b"y\r")
+                    confirmed = True
+                    time.sleep(0.5)
+                    
+                    try:
+                        remaining = ""
+                        end_time = time.time() + 5
+                        while time.time() < end_time:
+                            if self.channel.recv_ready():
+                                chunk = self.channel.recv(65535).decode(errors="replace")
+                                remaining += chunk
+                            if self.channel.closed:
+                                break
+                            time.sleep(0.1)
+                    except Exception:
+                        pass
+                    
+                    return "System is restarting - connection broken"
+            
+            if self.channel.closed:
+                return "System is restarting - connection broken"
+            
+            time.sleep(0.01)
+        
+        return "Timeout waiting for confirmation prompt"

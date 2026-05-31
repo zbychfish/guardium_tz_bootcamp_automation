@@ -91,5 +91,14 @@ groups:
           appliance_name: "cm01"
           debug: true
       
+      - name: restart_cm_after_setup
+        function: restart_appliance
+        module: tasks.setup_appliances
+        description: "Restart CM appliance after initial setup"
+        args:
+          appliance_name: "cm01"
+          debug: true
+          wait_for_availability: true
+          wait_timeout: 600
 
 # Made with Bob
