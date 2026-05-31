@@ -741,13 +741,13 @@ def configure_system_settings(
         logger.info(f"Domain: {domain}")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
-        # Create appliance client
+        # Create appliance client with 5 minute timeout
         client = ApplianceClient(
             host=host,
             user=user,
             password=password,
             prompt_regex=prompt_regex,
-            timeout=60,
+            timeout=300,  # 5 minutes for hostname change operations
             debug=debug
         )
         
