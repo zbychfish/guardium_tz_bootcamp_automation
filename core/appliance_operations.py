@@ -325,25 +325,26 @@ def configure_hosts_resolving(
         skipped_count = 0
         
         for machine_name, machine_config in machines.items():
-            ip = machine_config.get('host') or machine_config.get('public_ip')
-            fqdn = machine_config.get('fqdn', '')
+            # Use private_ip (local network IP)
+            private_ip = machine_config.get('private_ip', '')
             
-            if not ip:
-                logger.warning(f"Skipping {machine_name}: no IP address")
+            if not private_ip:
+                logger.warning(f"Skipping {machine_name}: no private_ip")
                 continue
             
-            # Use FQDN if available, otherwise use machine name
-            hostname = fqdn if fqdn else machine_name
+            # Use short name (without suffix) and add .demo.guardium domain
+            short_name = machine_name  # Already shortened by config_loader
+            fqdn = f"{short_name}.demo.guardium"
             
-            # Check if already exists
-            if (ip, hostname) in existing_hosts:
-                logger.info(f"  ⊘ Skipping {hostname} ({ip}) - already configured")
+            # Check if already exists (check both FQDN and short name)
+            if (private_ip, fqdn) in existing_hosts or (private_ip, short_name) in existing_hosts:
+                logger.info(f"  ⊘ Skipping {short_name} ({private_ip}) - already configured")
                 skipped_count += 1
                 continue
             
-            # Add host entry
-            command = f"support store hosts {ip} {hostname}"
-            logger.info(f"  ➜ Adding: {hostname} ({ip})")
+            # Add host entry with FQDN
+            command = f"support store hosts {private_ip} {fqdn}"
+            logger.info(f"  ➜ Adding: {fqdn} ({private_ip})")
             output = client.execute_command(command)
             
             if debug and output:
