@@ -290,19 +290,23 @@ class ApplianceClient:
         deadline = time.time() + self.timeout
         confirmed = False
         
+        iteration = 0
         while time.time() < deadline:
+            iteration += 1
             if self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode(errors="replace")
                 if self.debug:
-                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk)}", file=sys.stderr)
+                    print(f"[DEBUG] Iteration {iteration}: Received chunk ({len(chunk)} bytes): {repr(chunk)}", file=sys.stderr)
                 buf += chunk
             
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
             
-            # Debug: show what we're matching against
-            if self.debug and (not confirmed) and len(buf_for_match) > 0:
-                print(f"[DEBUG] Checking buffer for confirmation pattern...", file=sys.stderr)
+            # Debug: show what we're matching against (only every 1000 iterations to avoid spam)
+            if self.debug and (not confirmed) and len(buf_for_match) > 0 and (iteration % 1000 == 1):
+                print(f"[DEBUG] Iteration {iteration}: Checking buffer for confirmation pattern...", file=sys.stderr)
                 print(f"[DEBUG] Buffer (last 200 chars): {repr(buf_for_match[-200:])}", file=sys.stderr)
+                print(f"[DEBUG] Pattern: {confirmation_re.pattern}", file=sys.stderr)
+                print(f"[DEBUG] 'I agree' in buffer: {'I agree' in buf_for_match}", file=sys.stderr)
             
             # Handle confirmation once when detected
             if (not confirmed) and confirmation_re.search(buf_for_match):

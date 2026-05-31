@@ -859,7 +859,7 @@ def configure_system_settings(
         logger.info("➜ Enabling small disk mode...")
         output = client3.execute_command_with_confirmation(
             command="store system small_disk",
-            confirmation_pattern=r'"I agree"',
+            confirmation_pattern=r'I agree',
             response="I agree"
         )
         if debug and output:
