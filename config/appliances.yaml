@@ -4,18 +4,18 @@
 
 appliances:
   coll1:
-    ip: "10.240.64.35"
+    ip: "10.240.0.174"
     type: "collector"
     description: "Primary Guardium Collector"
   
   cm02:
-    ip: "10.240.64.37"
+    ip: "10.240.0.175"
     type: "cm"
     description: "Central Manager"
     port: 22
    
   appnode1:
-    ip: "10.240.64.36"
+    ip: "10.240.0.173"
     type: "appnode"
     description: "Application Node"
 
