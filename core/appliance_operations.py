@@ -828,18 +828,23 @@ def configure_system_settings(
         logger.info("➜ Configuring small disk and timeouts...")
         logger.info(f"Connecting to {appliance_name} ({host})...")
         
-        # Update prompt_regex to match new hostname.domain format
-        import re
-        escaped_hostname = re.escape(hostname)
-        escaped_domain = re.escape(domain)
-        new_prompt_regex = rf"{escaped_hostname}(\.{escaped_domain})?>"
-        logger.info(f"Using updated prompt regex: {new_prompt_regex}")
+        # Use configured prompt_regex (it should match the new hostname.domain format)
+        if appliance_type:
+            configured_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True)
+        else:
+            configured_prompt = None
+        
+        if not configured_prompt:
+            logger.error("Cannot determine configured prompt regex")
+            return False
+        
+        logger.info(f"Using configured prompt regex: {configured_prompt}")
         
         client3 = ApplianceClient(
             host=host,
             user=user,
             password=password,
-            prompt_regex=new_prompt_regex,
+            prompt_regex=configured_prompt,
             timeout=60,  # Standard 60 seconds for these operations
             debug=debug
         )

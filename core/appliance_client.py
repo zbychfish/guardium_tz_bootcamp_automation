@@ -292,6 +292,8 @@ class ApplianceClient:
         while time.time() < deadline:
             if self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode(errors="replace")
+                if self.debug:
+                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk)}", file=sys.stderr)
                 buf += chunk
             
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
