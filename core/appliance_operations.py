@@ -757,13 +757,9 @@ def configure_system_settings(
         
         logger.info(f"✓ Connected to {appliance_name}")
         
-        # Set hostname (Guardium CLI asks for confirmation about newly cloned appliance)
+        # Set hostname (may ask about newly cloned appliance - optional)
         logger.info(f"➜ Setting hostname to: {hostname}")
-        output = client.execute_command_with_confirmation(
-            command=f"store system hostname {hostname}",
-            confirmation_pattern=r"Is it a newly cloned appliance\s*\(y/n\)",
-            response="n"
-        )
+        output = client.execute_command(f"store system hostname {hostname}", timeout=120)
         if debug and output:
             logger.info(f"  Command output: {output}")
         logger.info(f"✓ Hostname set to: {hostname}")

@@ -297,7 +297,9 @@ class ApplianceClient:
             # Handle confirmation once when detected
             if (not confirmed) and confirmation_re.search(buf_for_match):
                 if self.debug:
-                    print(f"[DEBUG] Confirmation detected, waiting idle {confirm_idle}s then sending '{response}'")
+                    print(f"[DEBUG] Confirmation pattern matched in buffer")
+                    print(f"[DEBUG] Buffer content: {repr(buf_for_match[-200:])}")
+                    print(f"[DEBUG] Waiting idle {confirm_idle}s then sending '{response}'")
                 
                 # Wait until channel is idle
                 idle_deadline = time.time() + confirm_idle
