@@ -61,12 +61,12 @@ groups:
           appliance_name: "cm01"
           client_id: "BOOTCAMP"
       
-      - name: current_test
-        function: current_test
-        module: tasks.current_test
-        description: "TEST: Disable default accounts only (diagnostic)"
-        args:
-          appliance_name: "cm01"
+      # - name: current_test
+      #   function: current_test
+      #   module: tasks.current_test
+      #   description: "TEST: Disable default accounts only (diagnostic)"
+      #   args:
+      #     appliance_name: "cm01"
       
       - name: create_demo_user
         function: create_demo_user
