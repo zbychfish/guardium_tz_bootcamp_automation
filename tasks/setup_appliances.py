@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from core.logger import get_logger
 from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
+from core.appliance_operations import restart_appliance as core_restart_appliance
 
 logger = get_logger(__name__)
 
@@ -592,11 +593,6 @@ def create_demo_user(
         return False
     return True
 
-
-
-
-
-
 def set_unit_type_manager(
     config,
     logger,
@@ -738,17 +734,20 @@ def restart_appliance(
     """
     Restart Guardium appliance with MySQL busy check
     
+    This is a wrapper function that calls the core restart_appliance function.
+    Kept for backward compatibility with existing stage definitions.
+    
     Args:
         config: ConfigLoader instance
         logger: Logger instance
-        verbose: Enable verbose logging
+        verbose: Enable verbose logging (unused, kept for compatibility)
         appliance_name: Name of appliance from appliances.yaml (required)
         user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (required)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
         prompt_regex: Prompt regex (optional, uses default from type if not provided)
         debug: Enable debug mode (default True)
         wait_for_availability: Wait for appliance to come back online (default True)
-        wait_timeout: Timeout for waiting (default 600 seconds = 10 minutes)
+        wait_timeout: Timeout for waiting in seconds (default 600 = 10 minutes)
     
     Returns:
         True if successful, False otherwise
@@ -757,125 +756,15 @@ def restart_appliance(
         logger.error("appliance_name is required")
         return False
     
-    logger.info("=" * 80)
-    logger.info(f"RESTART APPLIANCE: {appliance_name}")
-    logger.info("=" * 80)
-    
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
-    try:
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        logger.info("\n➜ Executing: restart system")
-        logger.info("Checking if MySQL is busy...")
-        result = client.execute_restart_with_check()
-        
-        client.disconnect()
-        
-        if "System is restarting" in result:
-            logger.info("✓ System restart initiated")
-            
-            if wait_for_availability:
-                logger.info(f"\n⌛ Waiting for appliance to come back online (timeout: {wait_timeout}s)...")
-                
-                import time
-                start_time = time.time()
-                while time.time() - start_time < wait_timeout:
-                    try:
-                        test_client = ApplianceClient(
-                            host=host,
-                            user=user,
-                            password=password,
-                            prompt_regex=prompt_regex,
-                            initial_pattern=None,
-                            timeout=30,
-                            strip_ansi=True,
-                            debug=False
-                        )
-                        
-                        if test_client.connect():
-                            test_client.disconnect()
-                            elapsed = int(time.time() - start_time)
-                            logger.info(f"✓ Appliance is back online (after {elapsed}s)")
-                            logger.info("=" * 80)
-                            logger.info("Appliance restarted successfully")
-                            logger.info("=" * 80)
-                            return True
-                    except Exception:
-                        pass
-                    
-                    time.sleep(10)
-                
-                logger.error(f"✗ Timeout waiting for appliance (waited {wait_timeout}s)")
-                return False
-            else:
-                logger.info("=" * 80)
-                logger.info("Restart initiated (not waiting for availability)")
-                logger.info("=" * 80)
-                return True
-                
-        elif "MySQL is busy" in result:
-            logger.warning("✗ Restart rejected - MySQL is busy updating the database")
-            logger.warning("Please wait a few minutes and try again")
-            return False
-        else:
-            logger.error(f"✗ Unexpected result: {result}")
-            return False
-        
-    except Exception as e:
-        logger.error(f"Error restarting appliance: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
+    # Call the core function
+    return core_restart_appliance(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug,
+        wait_for_availability=wait_for_availability,
+        wait_timeout=wait_timeout
+    )

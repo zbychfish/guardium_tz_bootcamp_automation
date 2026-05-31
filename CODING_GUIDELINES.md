@@ -48,11 +48,112 @@ commands = [
 - **Export new core functions in `core/__init__.py`**
 - **Import from core in tasks**: `from core import function_name`
 - **Minimize code duplication** - if a function can be used by multiple tasks, move it to core
+- **Create specialized core modules** for domain-specific operations (e.g., `appliance_operations.py`)
 
 #### ❌ DON'T:
 - **Don't create general-purpose functions inside task files**
 - **Don't duplicate code between tasks**
 - **Don't keep utility functions in tasks/** - they belong in core/
+
+### 1.1. Keeping Code DRY (Don't Repeat Yourself)
+
+**CRITICAL RULE: Extract reusable code to core modules**
+
+When you notice:
+- ✅ **Same logic in multiple tasks** → Extract to `core/`
+- ✅ **Complex operation repeated** → Create dedicated core function
+- ✅ **Domain-specific operations** → Create specialized core module
+
+#### Example: Appliance Operations
+
+**❌ BAD - Duplicated code in tasks:**
+```python
+# tasks/setup_appliances.py
+def restart_appliance(...):
+    # 150 lines of restart logic
+    pass
+
+# tasks/maintenance_tasks.py
+def restart_appliance(...):
+    # Same 150 lines duplicated!
+    pass
+```
+
+**✅ GOOD - Reusable core function:**
+```python
+# core/appliance_operations.py
+def restart_appliance(config, logger, appliance_name, ...):
+    """Reusable restart function for any appliance"""
+    # 150 lines of restart logic - ONE place
+    pass
+
+# tasks/setup_appliances.py
+from core.appliance_operations import restart_appliance
+
+def my_task(config, logger, **kwargs):
+    return restart_appliance(config, logger, "cm01")
+
+# tasks/maintenance_tasks.py
+from core.appliance_operations import restart_appliance
+
+def my_other_task(config, logger, **kwargs):
+    return restart_appliance(config, logger, "cm02")
+```
+
+#### Core Module Organization
+
+Create specialized modules in `core/` for different domains:
+
+```
+core/
+├── utils.py                    # General utilities (file ops, command execution)
+├── logger.py                   # Logging setup
+├── ssh_client.py              # SSH operations
+├── config_loader.py           # Configuration management
+├── state_manager.py           # State tracking
+├── appliance_operations.py    # Appliance-specific operations (restart, configure, etc.)
+├── guardium_rest_api.py       # Guardium REST API operations
+└── appliance_client.py        # Appliance CLI client
+```
+
+#### When to Create New Core Module
+
+Create a new specialized module when:
+- ✅ You have 3+ related functions for a specific domain
+- ✅ Functions are reusable across multiple tasks
+- ✅ Logic is complex enough to warrant separation
+- ✅ Domain has its own data structures/patterns
+
+**Example domains:**
+- `appliance_operations.py` - Appliance management (restart, configure, backup)
+- `database_operations.py` - Database operations (backup, restore, migrate)
+- `network_operations.py` - Network configuration (firewall, routing)
+
+#### Task Files as Thin Wrappers
+
+Task functions should be **thin wrappers** that:
+- ✅ Call core functions with appropriate parameters
+- ✅ Handle task-specific orchestration
+- ✅ Provide backward compatibility for stage definitions
+- ✅ Add minimal task-specific logic
+
+**Example:**
+```python
+# tasks/setup_appliances.py
+from core.appliance_operations import restart_appliance as core_restart
+
+def restart_appliance(config, logger, verbose=True, **kwargs):
+    """
+    Task wrapper for restart_appliance.
+    Provides compatibility with stage definitions.
+    """
+    if not kwargs.get('appliance_name'):
+        logger.error("appliance_name is required")
+        return False
+    
+    # Call core function - all logic is there
+    return core_restart(config, logger, **kwargs)
+```
 
 ### 2. File Structure
 
@@ -116,7 +217,11 @@ tasks/
 | Command execution | `core/utils.py` | `execute_local_command()`, `execute_mysql_sql()` |
 | File operations | `core/utils.py` | `read_file()`, `write_file()` |
 | SSH operations | `core/ssh_client.py` | `SSHClient.execute_command()` |
+| Appliance operations | `core/appliance_operations.py` | `restart_appliance()`, `backup_appliance()` |
+| Appliance CLI client | `core/appliance_client.py` | `ApplianceClient.execute_command()` |
+| Guardium REST API | `core/guardium_rest_api.py` | `GuardiumRestAPI.create_user()` |
 | Configuration | `core/config_loader.py` | `get_machine()`, `get_custom_variable()` |
+| Appliance config | `core/appliance_config_loader.py` | `get_appliance()`, `get_default_user()` |
 | State management | `core/state_manager.py` | `mark_completed()`, `is_completed()` |
 | Task-specific logic | `tasks/*.py` | `setup_hosts_locally()`, `deploy_mysql_on_raptor()` |
 
