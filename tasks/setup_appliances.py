@@ -703,3 +703,140 @@ def configure_system_settings(
         prompt_regex=prompt_regex,
         debug=debug
     )
+
+
+
+def configure_system_settings_all(
+    config,
+    logger,
+    verbose: bool = True,
+    hostname: Optional[str] = None,
+    domain: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure system settings on ALL Guardium appliances in order: CM → Collectors → AppNodes
+    
+    Configures: hostname, domain, small_disk, session timeouts on all appliances.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (unused, kept for compatibility)
+        hostname: Hostname to set (optional, uses appliance_name with suffix removed)
+        domain: Domain to set (optional, defaults to demo.guardium)
+        user: SSH username (optional, uses default from type if not provided)
+        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
+        prompt_regex: Prompt regex (optional, uses default from type if not provided)
+        debug: Enable debug mode (default True)
+    
+    Returns:
+        True if all successful, False if any failed
+    
+    Example usage in groups.yaml:
+        stages:
+          - name: configure_system_settings_all
+            function: configure_system_settings_all
+            params:
+              # hostname: custom  # Optional - override hostname for all
+              # domain: example.com  # Optional - override domain for all
+              debug: true
+    """
+    from core.appliance_operations import configure_system_settings as core_configure_system_settings
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("CONFIGURE SYSTEM SETTINGS ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Group appliances by type
+    cms = []
+    collectors = []
+    appnodes = []
+    others = []
+    
+    for name, appliance_config in all_appliances.items():
+        appliance_type = appliance_config.get('type', '').lower()
+        if appliance_type == 'cm':
+            cms.append(name)
+        elif appliance_type == 'collector':
+            collectors.append(name)
+        elif appliance_type == 'appnode':
+            appnodes.append(name)
+        else:
+            others.append(name)
+    
+    # Order: CM → Collectors → AppNodes → Others
+    ordered_appliances = cms + collectors + appnodes + others
+    
+    logger.info(f"Found {len(ordered_appliances)} appliances:")
+    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
+    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
+    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
+    if others:
+        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
+    logger.info("")
+    
+    # Configure each appliance
+    success_count = 0
+    failed_count = 0
+    failed_appliances = []
+    
+    for appliance_name in ordered_appliances:
+        logger.info(f"➜ Configuring appliance: {appliance_name}")
+        
+        try:
+            result = core_configure_system_settings(
+                config=config,
+                logger=logger,
+                appliance_name=appliance_name,
+                hostname=hostname,
+                domain=domain,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                debug=debug
+            )
+            
+            if result:
+                success_count += 1
+                logger.info(f"✓ {appliance_name} configured successfully\n")
+            else:
+                failed_count += 1
+                failed_appliances.append(appliance_name)
+                logger.error(f"✗ {appliance_name} configuration failed\n")
+        
+        except Exception as e:
+            failed_count += 1
+            failed_appliances.append(appliance_name)
+            logger.error(f"✗ {appliance_name} configuration failed with exception: {str(e)}\n")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+    
+    # Summary
+    logger.info("=" * 80)
+    logger.info("CONFIGURATION SUMMARY")
+    logger.info("=" * 80)
+    logger.info(f"Total appliances: {len(ordered_appliances)}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {failed_count}")
+    
+    if failed_appliances:
+        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+    
+    logger.info("=" * 80)
+    
+    # Return True only if all succeeded
+    return failed_count == 0

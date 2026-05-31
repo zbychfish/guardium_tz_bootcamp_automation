@@ -83,13 +83,12 @@ groups:
           appliance_name: "cm02"
           debug: true
       
-      - name: configure_system_settings_on_cm
-        function: configure_system_settings
+      - name: configure_system_settings_all
+        function: configure_system_settings_all
         module: tasks.setup_appliances
-        description: "Configure hostname, domain, small_disk, and session timeouts"
+        description: "Configure hostname, domain, small_disk, and session timeouts on ALL appliances (CM → Collectors → AppNodes)"
         args:
-          appliance_name: "cm02"
-          # hostname: "cm"  # Optional - defaults to appliance_name with suffix removed
+          # hostname: "custom"  # Optional - override hostname for all appliances
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
           debug: true
       
