@@ -251,21 +251,21 @@ class ApplianceClient:
     def execute_command_with_confirmation(
         self,
         command: str,
-        confirmation_pattern: str,
-        response: str,
-        confirm_idle: float = 0.5
+        confirmation_pattern: str = r"Do you want to proceed\?\s*\(y/n\)\s*",
+        response: str = "y",
+        confirm_idle: float = 0.2
     ) -> str:
         """
-        Execute command that requires confirmation
+        Execute command that requires interactive confirmation.
         
         Args:
             command: Command to execute
             confirmation_pattern: Regex pattern for confirmation prompt
-            response: Response to send when confirmation prompt appears
-            confirm_idle: Idle time to wait before sending response (default: 0.5s)
+            response: Response to send (e.g. 'y', 'n')
+            confirm_idle: Wait time for idle before sending response (seconds)
         
         Returns:
-            Command output
+            Full command output
         
         Raises:
             RuntimeError: If not connected
@@ -275,12 +275,12 @@ class ApplianceClient:
             raise RuntimeError("Not connected")
         
         # Flush buffer
-        time.sleep(0.05)
+        time.sleep(0.03)
         while self.channel.recv_ready():
             self.channel.recv(65535)
         
-        # Send command
-        self.channel.send((command + "\r\n").encode())
+        # Send command with CR only (no LF)
+        self.channel.send((command + "\r").encode())
         
         confirmation_re = re.compile(confirmation_pattern)
         buf = ""
@@ -294,37 +294,47 @@ class ApplianceClient:
             
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
             
-            # Check for confirmation prompt
-            if not confirmed and confirmation_re.search(buf_for_match):
-                # Wait for idle period
+            # Handle confirmation once when detected
+            if (not confirmed) and confirmation_re.search(buf_for_match):
+                if self.debug:
+                    print(f"[DEBUG] Confirmation detected, waiting idle {confirm_idle}s then sending '{response}'")
+                
+                # Wait until channel is idle
                 idle_deadline = time.time() + confirm_idle
-                while time.time() < idle_deadline:
+                while time.time() < deadline:
                     if self.channel.recv_ready():
                         chunk = self.channel.recv(65535).decode(errors="replace")
                         buf += chunk
-                    time.sleep(0.05)
+                        idle_deadline = time.time() + confirm_idle
+                    if time.time() >= idle_deadline:
+                        break
+                    time.sleep(0.01)
                 
-                # Send response
-                self.channel.send((response + "\r\n").encode())
+                # Send response with CR only
+                self.channel.send((response + "\r").encode())
                 confirmed = True
-                continue
+                time.sleep(0.02)
             
-            # Check for prompt (command completed)
-            if confirmed and self.prompt_re.search(buf_for_match):
-                # Clean output
-                working = strip_ansi(buf) if self.strip_ansi_flag else buf
-                last_span = _find_last_prompt_span(working, self.prompt_re)
-                output_region = working[: last_span[0]] if last_span else working
-                
-                lines = output_region.splitlines()
-                return "\n".join(lines)
-            
-            if self.channel.closed:
+            # Check if prompt returned
+            if self.prompt_re.search(buf_for_match):
+                if self.debug:
+                    print(f"[DEBUG] Prompt detected after command")
                 break
             
-            time.sleep(0.05)
+            if self.channel.closed:
+                raise RuntimeError("Channel closed")
+            
+            time.sleep(0.005)
+        else:
+            raise TimeoutError(f"Timeout waiting for prompt: {self.prompt_re.pattern}")
         
-        raise TimeoutError(f"Timeout executing command with confirmation: {command}")
+        # Clean output
+        working = strip_ansi(buf) if self.strip_ansi_flag else buf
+        last_span = _find_last_prompt_span(working, self.prompt_re)
+        output_region = working[: last_span[0]] if last_span else working
+        
+        lines = output_region.splitlines()
+        return "\n".join(lines)
     
     def disconnect(self):
         """Close SSH connection"""

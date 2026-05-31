@@ -450,8 +450,7 @@ def set_timezone(
         
         output = client.execute_command_with_confirmation(
             command=command,
-            response="y",
-            confirmation_pattern=r"Do you want to proceed\?\s*\(y/n\)\s*"
+            response="y"
         )
         
         if debug and output:
