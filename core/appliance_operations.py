@@ -857,14 +857,42 @@ def configure_system_settings(
         
         # Enable small disk mode (requires "I agree" confirmation)
         logger.info("➜ Enabling small disk mode...")
-        output = client3.execute_command_with_confirmation(
-            command="store system small_disk",
-            confirmation_pattern=r'I agree',
-            response="I agree"
-        )
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ Small disk mode enabled")
+        
+        if not client3.channel:
+            raise RuntimeError("No channel available")
+        
+        # Step 1: Send command
+        client3.channel.send(b"store system small_disk\r")
+        
+        # Step 2: Wait for "I agree" text to appear
+        import time
+        buf = ""
+        deadline = time.time() + 60
+        i_agree_found = False
+        
+        while time.time() < deadline:
+            if client3.channel.recv_ready():
+                chunk = client3.channel.recv(65535).decode(errors="replace")
+                buf += chunk
+                if debug:
+                    logger.info(f"  Received: {repr(chunk)}")
+            
+            # Check if "I agree" text appeared
+            if "I agree" in buf and not i_agree_found:
+                logger.info("  Found 'I agree' prompt, sending response...")
+                # Step 3: Send "I agree" + ENTER
+                time.sleep(0.2)  # Wait a bit to ensure prompt is complete
+                client3.channel.send(b"I agree\r")
+                i_agree_found = True
+            
+            # Step 4: Check if prompt returned
+            if i_agree_found and client3.prompt_re.search(buf):
+                logger.info("✓ Small disk mode enabled")
+                break
+            
+            time.sleep(0.01)
+        else:
+            raise TimeoutError("Timeout waiting for small_disk command completion")
         
         # Configure GUI session timeout
         logger.info("➜ Configuring GUI session timeout (9999 minutes)...")
