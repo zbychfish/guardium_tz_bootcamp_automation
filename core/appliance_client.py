@@ -282,6 +282,7 @@ class ApplianceClient:
         # Send command with CR only (no LF)
         if self.debug:
             print(f"[DEBUG] Sending command: {command}", file=sys.stderr)
+            print(f"[DEBUG] Confirmation pattern: {confirmation_pattern}", file=sys.stderr)
         self.channel.send((command + "\r").encode())
         
         confirmation_re = re.compile(confirmation_pattern)
@@ -301,9 +302,10 @@ class ApplianceClient:
             # Handle confirmation once when detected
             if (not confirmed) and confirmation_re.search(buf_for_match):
                 if self.debug:
-                    print(f"[DEBUG] Confirmation pattern matched in buffer")
-                    print(f"[DEBUG] Buffer content: {repr(buf_for_match[-200:])}")
-                    print(f"[DEBUG] Waiting idle {confirm_idle}s then sending '{response}'")
+                    print(f"[DEBUG] Confirmation pattern matched in buffer", file=sys.stderr)
+                if self.debug:
+                    print(f"[DEBUG] Buffer content: {repr(buf_for_match[-200:])}", file=sys.stderr)
+                    print(f"[DEBUG] Waiting idle {confirm_idle}s then sending '{response}'", file=sys.stderr)
                 
                 # Wait until channel is idle
                 idle_deadline = time.time() + confirm_idle
