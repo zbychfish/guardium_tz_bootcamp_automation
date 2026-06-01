@@ -60,14 +60,7 @@ groups:
         args:
           appliance_name: "cm02"
           client_id: "BOOTCAMP"
-      
-      # - name: current_test
-      #   function: current_test
-      #   module: tasks.current_test
-      #   description: "TEST: Disable default accounts only (diagnostic)"
-      #   args:
-      #     appliance_name: "cm01"
-      
+           
       - name: create_demo_user
         function: create_demo_user
         module: tasks.setup_appliances
@@ -92,12 +85,11 @@ groups:
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
           debug: true
       
-      - name: set_timezone_on_cm
+      - name: set_timezone_on_appliances
         function: set_timezone
         module: tasks.setup_appliances
-        description: "Set timezone on CM appliance (defaults to Europe/Warsaw or from machines_info.json)"
+        description: "Set timezone on appliances (defaults to Europe/Warsaw or from machines_info.json)"
         args:
-          appliance_name: "cm02"
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
           debug: true
       
@@ -127,5 +119,12 @@ groups:
           debug: true
           wait_for_availability: true
           wait_timeout: 600
+
+      # - name: current_test
+      #   function: current_test
+      #   module: tasks.current_test
+      #   description: "TEST: Disable default accounts only (diagnostic)"
+      #   args:
+      #     appliance_name: "cm01"
 
 # Made with Bob

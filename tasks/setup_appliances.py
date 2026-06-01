@@ -165,9 +165,6 @@ def initial_collector_settings(
         appliance.disconnect()
         logger.info("✓ Disconnected")
 
-# Made with Bob
-
-
 def create_oauth_client(
     config,
     logger,
@@ -308,7 +305,6 @@ def create_oauth_client(
         
     finally:
         client.disconnect()
-
 
 def create_demo_user(
     config,
@@ -520,8 +516,6 @@ def set_unit_type_manager(
         logger.error(traceback.format_exc())
         return False
 
-
-
 def restart_appliance(
     config,
     logger,
@@ -589,25 +583,71 @@ def set_timezone(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
+   
     # Import here to avoid circular dependency
     from core.appliance_operations import set_timezone as core_set_timezone
+    from core.appliance_config_loader import ApplianceConfigLoader
     
-    # Call the core function
-    return core_set_timezone(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        timezone=timezone,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
+    # If specific appliance provided, configure only that one
+    if appliance_name:
+        logger.info(f"Configuring timezone for single appliance: {appliance_name}")
+        return core_set_timezone(
+            config=config,
+            logger=logger,
+            appliance_name=appliance_name,
+            timezone=timezone,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            debug=debug
+        )
+    
+    # Otherwise, configure all appliances in order: CM → Collectors → AppNodes
+    logger.info("=" * 80)
+    logger.info("SETTING TIMEZONE ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    # Sort appliances by type: CM → Collectors → AppNodes
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
     )
+    
+    # Process all appliances in order
+    all_success = True
+    for appliance_name, config_data in sorted_appliances:
+        appliance_type = config_data.get('type', 'unknown')
+        logger.info(f"\n{'='*80}")
+        logger.info(f"Processing {appliance_type.upper()}: {appliance_name}")
+        logger.info(f"{'='*80}")
+        
+        success = core_set_timezone(
+            config=config,
+            logger=logger,
+            appliance_name=appliance_name,
+            timezone=timezone,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            debug=debug
+        )
+        if not success:
+            logger.error(f"Failed to set timezone on {appliance_name}")
+            all_success = False
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    if all_success:
+        logger.info("✓ Timezone set successfully on all appliances")
+    else:
+        logger.error("✗ Some appliances failed timezone configuration")
+    logger.info("=" * 80)
+    
+    return all_success
 
 def configure_ntp(
     config,
@@ -640,8 +680,6 @@ def configure_ntp(
         debug=debug
     )
 
-
-
 def configure_system_settings(
     config,
     logger,
@@ -654,36 +692,7 @@ def configure_system_settings(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Configure system settings on Guardium appliance
     
-    This is a wrapper function that calls the core configure_system_settings function.
-    Configures: hostname, domain, small_disk, session timeouts.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (unused, kept for compatibility)
-        appliance_name: Name of appliance from appliances.yaml (required)
-        hostname: Hostname to set (optional, uses appliance_name with suffix removed)
-        domain: Domain to set (optional, defaults to demo.guardium)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-    
-    Returns:
-        True if successful, False otherwise
-    
-    Example usage in groups.yaml:
-        stages:
-          - name: configure_system_settings
-            function: configure_system_settings
-            params:
-              appliance_name: cm01  # Will use hostname 'cm' (suffix removed)
-              # hostname: cm  # Optional - override hostname
-              # domain: example.com  # Optional - override domain
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -704,8 +713,6 @@ def configure_system_settings(
         debug=debug
     )
 
-
-
 def configure_system_settings_all(
     config,
     logger,
@@ -717,34 +724,7 @@ def configure_system_settings_all(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Configure system settings on ALL Guardium appliances in order: CM → Collectors → AppNodes
-    
-    Configures: hostname, domain, small_disk, session timeouts on all appliances.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (unused, kept for compatibility)
-        hostname: Hostname to set (optional, uses appliance_name with suffix removed)
-        domain: Domain to set (optional, defaults to demo.guardium)
-        user: SSH username (optional, uses default from type if not provided)
-        password: SSH password (optional, uses cli_pwd from custom_variables if not provided)
-        prompt_regex: Prompt regex (optional, uses default from type if not provided)
-        debug: Enable debug mode (default True)
-    
-    Returns:
-        True if all successful, False if any failed
-    
-    Example usage in groups.yaml:
-        stages:
-          - name: configure_system_settings_all
-            function: configure_system_settings_all
-            params:
-              # hostname: custom  # Optional - override hostname for all
-              # domain: example.com  # Optional - override domain for all
-              debug: true
-    """
+
     from core.appliance_operations import configure_system_settings as core_configure_system_settings
     from core.appliance_config_loader import ApplianceConfigLoader
     
