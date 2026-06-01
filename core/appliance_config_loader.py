@@ -49,15 +49,26 @@ class ApplianceConfigLoader:
     
     def get_appliance(self, name: str) -> Optional[Dict[str, Any]]:
         """
-        Get appliance configuration by name
+        Get appliance configuration by name.
+        Supports both exact match and prefix match (name without suffix).
         
         Args:
-            name: Appliance name
+            name: Appliance name (e.g., "cm02" or "cm02-suffix")
         
         Returns:
             Appliance configuration dict or None if not found
         """
-        return self.appliances.get(name)
+        # Try exact match first
+        if name in self.appliances:
+            return self.appliances.get(name)
+        
+        # Try prefix match (find appliance starting with name)
+        for appliance_name, config in self.appliances.items():
+            if appliance_name.startswith(name + "-"):
+                logger.debug(f"Found appliance '{appliance_name}' by prefix '{name}'")
+                return config
+        
+        return None
     
     def get_all_appliances(self) -> Dict[str, Dict[str, Any]]:
         """Get all appliances"""
