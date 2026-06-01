@@ -680,6 +680,127 @@ def configure_ntp(
         debug=debug
     )
 
+def configure_ntp_all(
+    config,
+    logger,
+    verbose: bool = True,
+    ntp_servers: Optional[list] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure NTP on all appliances in order: CM → Collectors → AppNodes
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        ntp_servers: List of NTP servers (optional, defaults to pool.ntp.org)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances configured successfully, False otherwise
+    """
+    from core.appliance_operations import configure_ntp as core_configure_ntp
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("CONFIGURE NTP ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Group appliances by type
+    cms = []
+    collectors = []
+    appnodes = []
+    others = []
+    
+    for name, appliance_config in all_appliances.items():
+        appliance_type = appliance_config.get('type', '').lower()
+        if appliance_type == 'cm':
+            cms.append(name)
+        elif appliance_type == 'collector':
+            collectors.append(name)
+        elif appliance_type == 'appnode':
+            appnodes.append(name)
+        else:
+            others.append(name)
+    
+    # Order: CM → Collectors → AppNodes → Others
+    ordered_appliances = cms + collectors + appnodes + others
+    
+    logger.info(f"Found {len(ordered_appliances)} appliances:")
+    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
+    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
+    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
+    if others:
+        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
+    logger.info("")
+    
+    # Configure NTP on each appliance
+    success_count = 0
+    failed_count = 0
+    failed_appliances = []
+    
+    for appliance_name in ordered_appliances:
+        logger.info(f"➜ Configuring NTP on appliance: {appliance_name}")
+        
+        try:
+            result = core_configure_ntp(
+                config=config,
+                logger=logger,
+                appliance_name=appliance_name,
+                ntp_servers=ntp_servers,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                debug=debug
+            )
+            
+            if result:
+                success_count += 1
+                logger.info(f"✓ {appliance_name} NTP configured successfully\n")
+            else:
+                failed_count += 1
+                failed_appliances.append(appliance_name)
+                logger.error(f"✗ {appliance_name} NTP configuration failed\n")
+        
+        except Exception as e:
+            failed_count += 1
+            failed_appliances.append(appliance_name)
+            logger.error(f"✗ {appliance_name} NTP configuration failed with exception: {str(e)}\n")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+    
+    # Summary
+    logger.info("=" * 80)
+    logger.info("NTP CONFIGURATION SUMMARY")
+    logger.info("=" * 80)
+    logger.info(f"Total appliances: {len(ordered_appliances)}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {failed_count}")
+    
+    if failed_appliances:
+        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+    
+    logger.info("=" * 80)
+    
+    # Return True only if all succeeded
+    return failed_count == 0
+
 def configure_system_settings(
     config,
     logger,
