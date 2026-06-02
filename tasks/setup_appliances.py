@@ -1107,3 +1107,235 @@ def configure_system_settings_all(
     
     # Return True only if all succeeded
     return failed_count == 0
+
+
+
+def set_shared_secret_all(
+    config,
+    logger,
+    verbose: bool = True,
+    shared_secret: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set shared secret on all appliances in order: CM → Collectors → AppNodes
+    This must be done before registering appliances on Central Manager.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        shared_secret: Shared secret value (optional, uses value from machines_info.json custom_variables)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances configured successfully, False otherwise
+    """
+    from core.appliance_operations import set_shared_secret
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("SET SHARED SECRET ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Sort appliances by type: CM → Collectors → AppNodes
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    logger.info(f"Found {len(sorted_appliances)} appliances to configure")
+    
+    # Define operation function
+    def set_secret_operation(appliance_name: str, **kwargs) -> bool:
+        return set_shared_secret(
+            appliance_name=appliance_name,
+            **kwargs
+        )
+    
+    # Prepare appliance list
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=set_secret_operation,
+        operation_name="set shared secret",
+        logger=logger,
+        config=config,
+        shared_secret=shared_secret,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    logger.info("SHARED SECRET CONFIGURATION SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"Successful: {success_count}")
+    logger.info(f"Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
+    if all_success:
+        logger.info("\n✓ Shared secret set successfully on all appliances")
+    else:
+        logger.error("\n✗ Some appliances failed shared secret configuration")
+    
+    logger.info("=" * 80)
+    
+    return all_success
+
+
+def register_appliances_all(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_ip: Optional[str] = None,
+    cm_port: int = 8443,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True,
+    timeout: int = 600
+) -> bool:
+    """
+    Register all Collectors and AppNodes on Central Manager in parallel.
+    Note: CM itself is not registered. Shared secret must be set on all appliances first.
+    Uses parallel execution to register multiple appliances simultaneously (max 20 parallel).
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        cm_ip: Central Manager IP (optional, auto-detected from appliances.yaml)
+        cm_port: Central Manager port (default: 8443)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+        timeout: Registration timeout in seconds (default: 600)
+    
+    Returns:
+        True if all appliances registered successfully, False otherwise
+    """
+    from core.appliance_operations import register_appliance
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("REGISTER APPLIANCES ON CENTRAL MANAGER")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Filter out CM - only register Collectors and AppNodes
+    appliances_to_register = {
+        name: cfg for name, cfg in all_appliances.items()
+        if cfg.get('type', '').lower() in ['collector', 'appnode']
+    }
+    
+    if not appliances_to_register:
+        logger.warning("No Collectors or AppNodes found to register")
+        return True
+    
+    # Sort by type: Collectors → AppNodes
+    type_order = {'collector': 1, 'appnode': 2}
+    sorted_appliances = sorted(
+        appliances_to_register.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    logger.info(f"Found {len(sorted_appliances)} appliances to register")
+    for name, cfg in sorted_appliances:
+        logger.info(f"  - {name} ({cfg.get('type')})")
+    
+    # Define operation function
+    def register_operation(appliance_name: str, **kwargs) -> bool:
+        return register_appliance(
+            appliance_name=appliance_name,
+            **kwargs
+        )
+    
+    # Prepare appliance list
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=register_operation,
+        operation_name="register appliance",
+        logger=logger,
+        config=config,
+        cm_ip=cm_ip,
+        cm_port=cm_port,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug,
+        timeout=timeout
+    )
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    logger.info("APPLIANCE REGISTRATION SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"Successful: {success_count}")
+    logger.info(f"Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
+    if all_success:
+        logger.info("\n✓ All appliances registered successfully")
+    else:
+        logger.error("\n✗ Some appliances failed registration")
+    
+    logger.info("=" * 80)
+    
+    return all_success

@@ -409,6 +409,337 @@ def configure_network_ip(
         logger.error(traceback.format_exc())
         return False
 
+def set_shared_secret(
+    config,
+    logger,
+    appliance_name: str,
+    shared_secret: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set shared secret on Guardium appliance.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        shared_secret: Shared secret value (optional, uses value from machines_info.json custom_variables if not provided)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        set_shared_secret(config, logger, 'cm02', shared_secret='guardium')
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"SET SHARED SECRET: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Use shared_secret from custom_variables (machines_info.json) if not provided
+    if not shared_secret:
+        shared_secret = config.get_custom_variable('shared_secret')
+        if shared_secret:
+            logger.info("Using shared_secret from custom_variables (machines_info.json)")
+        else:
+            logger.error("shared_secret not provided and not found in custom_variables")
+            return False
+    
+    # Get user from config if not provided
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    try:
+        # Connect to appliance
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Set shared secret
+        command = f"store system shared secret {shared_secret}"
+        logger.info(f"\n➜ Executing: store system shared secret ***")
+        output = client.execute_command(command)
+        logger.info(f"Command output:\n{output}")
+        
+        client.disconnect()
+        
+        # Verify success
+        if "ok" in output.lower() or "success" in output.lower():
+            logger.info("=" * 80)
+            logger.info("✓ Shared secret set successfully")
+            logger.info("=" * 80)
+            return True
+        else:
+            logger.error(f"✗ Unexpected output: {output}")
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error setting shared secret: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
+
+def register_appliance(
+    config,
+    logger,
+    appliance_name: str,
+    cm_ip: Optional[str] = None,
+    cm_port: int = 8443,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True,
+    timeout: int = 600
+) -> bool:
+    """
+    Register appliance (Collector or AppNode) on Central Manager.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance to register
+        cm_ip: Central Manager IP address (optional, auto-detected from appliances.yaml)
+        cm_port: Central Manager port (default: 8443)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+        timeout: Command timeout in seconds (default: 600 - 10 minutes)
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        register_appliance(config, logger, 'coll1', cm_ip='10.240.64.9')
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"REGISTER APPLIANCE: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Auto-detect CM IP if not provided
+    if not cm_ip:
+        all_appliances = appliance_loader.get_all_appliances()
+        cm_appliances = {name: cfg for name, cfg in all_appliances.items() 
+                        if cfg.get('type', '').lower() == 'cm'}
+        
+        if not cm_appliances:
+            logger.error("No Central Manager found in appliances.yaml")
+            return False
+        
+        if len(cm_appliances) > 1:
+            logger.warning(f"Multiple CMs found: {list(cm_appliances.keys())}")
+            logger.warning("Using the first one. Specify cm_ip to use a different CM.")
+        
+        cm_name = list(cm_appliances.keys())[0]
+        cm_ip = cm_appliances[cm_name].get('ip')
+        logger.info(f"Auto-detected Central Manager: {cm_name} at {cm_ip}")
+    
+    if not cm_ip:
+        logger.error("Central Manager IP not found")
+        return False
+    
+    # Get user from config if not provided
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"Central Manager: {cm_ip}:{cm_port}")
+    logger.info(f"User: {user}")
+    logger.info(f"Timeout: {timeout} seconds")
+    
+    try:
+        # Connect to appliance
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=timeout,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Check unit type before registration
+        logger.info("\n➜ Checking unit type before registration...")
+        unit_type_output = client.execute_command("show unit type")
+        logger.info(f"Unit type:\n{unit_type_output}")
+        
+        # Register appliance
+        command = f"register management {cm_ip} {cm_port}"
+        logger.info(f"\n➜ Executing: {command}")
+        logger.info("⌛ This can take several minutes (up to 10 minutes)...")
+        
+        try:
+            output = client.execute_command(command, timeout=timeout)
+            logger.info(f"Command output:\n{output}")
+            
+            # Check unit type after registration
+            logger.info("\n➜ Checking unit type after registration...")
+            unit_type_output = client.execute_command("show unit type")
+            logger.info(f"Unit type:\n{unit_type_output}")
+            
+            client.disconnect()
+            
+            # Verify success
+            if "unit_type" in output.lower() or "registered" in output.lower():
+                logger.info("=" * 80)
+                logger.info("✓ Appliance registered successfully")
+                logger.info("=" * 80)
+                return True
+            else:
+                logger.warning("Registration command completed but verification unclear")
+                logger.warning("Check the output above to verify registration status")
+                return True
+                
+        except TimeoutError:
+            logger.warning("⚠ Registration command timeout")
+            logger.warning("This sometimes happens. Waiting 5 minutes and checking status...")
+            time.sleep(300)
+            
+            # Reconnect and check status
+            client = ApplianceClient(
+                host=host,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                initial_pattern=None,
+                timeout=60,
+                strip_ansi=True,
+                debug=debug
+            )
+            
+            if not client.connect():
+                logger.error("Failed to reconnect to appliance")
+                return False
+            
+            logger.info("\n➜ Checking unit type after timeout...")
+            unit_type_output = client.execute_command("show unit type")
+            logger.info(f"Unit type:\n{unit_type_output}")
+            
+            client.disconnect()
+            
+            logger.info("=" * 80)
+            logger.info("✓ Registration completed (after timeout)")
+            logger.info("=" * 80)
+            return True
+        
+    except Exception as e:
+        logger.error(f"Error registering appliance: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
 
 def configure_hosts_resolving(
     config,

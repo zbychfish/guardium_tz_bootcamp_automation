@@ -117,6 +117,24 @@ groups:
           wait_for_availability: true
           retry_interval: 15  # Seconds between retry attempts (default: 10)
           max_retries: 40  # Maximum retry attempts (default: 60, total timeout = 40 * 15 = 600s = 10min)
+      
+      - name: set_shared_secret_on_all_appliances
+        function: set_shared_secret_all
+        module: tasks.setup_appliances
+        description: "Set shared secret on ALL appliances (CM → Collectors → AppNodes). Required before registration."
+        args:
+          # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
+          debug: false
+      
+      - name: register_appliances_on_cm
+        function: register_appliances_all
+        module: tasks.setup_appliances
+        description: "Register all Collectors and AppNodes on Central Manager in parallel (max 20 parallel, 10 min timeout per appliance)"
+        args:
+          # cm_ip: "10.240.64.9"  # Optional - auto-detected from appliances.yaml
+          cm_port: 8443
+          timeout: 600  # 10 minutes per appliance
+          debug: false
 
       # - name: current_test
       #   function: current_test
