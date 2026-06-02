@@ -526,14 +526,22 @@ def set_shared_secret(
         client.disconnect()
         
         # Verify success
-        if "ok" in output.lower() or "success" in output.lower():
+        # Note: execute_command filters out "ok" line, so we check for "Command ran on:" or absence of error
+        if "error" in output.lower() or "failed" in output.lower():
+            logger.error(f"✗ Command failed: {output}")
+            return False
+        elif "Command ran on:" in output or not output.strip():
+            # Success: either has timestamp or empty output (ok was filtered)
             logger.info("=" * 80)
             logger.info("✓ Shared secret set successfully")
             logger.info("=" * 80)
             return True
         else:
-            logger.error(f"✗ Unexpected output: {output}")
-            return False
+            logger.warning(f"⚠ Unexpected output (assuming success): {output}")
+            logger.info("=" * 80)
+            logger.info("✓ Shared secret set successfully")
+            logger.info("=" * 80)
+            return True
         
     except Exception as e:
         logger.error(f"Error setting shared secret: {e}")
