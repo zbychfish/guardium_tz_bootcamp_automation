@@ -67,7 +67,11 @@ def execute_on_appliances_async(
         """Execute operation on single appliance and return result"""
         try:
             logger.info(f"[{appliance_name}] Starting {operation_name}...")
-            success = operation_func(appliance_name=appliance_name, **operation_kwargs)
+            success = operation_func(
+                appliance_name=appliance_name,
+                logger=logger,
+                **operation_kwargs
+            )
             if success:
                 logger.info(f"[{appliance_name}] ✓ {operation_name} completed successfully")
             else:
