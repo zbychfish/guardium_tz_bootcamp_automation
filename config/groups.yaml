@@ -83,7 +83,7 @@ groups:
         description: "Set timezone on appliances (defaults to Europe/Warsaw or from machines_info.json)"
         args:
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
-          debug: true
+          debug: false
       
       - name: configure_ntp_on_all_appliances
         function: configure_ntp_all
@@ -91,32 +91,22 @@ groups:
         description: "Configure NTP servers and enable time synchronization on ALL appliances (CM → Collectors → AppNodes)"
         args:
           # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
-          debug: true
+          debug: false
       
-      - name: configure_hosts_resolving_on_cm
-        function: configure_hosts_resolving
+      - name: configure_hosts_resolving_on_all_appliances
+        function: configure_hosts_resolving_all
         module: tasks.setup_appliances
-        description: "Configure /etc/hosts resolving for all machines from machines_info.json"
+        description: "Configure /etc/hosts resolving on ALL appliances for Unix machines (raptor, ceraptos, sauropod) and other Guardium appliances"
         args:
-          appliance_name: "cm02"
           debug: true
-      
-     - name: configure_dns_on_cm
-        function: configure_dns
-        module: tasks.setup_appliances
-        description: "Configure DNS servers on CM"
-        args:
-          appliance_name: "cm02"
-          dns_servers: ['8.8.8.8', '8.8.4.4']  # Optional - defaults to 8.8.8.8 and 8.8.4.4
-          debug: true
-
+     
       - name: set_unit_type_manager
         function: set_unit_type_manager
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
           appliance_name: "cm02"
-          debug: true
+          debug: false
 
       - name: restart_cm_after_setup
         function: restart_appliance

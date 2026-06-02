@@ -222,14 +222,21 @@ def configure_hosts_resolving(
     
     # Get machines from config (loaded from machines_info.json)
     machines = config.get('machines', {})
-    if not machines:
-        logger.warning("No machines found in config (machines_info.json may not be loaded)")
+    
+    # Get all appliances from appliances.yaml
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    # Combine both sources
+    total_entries = len(machines) + len(all_appliances) - 1  # -1 to exclude current appliance
+    
+    if not machines and not all_appliances:
+        logger.warning("No machines or appliances found to configure")
         logger.info("=" * 80)
         logger.info("No hosts to configure")
         logger.info("=" * 80)
         return True
     
-    logger.info(f"Found {len(machines)} machines to configure")
+    logger.info(f"Found {len(machines)} Unix machines and {len(all_appliances)} appliances to configure")
     
     try:
         # Connect to appliance
@@ -264,16 +271,18 @@ def configure_hosts_resolving(
         
         logger.info(f"Found {len(existing_hosts)} existing host entries")
         
-        # Configure hosts for each machine
+        # Configure hosts for each machine and appliance
         configured_count = 0
         skipped_count = 0
         
+        # First, add Unix machines (raptor, ceraptos, sauropod)
+        logger.info("\n➜ Configuring Unix machines:")
         for machine_name, machine_config in machines.items():
             # Use private_ip (local network IP)
             private_ip = machine_config.get('private_ip', '')
             
             if not private_ip:
-                logger.warning(f"Skipping {machine_name}: no private_ip")
+                logger.warning(f"  ⊘ Skipping {machine_name}: no private_ip")
                 continue
             
             # Use short name (without suffix) and add .demo.guardium domain
@@ -289,6 +298,41 @@ def configure_hosts_resolving(
             # Add host entry with FQDN
             command = f"support store hosts {private_ip} {fqdn}"
             logger.info(f"  ➜ Adding: {fqdn} ({private_ip})")
+            output = client.execute_command(command)
+            
+            if debug and output:
+                logger.info(f"     Output: {output}")
+            
+            configured_count += 1
+        
+        # Second, add other Guardium appliances (excluding current one)
+        logger.info("\n➜ Configuring Guardium appliances:")
+        for other_appliance_name, other_appliance_config in all_appliances.items():
+            # Skip the current appliance
+            if other_appliance_name == appliance_name:
+                logger.info(f"  ⊘ Skipping {other_appliance_name} (current appliance)")
+                continue
+            
+            # Get IP address
+            appliance_ip = other_appliance_config.get('ip', '')
+            if not appliance_ip:
+                logger.warning(f"  ⊘ Skipping {other_appliance_name}: no IP address")
+                continue
+            
+            # Remove suffix from appliance name (e.g., "cm02-suffix" -> "cm02")
+            # This handles the case where appliances have random suffixes
+            short_name = other_appliance_name.split('-')[0] if '-' in other_appliance_name else other_appliance_name
+            fqdn = f"{short_name}.demo.guardium"
+            
+            # Check if already exists
+            if (appliance_ip, fqdn) in existing_hosts or (appliance_ip, short_name) in existing_hosts:
+                logger.info(f"  ⊘ Skipping {short_name} ({appliance_ip}) - already configured")
+                skipped_count += 1
+                continue
+            
+            # Add host entry with FQDN
+            command = f"support store hosts {appliance_ip} {fqdn}"
+            logger.info(f"  ➜ Adding: {fqdn} ({appliance_ip})")
             output = client.execute_command(command)
             
             if debug and output:
