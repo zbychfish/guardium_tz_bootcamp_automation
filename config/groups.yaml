@@ -58,7 +58,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm03"
           client_id: "BOOTCAMP"
            
       - name: create_demo_user
@@ -66,7 +66,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm02"  # Name from config/appliances.yaml
+          appliance_name: "cm03"  # Name from config/appliances.yaml
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
@@ -105,7 +105,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm03"
           debug: false
 
       - name: restart_all_appliances_after_setup
