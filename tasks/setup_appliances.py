@@ -546,6 +546,121 @@ def restart_appliance(
         wait_timeout=wait_timeout
     )
 
+def restart_appliance_all(
+    config,
+    logger,
+    verbose: bool = True,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True,
+    wait_for_availability: bool = True,
+    wait_timeout: int = 600,
+    max_workers: Optional[int] = None
+) -> bool:
+    """
+    Restart all appliances asynchronously in order: CM → Collectors → AppNodes
+    Uses parallel execution to restart multiple appliances simultaneously.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+        wait_for_availability: Wait for appliances to come back online
+        wait_timeout: Timeout in seconds for waiting for each appliance
+        max_workers: Maximum number of parallel workers (default: min(appliances, 10))
+    
+    Returns:
+        True if all appliances restarted successfully, False otherwise
+    """
+    from core.appliance_config_loader import ApplianceConfigLoader
+    from core.appliance_operations import execute_on_appliances_async
+    
+    logger.info("=" * 80)
+    logger.info("RESTART ALL APPLIANCES (ASYNC)")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Group appliances by type
+    cms = []
+    collectors = []
+    appnodes = []
+    others = []
+    
+    for name, appliance_config in all_appliances.items():
+        appliance_type = appliance_config.get('type', '').lower()
+        if appliance_type == 'cm':
+            cms.append(name)
+        elif appliance_type == 'collector':
+            collectors.append(name)
+        elif appliance_type == 'appnode':
+            appnodes.append(name)
+        else:
+            others.append(name)
+    
+    # Order: CM → Collectors → AppNodes → Others
+    ordered_appliances = cms + collectors + appnodes + others
+    
+    logger.info(f"Found {len(ordered_appliances)} appliances to restart:")
+    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
+    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
+    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
+    if others:
+        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
+    logger.info("")
+    
+    # Execute restart asynchronously on all appliances
+    results, errors = execute_on_appliances_async(
+        appliances=ordered_appliances,
+        operation_func=core_restart_appliance,
+        operation_name="restart",
+        logger=logger,
+        max_workers=max_workers,
+        config=config,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug,
+        wait_for_availability=wait_for_availability,
+        wait_timeout=wait_timeout
+    )
+    
+    # Count results
+    success_count = sum(1 for success in results.values() if success)
+    failed_count = len(results) - success_count
+    failed_appliances = [name for name, success in results.items() if not success]
+    
+    # Summary
+    logger.info("")
+    logger.info("=" * 80)
+    logger.info("RESTART SUMMARY")
+    logger.info("=" * 80)
+    logger.info(f"Total appliances: {len(ordered_appliances)}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {failed_count}")
+    
+    if failed_appliances:
+        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+        for appliance in failed_appliances:
+            if appliance in errors:
+                logger.error(f"  - {appliance}: {errors[appliance]}")
+    
+    logger.info("=" * 80)
+    
+    # Return True only if all succeeded
+    return failed_count == 0
+
 def configure_hosts_resolving(
     config,
     logger,

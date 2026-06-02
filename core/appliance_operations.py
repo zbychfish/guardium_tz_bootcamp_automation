@@ -8,6 +8,93 @@ import time
 from typing import Optional, List
 from .appliance_client import ApplianceClient
 from .appliance_config_loader import ApplianceConfigLoader
+import concurrent.futures
+from typing import Callable, Dict, Any, Tuple
+
+
+def execute_on_appliances_async(
+    appliances: List[str],
+    operation_func: Callable,
+    operation_name: str,
+    logger,
+    max_workers: Optional[int] = None,
+    **operation_kwargs
+) -> Tuple[Dict[str, bool], Dict[str, str]]:
+    """
+    Execute an operation on multiple appliances asynchronously.
+    This is a reusable function for parallel execution of appliance operations.
+    
+    Args:
+        appliances: List of appliance names to operate on
+        operation_func: Function to execute on each appliance (must accept appliance_name as first arg)
+        operation_name: Name of the operation (for logging)
+        logger: Logger instance
+        max_workers: Maximum number of parallel workers (default: number of appliances, max 10)
+        **operation_kwargs: Additional keyword arguments to pass to operation_func
+    
+    Returns:
+        Tuple of (results_dict, errors_dict) where:
+        - results_dict: {appliance_name: success_bool}
+        - errors_dict: {appliance_name: error_message}
+    
+    Example:
+        results, errors = execute_on_appliances_async(
+            appliances=['cm02', 'coll1', 'appnode1'],
+            operation_func=restart_appliance,
+            operation_name="restart",
+            logger=logger,
+            config=config,
+            debug=True,
+            wait_for_availability=True
+        )
+    """
+    if not appliances:
+        logger.warning("No appliances provided for async execution")
+        return {}, {}
+    
+    # Determine number of workers (default: min of appliances count and 10)
+    if max_workers is None:
+        max_workers = min(len(appliances), 10)
+    
+    logger.info(f"Starting async {operation_name} on {len(appliances)} appliances (max {max_workers} parallel)")
+    logger.info(f"Appliances: {', '.join(appliances)}")
+    logger.info("")
+    
+    results = {}
+    errors = {}
+    
+    def execute_single(appliance_name: str) -> Tuple[str, bool, Optional[str]]:
+        """Execute operation on single appliance and return result"""
+        try:
+            logger.info(f"[{appliance_name}] Starting {operation_name}...")
+            success = operation_func(appliance_name=appliance_name, **operation_kwargs)
+            if success:
+                logger.info(f"[{appliance_name}] ✓ {operation_name} completed successfully")
+            else:
+                logger.error(f"[{appliance_name}] ✗ {operation_name} failed")
+            return appliance_name, success, None
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"[{appliance_name}] ✗ {operation_name} failed with exception: {error_msg}")
+            return appliance_name, False, error_msg
+    
+    # Execute operations in parallel using ThreadPoolExecutor
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_appliance = {
+            executor.submit(execute_single, appliance): appliance 
+            for appliance in appliances
+        }
+        
+        # Wait for all tasks to complete
+        for future in concurrent.futures.as_completed(future_to_appliance):
+            appliance_name, success, error = future.result()
+            results[appliance_name] = success
+            if error:
+                errors[appliance_name] = error
+    
+    return results, errors
+
 
 
 def restart_appliance(
