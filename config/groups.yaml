@@ -78,9 +78,9 @@ groups:
           debug: true
       
       - name: set_timezone_on_appliances
-        function: set_timezone
+        function: set_timezone_all
         module: tasks.setup_appliances
-        description: "Set timezone on appliances (defaults to Europe/Warsaw or from machines_info.json)"
+        description: "Set timezone on ALL appliances (defaults to Europe/Warsaw or from machines_info.json)"
         args:
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
           debug: false

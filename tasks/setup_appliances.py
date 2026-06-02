@@ -1108,8 +1108,6 @@ def configure_system_settings_all(
     # Return True only if all succeeded
     return failed_count == 0
 
-
-
 def set_shared_secret_all(
     config,
     logger,
@@ -1214,7 +1212,6 @@ def set_shared_secret_all(
     logger.info("=" * 80)
     
     return all_success
-
 
 def register_appliances_all(
     config,
@@ -1336,6 +1333,88 @@ def register_appliances_all(
     else:
         logger.error("\n✗ Some appliances failed registration")
     
+    logger.info("=" * 80)
+    
+    return all_success
+
+def set_timezone_all(
+    config,
+    logger,
+    verbose: bool = True,
+    timezone: Optional[str] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set timezone on all appliances in order: CM → Collectors → AppNodes
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        timezone: Timezone string (optional, defaults to Europe/Warsaw or from machines_info.json)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances configured successfully, False otherwise
+    """
+    from core.appliance_operations import set_timezone
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("SET TIMEZONE ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Sort appliances by type: CM → Collectors → AppNodes
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    logger.info(f"Found {len(sorted_appliances)} appliances to configure")
+    
+    # Process all appliances in order
+    all_success = True
+    for appliance_name, config_data in sorted_appliances:
+        appliance_type = config_data.get('type', 'unknown')
+        logger.info(f"\n{'='*80}")
+        logger.info(f"Processing {appliance_type.upper()}: {appliance_name}")
+        logger.info(f"{'='*80}")
+        
+        success = set_timezone(
+            config=config,
+            logger=logger,
+            appliance_name=appliance_name,
+            timezone=timezone,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            debug=debug
+        )
+        if not success:
+            logger.error(f"Failed to set timezone on {appliance_name}")
+            all_success = False
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    if all_success:
+        logger.info("✓ Timezone set successfully on all appliances")
+    else:
+        logger.error("✗ Some appliances failed timezone configuration")
     logger.info("=" * 80)
     
     return all_success
