@@ -1226,9 +1226,9 @@ def register_appliances_all(
     timeout: int = 600
 ) -> bool:
     """
-    Register all Collectors and AppNodes on Central Manager in parallel.
+    Register all Collectors and AppNodes on Central Manager sequentially.
     Note: CM itself is not registered. Shared secret must be set on all appliances first.
-    Uses parallel execution to register multiple appliances simultaneously (max 20 parallel).
+    Registers appliances one by one to avoid potential conflicts.
     
     Args:
         config: Configuration object
@@ -1281,57 +1281,40 @@ def register_appliances_all(
     for name, cfg in sorted_appliances:
         logger.info(f"  - {name} ({cfg.get('type')})")
     
-    # Define operation function
-    def register_operation(appliance_name: str, **kwargs) -> bool:
-        return register_appliance(
+    # Register appliances sequentially (one by one)
+    all_success = True
+    for appliance_name, appliance_config in sorted_appliances:
+        appliance_type = appliance_config.get('type', 'unknown')
+        logger.info(f"\n{'='*80}")
+        logger.info(f"Registering {appliance_type.upper()}: {appliance_name}")
+        logger.info(f"{'='*80}")
+        
+        success = register_appliance(
+            config=config,
+            logger=logger,
             appliance_name=appliance_name,
-            **kwargs
+            cm_ip=cm_ip,
+            cm_port=cm_port,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            debug=debug,
+            timeout=timeout
         )
-    
-    # Prepare appliance list
-    appliance_names = [name for name, _ in sorted_appliances]
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
-    results, errors = execute_on_appliances_async(
-        appliances=appliance_names,
-        operation_func=register_operation,
-        operation_name="register appliance",
-        logger=logger,
-        config=config,
-        cm_ip=cm_ip,
-        cm_port=cm_port,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug,
-        timeout=timeout
-    )
+        
+        if not success:
+            logger.error(f"Failed to register {appliance_name}")
+            all_success = False
     
     # Summary
     logger.info("\n" + "=" * 80)
     logger.info("APPLIANCE REGISTRATION SUMMARY")
     logger.info("=" * 80)
     
-    success_count = sum(1 for success in results.values() if success)
-    total_count = len(results)
-    
-    logger.info(f"Total appliances: {total_count}")
-    logger.info(f"Successful: {success_count}")
-    logger.info(f"Failed: {total_count - success_count}")
-    
-    if errors:
-        logger.error("\nErrors encountered:")
-        for appliance_name, error_msg in errors.items():
-            logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    all_success = all(results.values())
-    
     if all_success:
-        logger.info("\n✓ All appliances registered successfully")
+        logger.info("✓ All appliances registered successfully")
     else:
-        logger.error("\n✗ Some appliances failed registration")
+        logger.error("✗ Some appliances failed registration")
     
     logger.info("=" * 80)
     
