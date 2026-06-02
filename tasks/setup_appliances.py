@@ -516,38 +516,6 @@ def set_unit_type_manager(
         logger.error(traceback.format_exc())
         return False
 
-def restart_appliance(
-    config,
-    logger,
-    verbose: bool = True,
-    appliance_name: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True,
-    wait_for_availability: bool = True,
-    retry_interval: int = 10,
-    max_retries: int = 60
-) -> bool:
-
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    # Call the core function
-    return core_restart_appliance(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug,
-        wait_for_availability=wait_for_availability,
-        retry_interval=retry_interval,
-        max_retries=max_retries
-    )
-
 def restart_appliance_all(
     config,
     logger,
@@ -663,31 +631,133 @@ def restart_appliance_all(
     # Return True only if all succeeded
     return failed_count == 0
 
-def configure_hosts_resolving(
+def configure_network_ip_all(
     config,
     logger,
     verbose: bool = True,
-    appliance_name: Optional[str] = None,
+    prefix: str = "/24",
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-
-    if not appliance_name:
-        logger.error("appliance_name is required")
+    """
+    Configure network IP addresses on all appliances in order: CM → Collectors → AppNodes
+    Uses IP addresses from appliances.yaml configuration.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        prefix: Network prefix (default: /24)
+        user: SSH username (optional)
+        password: SSH password (optional)
+        prompt_regex: CLI prompt regex (optional)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances configured successfully, False otherwise
+    """
+    from core.appliance_operations import configure_network_ip as core_configure_network_ip
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("CONFIGURE NETWORK IP ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
         return False
     
-    # Call the core function
-    return core_configure_hosts(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
+    # Group appliances by type
+    cms = []
+    collectors = []
+    appnodes = []
+    others = []
+    
+    for name, appliance_config in all_appliances.items():
+        appliance_type = appliance_config.get('type', '').lower()
+        if appliance_type == 'cm':
+            cms.append(name)
+        elif appliance_type == 'collector':
+            collectors.append(name)
+        elif appliance_type == 'appnode':
+            appnodes.append(name)
+        else:
+            others.append(name)
+    
+    # Order: CM → Collectors → AppNodes → Others
+    ordered_appliances = cms + collectors + appnodes + others
+    
+    logger.info(f"Found {len(ordered_appliances)} appliances:")
+    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
+    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
+    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
+    if others:
+        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
+    logger.info("")
+    
+    # Configure network IP on each appliance
+    success_count = 0
+    failed_count = 0
+    failed_appliances = []
+    
+    for appliance_name in ordered_appliances:
+        logger.info(f"➜ Configuring network IP on appliance: {appliance_name}")
+        
+        try:
+            result = core_configure_network_ip(
+                config=config,
+                logger=logger,
+                appliance_name=appliance_name,
+                ip_address=None,  # Use IP from appliances.yaml
+                prefix=prefix,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                debug=debug
+            )
+            
+            if result:
+                success_count += 1
+                logger.info(f"✓ {appliance_name} network IP configured successfully\n")
+            else:
+                failed_count += 1
+                failed_appliances.append(appliance_name)
+                logger.error(f"✗ {appliance_name} network IP configuration failed\n")
+        
+        except Exception as e:
+            failed_count += 1
+            failed_appliances.append(appliance_name)
+            logger.error(f"✗ {appliance_name} network IP configuration failed with exception: {str(e)}\n")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+    
+    # Summary
+    logger.info("=" * 80)
+    logger.info("NETWORK IP CONFIGURATION SUMMARY")
+    logger.info("=" * 80)
+    logger.info(f"Total appliances: {len(ordered_appliances)}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {failed_count}")
+    
+    if failed_appliances:
+        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+    
+    logger.info("=" * 80)
+    logger.info("Note: Changes will take effect after network restart on each appliance")
+    logger.info("=" * 80)
+    
+    # Return True only if all succeeded
+    return failed_count == 0
+    
+    # Return True only if all succeeded
+    return failed_count == 0
 
 def configure_hosts_resolving_all(
     config,
@@ -809,114 +879,6 @@ def configure_hosts_resolving_all(
     # Return True only if all succeeded
     return failed_count == 0
 
-def set_timezone(
-    config,
-    logger,
-    verbose: bool = True,
-    appliance_name: Optional[str] = None,
-    timezone: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-   
-    # Import here to avoid circular dependency
-    from core.appliance_operations import set_timezone as core_set_timezone
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    # If specific appliance provided, configure only that one
-    if appliance_name:
-        logger.info(f"Configuring timezone for single appliance: {appliance_name}")
-        return core_set_timezone(
-            config=config,
-            logger=logger,
-            appliance_name=appliance_name,
-            timezone=timezone,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            debug=debug
-        )
-    
-    # Otherwise, configure all appliances in order: CM → Collectors → AppNodes
-    logger.info("=" * 80)
-    logger.info("SETTING TIMEZONE ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    # Sort appliances by type: CM → Collectors → AppNodes
-    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
-    sorted_appliances = sorted(
-        all_appliances.items(),
-        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
-    )
-    
-    # Process all appliances in order
-    all_success = True
-    for appliance_name, config_data in sorted_appliances:
-        appliance_type = config_data.get('type', 'unknown')
-        logger.info(f"\n{'='*80}")
-        logger.info(f"Processing {appliance_type.upper()}: {appliance_name}")
-        logger.info(f"{'='*80}")
-        
-        success = core_set_timezone(
-            config=config,
-            logger=logger,
-            appliance_name=appliance_name,
-            timezone=timezone,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            debug=debug
-        )
-        if not success:
-            logger.error(f"Failed to set timezone on {appliance_name}")
-            all_success = False
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    if all_success:
-        logger.info("✓ Timezone set successfully on all appliances")
-    else:
-        logger.error("✗ Some appliances failed timezone configuration")
-    logger.info("=" * 80)
-    
-    return all_success
-
-def configure_ntp(
-    config,
-    logger,
-    verbose: bool = True,
-    appliance_name: Optional[str] = None,
-    ntp_servers: Optional[list] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    # Import here to avoid circular dependency
-    from core.appliance_operations import configure_ntp as core_configure_ntp
-    
-    # Call the core function
-    return core_configure_ntp(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        ntp_servers=ntp_servers,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
-
 def configure_ntp_all(
     config,
     logger,
@@ -1037,39 +999,6 @@ def configure_ntp_all(
     
     # Return True only if all succeeded
     return failed_count == 0
-
-def configure_system_settings(
-    config,
-    logger,
-    verbose: bool = True,
-    appliance_name: Optional[str] = None,
-    hostname: Optional[str] = None,
-    domain: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    # Import here to avoid circular dependency
-    from core.appliance_operations import configure_system_settings as core_configure_system_settings
-    
-    # Call the core function
-    return core_configure_system_settings(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        hostname=hostname,
-        domain=domain,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
 
 def configure_system_settings_all(
     config,

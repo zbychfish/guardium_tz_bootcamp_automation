@@ -258,6 +258,158 @@ def restart_appliance(
         return False
 
 
+def configure_network_ip(
+    config,
+    logger,
+    appliance_name: str,
+    ip_address: Optional[str] = None,
+    prefix: str = "/24",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure network IP address on Guardium appliance.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        ip_address: IP address to set (optional, uses IP from appliances.yaml if not provided)
+        prefix: Network prefix (default: /24)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        configure_network_ip(config, logger, 'cm02', ip_address='10.240.64.9')
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"CONFIGURE NETWORK IP: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Use IP from appliances.yaml if not provided
+    if not ip_address:
+        ip_address = host
+        logger.info(f"Using IP address from appliances.yaml: {ip_address}")
+    
+    # Get user from config if not provided
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"Setting IP: {ip_address}{prefix}")
+    logger.info(f"User: {user}")
+    
+    try:
+        # Connect to appliance
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Check current network configuration
+        logger.info("\n➜ Checking current network configuration...")
+        current_config = client.execute_command("show network interface all")
+        logger.info(f"Current configuration:\n{current_config}")
+        
+        # Set network IP
+        command = f"store network interface ip {ip_address}{prefix}"
+        logger.info(f"\n➜ Executing: {command}")
+        output = client.execute_command(command)
+        logger.info(f"Command output:\n{output}")
+        
+        # Verify the change
+        if "This change will take effect after the next network restart" in output or "ok" in output:
+            logger.info("✓ Network IP configuration command executed successfully")
+            
+            # Show updated configuration
+            logger.info("\n➜ Verifying new configuration...")
+            new_config = client.execute_command("show network interface all")
+            logger.info(f"New configuration:\n{new_config}")
+            
+            # Check if IP is in the output
+            if ip_address in new_config:
+                logger.info(f"✓ IP address {ip_address} confirmed in configuration")
+            else:
+                logger.warning(f"⚠ IP address {ip_address} not found in configuration output")
+            
+            client.disconnect()
+            
+            logger.info("=" * 80)
+            logger.info("Network IP configured successfully")
+            logger.info("Note: Changes will take effect after network restart")
+            logger.info("=" * 80)
+            return True
+        else:
+            logger.error(f"✗ Unexpected output: {output}")
+            client.disconnect()
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error configuring network IP: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
 def configure_hosts_resolving(
     config,
     logger,
