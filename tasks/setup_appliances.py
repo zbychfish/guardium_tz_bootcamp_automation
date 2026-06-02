@@ -526,7 +526,8 @@ def restart_appliance(
     prompt_regex: Optional[str] = None,
     debug: bool = True,
     wait_for_availability: bool = True,
-    wait_timeout: int = 600
+    retry_interval: int = 10,
+    max_retries: int = 60
 ) -> bool:
 
     if not appliance_name:
@@ -543,7 +544,8 @@ def restart_appliance(
         prompt_regex=prompt_regex,
         debug=debug,
         wait_for_availability=wait_for_availability,
-        wait_timeout=wait_timeout
+        retry_interval=retry_interval,
+        max_retries=max_retries
     )
 
 def restart_appliance_all(
@@ -555,12 +557,12 @@ def restart_appliance_all(
     prompt_regex: Optional[str] = None,
     debug: bool = True,
     wait_for_availability: bool = True,
-    wait_timeout: int = 600,
-    max_workers: Optional[int] = None
+    retry_interval: int = 10,
+    max_retries: int = 60
 ) -> bool:
     """
     Restart all appliances asynchronously in order: CM → Collectors → AppNodes
-    Uses parallel execution to restart multiple appliances simultaneously.
+    Uses parallel execution to restart multiple appliances simultaneously (max 20 parallel).
     
     Args:
         config: Configuration object
@@ -571,8 +573,8 @@ def restart_appliance_all(
         prompt_regex: CLI prompt regex (optional, uses default from appliance type)
         debug: Enable debug output
         wait_for_availability: Wait for appliances to come back online
-        wait_timeout: Timeout in seconds for waiting for each appliance
-        max_workers: Maximum number of parallel workers (default: min(appliances, 10))
+        retry_interval: Seconds between retry attempts (default: 10)
+        max_retries: Maximum number of retry attempts (default: 60, total timeout = max_retries * retry_interval)
     
     Returns:
         True if all appliances restarted successfully, False otherwise
@@ -620,20 +622,20 @@ def restart_appliance_all(
         logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
     logger.info("")
     
-    # Execute restart asynchronously on all appliances
+    # Execute restart asynchronously on all appliances (max 20 parallel)
     results, errors = execute_on_appliances_async(
         appliances=ordered_appliances,
         operation_func=core_restart_appliance,
         operation_name="restart",
         logger=logger,
-        max_workers=max_workers,
         config=config,
         user=user,
         password=password,
         prompt_regex=prompt_regex,
         debug=debug,
         wait_for_availability=wait_for_availability,
-        wait_timeout=wait_timeout
+        retry_interval=retry_interval,
+        max_retries=max_retries
     )
     
     # Count results

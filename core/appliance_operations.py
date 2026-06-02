@@ -17,7 +17,6 @@ def execute_on_appliances_async(
     operation_func: Callable,
     operation_name: str,
     logger,
-    max_workers: Optional[int] = None,
     **operation_kwargs
 ) -> Tuple[Dict[str, bool], Dict[str, str]]:
     """
@@ -29,7 +28,6 @@ def execute_on_appliances_async(
         operation_func: Function to execute on each appliance (must accept appliance_name as first arg)
         operation_name: Name of the operation (for logging)
         logger: Logger instance
-        max_workers: Maximum number of parallel workers (default: number of appliances, max 10)
         **operation_kwargs: Additional keyword arguments to pass to operation_func
     
     Returns:
@@ -52,9 +50,8 @@ def execute_on_appliances_async(
         logger.warning("No appliances provided for async execution")
         return {}, {}
     
-    # Determine number of workers (default: min of appliances count and 10)
-    if max_workers is None:
-        max_workers = min(len(appliances), 10)
+    # Determine number of workers (max 20 parallel operations)
+    max_workers = min(len(appliances), 20)
     
     logger.info(f"Starting async {operation_name} on {len(appliances)} appliances (max {max_workers} parallel)")
     logger.info(f"Appliances: {', '.join(appliances)}")
@@ -110,7 +107,8 @@ def restart_appliance(
     prompt_regex: Optional[str] = None,
     debug: bool = True,
     wait_for_availability: bool = True,
-    wait_timeout: int = 600
+    retry_interval: int = 10,
+    max_retries: int = 60
 ) -> bool:
     
     if not appliance_name:
@@ -195,10 +193,19 @@ def restart_appliance(
             logger.info("✓ System restart initiated")
             
             if wait_for_availability:
-                logger.info(f"\n⌛ Waiting for appliance to come back online (timeout: {wait_timeout}s)...")
+                total_timeout = max_retries * retry_interval
+                
+                logger.info(f"\n⌛ Waiting for appliance to come back online...")
+                logger.info(f"   Retry interval: {retry_interval}s")
+                logger.info(f"   Max retries: {max_retries}")
+                logger.info(f"   Total timeout: ~{total_timeout}s (~{total_timeout//60}m)")
                 
                 start_time = time.time()
-                while time.time() - start_time < wait_timeout:
+                retry_count = 0
+                
+                while retry_count < max_retries:
+                    retry_count += 1
+                    
                     try:
                         # Try to connect
                         test_client = ApplianceClient(
@@ -215,7 +222,7 @@ def restart_appliance(
                         if test_client.connect():
                             test_client.disconnect()
                             elapsed = int(time.time() - start_time)
-                            logger.info(f"✓ Appliance is back online (after {elapsed}s)")
+                            logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
                             logger.info("=" * 80)
                             logger.info("Appliance restarted successfully")
                             logger.info("=" * 80)
@@ -223,9 +230,12 @@ def restart_appliance(
                     except Exception:
                         pass
                     
-                    time.sleep(10)
+                    if retry_count < max_retries:
+                        logger.debug(f"   Attempt {retry_count}/{max_retries} failed, waiting {retry_interval}s...")
+                        time.sleep(retry_interval)
                 
-                logger.error(f"✗ Timeout waiting for appliance (waited {wait_timeout}s)")
+                elapsed = int(time.time() - start_time)
+                logger.error(f"✗ Timeout waiting for appliance (waited {elapsed}s, {retry_count} attempts)")
                 return False
             else:
                 logger.info("=" * 80)

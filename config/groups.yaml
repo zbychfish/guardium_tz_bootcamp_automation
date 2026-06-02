@@ -98,7 +98,7 @@ groups:
         module: tasks.setup_appliances
         description: "Configure /etc/hosts resolving on ALL appliances for Unix machines (raptor, ceraptos, sauropod) and other Guardium appliances"
         args:
-          debug: true
+          debug: false
      
       - name: set_unit_type_manager
         function: set_unit_type_manager
@@ -111,12 +111,12 @@ groups:
       - name: restart_all_appliances_after_setup
         function: restart_appliance_all
         module: tasks.setup_appliances
-        description: "Restart ALL appliances after initial setup (async with parallel execution)"
+        description: "Restart ALL appliances after initial setup (async with max 20 parallel)"
         args:
-          debug: true
+          debug: false
           wait_for_availability: true
-          wait_timeout: 600
-          max_workers: 5  # Maximum 5 appliances restarting in parallel
+          retry_interval: 15  # Seconds between retry attempts (default: 10)
+          max_retries: 40  # Maximum retry attempts (default: 60, total timeout = 40 * 15 = 600s = 10min)
 
       # - name: current_test
       #   function: current_test
