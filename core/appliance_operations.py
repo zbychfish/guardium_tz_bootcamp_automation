@@ -386,7 +386,7 @@ def configure_network_ip(
             logger.info(f"New configuration:\n{new_config}")
             
             # Check if IP is in the output
-            if ip_address in new_config:
+            if ip_address and ip_address in new_config:
                 logger.info(f"✓ IP address {ip_address} confirmed in configuration")
             else:
                 logger.warning(f"⚠ IP address {ip_address} not found in configuration output")
@@ -1188,3 +1188,4 @@ def configure_system_settings(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
