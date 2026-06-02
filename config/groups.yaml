@@ -124,7 +124,7 @@ groups:
         description: "Set shared secret on ALL appliances (CM → Collectors → AppNodes). Required before registration."
         args:
           # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
-          debug: false
+          debug: true
       
       - name: register_appliances_on_cm
         function: register_appliances_all
@@ -134,7 +134,7 @@ groups:
           # cm_ip: "10.240.64.9"  # Optional - auto-detected from appliances.yaml
           cm_port: 8443
           timeout: 600  # 10 minutes per appliance
-          debug: false
+          debug: true
 
       # - name: current_test
       #   function: current_test
