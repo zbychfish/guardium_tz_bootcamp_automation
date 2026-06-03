@@ -127,7 +127,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm01"
           debug: false
 
       - name: set_shared_secret_on_all_appliances
