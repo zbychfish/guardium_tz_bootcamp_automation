@@ -966,9 +966,9 @@ def configure_hosts_resolving(
                 logger.warning(f"  ⊘ Skipping {other_appliance_name}: no IP address")
                 continue
             
-            # Remove suffix from appliance name (e.g., "cm02-suffix" -> "cm02")
-            # This handles the case where appliances have random suffixes
-            short_name = other_appliance_name.split('-')[0] if '-' in other_appliance_name else other_appliance_name
+            # Remove suffix from appliance name (everything after last dash)
+            # e.g., "cm02-suffix" -> "cm02", "coll2-suffix2" -> "coll2", "cm-02-suffix" -> "cm-02"
+            short_name = other_appliance_name.rsplit('-', 1)[0] if '-' in other_appliance_name else other_appliance_name
             fqdn = f"{short_name}.demo.guardium"
             
             # Check if already exists
@@ -1393,11 +1393,10 @@ def configure_system_settings(
                 logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
                 return False
         
-        # Determine hostname - remove suffix after dash
+        # Determine hostname - remove suffix after last dash
         if not hostname:
-            # Remove suffix after dash (e.g., coll1-suffix -> coll1, cm02-suffix -> cm02)
-            import re
-            hostname = re.sub(r'-suffix$', '', appliance_name)
+            # Remove everything after last dash (e.g., coll1-suffix -> coll1, coll2-suffix2 -> coll2, cm-02-suffix -> cm-02)
+            hostname = appliance_name.rsplit('-', 1)[0] if '-' in appliance_name else appliance_name
             logger.info(f"Using hostname from appliance_name: {appliance_name} -> {hostname}")
         
         # Determine domain
