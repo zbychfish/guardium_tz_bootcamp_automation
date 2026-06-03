@@ -108,7 +108,7 @@ groups:
         args:
           debug: false
 
-      - name: restart_all_appliances_after_setup
+      - name: restart_all_appliances_after_initial_setup
         function: restart_appliance_all
         module: tasks.setup_appliances
         description: "Restart ALL appliances after initial setup (async with max 20 parallel)"
@@ -144,7 +144,7 @@ groups:
           timeout: 900  # 15 minutes per appliance
           debug: true
 
-      - name: restart_all_appliances_after_setup
+      - name: restart_all_appliances_after_managed_by_cm
         function: restart_appliance_all
         module: tasks.setup_appliances
         description: "Restart ALL appliances after initial setup (async with max 20 parallel)"
