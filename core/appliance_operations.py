@@ -97,8 +97,6 @@ def execute_on_appliances_async(
     
     return results, errors
 
-
-
 def restart_appliance(
     config,
     logger,
@@ -257,7 +255,6 @@ def restart_appliance(
         import traceback
         logger.error(traceback.format_exc())
         return False
-
 
 def configure_network_ip(
     config,
@@ -550,8 +547,6 @@ def set_shared_secret(
         logger.error(traceback.format_exc())
         return False
 
-
-
 def register_appliance(
     config,
     logger,
@@ -810,7 +805,6 @@ def register_appliance(
         logger.error(traceback.format_exc())
         return False
 
-
 def configure_hosts_resolving(
     config,
     logger,
@@ -1014,9 +1008,6 @@ def configure_hosts_resolving(
         logger.error(traceback.format_exc())
         return False
 
-# Made with Bob
-
-
 def set_timezone(
     config,
     logger,
@@ -1183,8 +1174,6 @@ def set_timezone(
             logger.error(traceback.format_exc())
         return False
 
-
-
 def configure_ntp(
     config,
     logger,
@@ -1334,8 +1323,6 @@ def configure_ntp(
             import traceback
             logger.error(traceback.format_exc())
         return False
-
-
 
 def configure_system_settings(
     config,
@@ -1589,9 +1576,6 @@ def configure_system_settings(
             logger.error(traceback.format_exc())
         return False
 
-
-
-
 def set_product_gid(
     config,
     logger,
@@ -1728,8 +1712,6 @@ def set_product_gid(
         import traceback
         logger.error(traceback.format_exc())
         return False
-
-
 
 def prepare_appliance_for_patching(
     config,
