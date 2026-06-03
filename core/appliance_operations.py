@@ -1722,11 +1722,11 @@ def prepare_appliance_for_patching(
     debug: bool = True
 ) -> bool:
     """
-    Prepare appliance for patching by copying patch files (*.sig) to /var/log/guard/patches/
+    Prepare appliance for patching by copying patch files (*.sig) to /var/IBM/Guardium/log/patches/
     
     This function:
     1. Copies *.sig files from local patches directory to appliance's /tmp/ as cloudsupport user
-    2. Uses sudo to move files from /tmp/ to /var/log/guard/patches/
+    2. Uses sudo to move files from /tmp/ to /var/IBM/Guardium/log/patches/
     3. Sets ownership to tomcat:tomcat
     
     Args:
@@ -1905,11 +1905,11 @@ def prepare_appliance_for_patching(
             logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
             
             # Step 2: Use sudo to move files and set permissions
-            logger.info(f"\n➜ Moving files to /var/log/guard/patches/ and setting permissions...")
+            logger.info(f"\n➜ Moving files to /var/IBM/Guardium/log/patches/ and setting permissions...")
             
             # Create target directory if it doesn't exist
-            logger.info("  Creating /var/log/guard/patches/ directory if needed...")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo mkdir -p /var/log/guard/patches/')
+            logger.info("  Creating /var/IBM/Guardium/log/patches/ directory if needed...")
+            stdin, stdout, stderr = ssh_client.exec_command('sudo mkdir -p /var/IBM/Guardium/log/patches/')
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
                 error = stderr.read().decode()
@@ -1917,9 +1917,9 @@ def prepare_appliance_for_patching(
                 ssh_client.close()
                 return False
             
-            # Move files from /tmp/ to /var/log/guard/patches/
-            logger.info("  Moving files from /tmp/ to /var/log/guard/patches/...")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo mv /tmp/*.sig /var/log/guard/patches/')
+            # Move files from /tmp/ to /var/IBM/Guardium/log/patches/
+            logger.info("  Moving files from /tmp/ to /var/IBM/Guardium/log/patches/...")
+            stdin, stdout, stderr = ssh_client.exec_command('sudo mv /tmp/*.sig /var/IBM/Guardium/log/patches/')
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
                 error = stderr.read().decode()
@@ -1929,7 +1929,7 @@ def prepare_appliance_for_patching(
             
             # Set ownership to tomcat:tomcat
             logger.info("  Setting ownership to tomcat:tomcat...")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo chown tomcat:tomcat /var/log/guard/patches/*.sig')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo chown tomcat:tomcat /var/IBM/Guardium/log/patches/*.sig')
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
                 error = stderr.read().decode()
@@ -1939,9 +1939,9 @@ def prepare_appliance_for_patching(
             
             # Verify files exist
             logger.info("  Verifying files...")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo ls -la /var/log/guard/patches/*.sig')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo ls -la /var/IBM/Guardium/log/patches/*.sig')
             output = stdout.read().decode()
-            logger.info(f"Files in /var/log/guard/patches/:\n{output}")
+            logger.info(f"Files in /var/IBM/Guardium/log/patches/:\n{output}")
             
             ssh_client.close()
             
