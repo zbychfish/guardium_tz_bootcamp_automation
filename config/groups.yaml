@@ -58,7 +58,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm03"
+          appliance_name: "cm02"
           client_id: "BOOTCAMP"
            
       - name: create_demo_user
@@ -66,7 +66,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm03"  # Name from config/appliances.yaml
+          appliance_name: "cm02"  # Name from config/appliances.yaml
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
@@ -141,7 +141,7 @@ groups:
         args:
           # cm_ip: "10.240.64.9"  # Optional - auto-detected from appliances.yaml
           cm_port: 8443
-          timeout: 600  # 10 minutes per appliance
+          timeout: 900  # 15 minutes per appliance
           debug: true
 
       # - name: current_test
