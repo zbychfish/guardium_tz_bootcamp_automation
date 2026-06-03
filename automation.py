@@ -27,11 +27,12 @@ class AutomationOrchestrator:
     Manages group and stage execution, state tracking, and error handling.
     """
     
-    def __init__(self, config_file: str = "config/config.yaml", 
+    def __init__(self, config_file: str = "config/config.yaml",
                  groups_file: str = "config/groups.yaml",
                  state_file: str = "state.json",
-                 machines_info_file: str = "/root/machines_info.json", 
-                 verbose: bool = False):
+                 machines_info_file: str = "/root/machines_info.json",
+                 verbose: bool = False,
+                 skip_deps: bool = False):
         """
         Initialize the orchestrator.
         
@@ -41,12 +42,14 @@ class AutomationOrchestrator:
             state_file: Path to state tracking file
             machines_info_file: Path to JSON file containing machine information
             verbose: Enable verbose logging
+            skip_deps: Skip dependency checks (default: False)
         """
         self.logger = setup_logger("AutomationOrchestrator")
         self.config = ConfigLoader(config_file, machines_info_file)
         self.group_manager = GroupManager(Path(groups_file))
         self.state = StateManager(state_file)
         self.verbose = verbose
+        self.skip_deps = skip_deps
         
         self.logger.info("Automation Orchestrator initialized")
         self.logger.info(f"Config: {config_file}")
@@ -139,12 +142,13 @@ class AutomationOrchestrator:
             self.logger.error(f"   Error: {str(e)}", exc_info=self.verbose)
             return False
     
-    def run_group(self, group_name: str) -> bool:
+    def run_group(self, group_name: str, skip_dependency_check: Optional[bool] = None) -> bool:
         """
         Execute all stages in a group.
         
         Args:
             group_name: Name of the group to execute
+            skip_dependency_check: If True, skip dependency validation. If None, uses self.skip_deps (default: None)
             
         Returns:
             True if all stages completed successfully, False otherwise
@@ -154,10 +158,38 @@ class AutomationOrchestrator:
             self.logger.error(f"Group not found: {group_name}")
             return False
         
+        # Determine if we should skip dependency check
+        should_skip = skip_dependency_check if skip_dependency_check is not None else self.skip_deps
+        
+        # Check dependencies unless explicitly skipped
+        if not should_skip:
+            completed_groups = self.state.get_completed_groups()
+            deps_satisfied, missing_deps = self.group_manager.check_dependencies(group_name, completed_groups)
+            
+            if not deps_satisfied:
+                self.logger.error("=" * 80)
+                self.logger.error(f"DEPENDENCY CHECK FAILED for group '{group_name}'")
+                self.logger.error("=" * 80)
+                self.logger.error(f"The following dependency groups must be completed first:")
+                for dep in missing_deps:
+                    self.logger.error(f"  - {dep}")
+                self.logger.error("")
+                self.logger.error(f"Completed groups: {', '.join(completed_groups) if completed_groups else 'none'}")
+                self.logger.error("")
+                self.logger.error(f"Please run the missing dependency groups first, or use --skip-deps to bypass this check.")
+                self.logger.error("=" * 80)
+                return False
+        
         self.logger.info("=" * 80)
         self.logger.info(f"GROUP: {group_info.get('name', group_name)}")
         if self.verbose and group_info.get('description'):
             self.logger.info(f"Description: {group_info.get('description')}")
+        
+        # Show dependencies info
+        dependencies = self.group_manager.get_group_dependencies(group_name)
+        if dependencies:
+            self.logger.info(f"Dependencies: {', '.join(dependencies)}")
+        
         self.logger.info("=" * 80)
         
         stages = self.group_manager.get_group_stages(group_name)
@@ -167,6 +199,9 @@ class AutomationOrchestrator:
             if not success:
                 self.logger.error(f"Group '{group_name}' execution failed")
                 return False
+        
+        # Mark group as completed
+        self.state.mark_group_completed(group_name)
         
         self.logger.info(f"✓ Group '{group_name}' completed successfully")
         return True
@@ -483,6 +518,12 @@ def main():
         help="Enable verbose output"
     )
     
+    parser.add_argument(
+        "--skip-deps",
+        action="store_true",
+        help="Skip dependency checks when executing groups (use with caution)"
+    )
+    
     args = parser.parse_args()
     
     # Initialize orchestrator
@@ -492,7 +533,8 @@ def main():
             groups_file=args.groups_config,
             state_file=args.state,
             machines_info_file=args.machines_info,
-            verbose=args.verbose
+            verbose=args.verbose,
+            skip_deps=args.skip_deps
         )
     except Exception as e:
         print(f"Failed to initialize orchestrator: {e}")

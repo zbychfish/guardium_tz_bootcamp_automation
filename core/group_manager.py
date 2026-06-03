@@ -191,6 +191,42 @@ class GroupManager:
         
         return None
     
+    def get_group_dependencies(self, group_name: str) -> List[str]:
+        """
+        Get list of dependency groups for a specific group.
+        
+        Args:
+            group_name: Name of the group
+            
+        Returns:
+            List of group names that must be completed before this group
+        """
+        group = self.groups.get(group_name)
+        if not group:
+            return []
+        
+        return group.get('dependencies', [])
+    
+    def check_dependencies(self, group_name: str, completed_groups: List[str]) -> tuple[bool, List[str]]:
+        """
+        Check if all dependencies for a group are satisfied.
+        
+        Args:
+            group_name: Name of the group to check
+            completed_groups: List of group names that have been completed
+            
+        Returns:
+            Tuple of (all_satisfied: bool, missing_dependencies: List[str])
+        """
+        dependencies = self.get_group_dependencies(group_name)
+        
+        if not dependencies:
+            return True, []
+        
+        missing = [dep for dep in dependencies if dep not in completed_groups]
+        
+        return len(missing) == 0, missing
+    
     def print_groups_summary(self):
         """Print a summary of all groups and their stages."""
         print("\n" + "=" * 80)
@@ -203,8 +239,10 @@ class GroupManager:
                 continue
             
             auto = "AUTO" if group_info.get('auto_execute') else "MANUAL"
+            dependencies = self.get_group_dependencies(group_name)
+            deps_str = f" (depends on: {', '.join(dependencies)})" if dependencies else ""
             
-            print(f"\n[{auto}] {group_name}: {group_info.get('name')}")
+            print(f"\n[{auto}] {group_name}: {group_info.get('name')}{deps_str}")
             print(f"  Description: {group_info.get('description')}")
             print(f"  Stages:")
             

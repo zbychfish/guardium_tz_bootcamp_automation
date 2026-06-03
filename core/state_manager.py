@@ -136,5 +136,50 @@ class StateManager:
         if task_id in completed:
             completed.remove(task_id)
             self._save_state()
+    
+    def is_group_completed(self, group_name: str) -> bool:
+        """
+        Check if all stages in a group have been completed.
+        
+        Args:
+            group_name: Name of the group
+            
+        Returns:
+            True if group is marked as completed, False otherwise
+        """
+        completed_groups = self.state.get("completed_groups", [])
+        return group_name in completed_groups
+    
+    def mark_group_completed(self, group_name: str):
+        """
+        Mark a group as completed.
+        
+        Args:
+            group_name: Name of the group
+        """
+        if not self.is_group_completed(group_name):
+            self.state.setdefault("completed_groups", []).append(group_name)
+            self._save_state()
+    
+    def get_completed_groups(self) -> List[str]:
+        """
+        Get list of completed groups.
+        
+        Returns:
+            List of completed group names
+        """
+        return self.state.get("completed_groups", [])
+    
+    def remove_group(self, group_name: str):
+        """
+        Remove group from completed list.
+        
+        Args:
+            group_name: Name of the group
+        """
+        completed_groups = self.state.get("completed_groups", [])
+        if group_name in completed_groups:
+            completed_groups.remove(group_name)
+            self._save_state()
 
 # Made with Bob

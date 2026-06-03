@@ -7,6 +7,7 @@ groups:
     name: "Initial Preparation"
     description: "Basic system setup and database deployments before marker creation"
     auto_execute: true  # Executed automatically before marker
+    dependencies: []  # No dependencies - this is the first group
     stages:
       - name: setup_hosts
         function: setup_hosts_task
@@ -22,7 +23,8 @@ groups:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
     auto_execute: false
-    stages:      
+    dependencies: [initial_preparation]  # Requires initial_preparation to be completed
+    stages:
       - name: deploy_mysql_on_raptor
         function: deploy_mysql_on_raptor_task
         module: tasks.deploy_mysql
@@ -42,6 +44,7 @@ groups:
     name: "ATAP Lab"
     description: "PostgreSQL deployment for ATAP training"
     auto_execute: false  # Executed after marker, on demand
+    dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_postgres_on_raptor
         function: deploy_postgres_on_raptor
@@ -52,7 +55,8 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     auto_execute: false  # Executed on demand
-    stages:     
+    dependencies: [initial_preparation]  # Requires initial_preparation to be completed
+    stages:
       - name: create_oauth_client
         function: create_oauth_client
         module: tasks.setup_appliances
