@@ -1797,6 +1797,12 @@ def prepare_appliance_for_patching(
             logger.error("Could not find raptor IP in machines_info.json")
             return False
         
+        # Get root password for raptor from custom_variables
+        raptor_root_password = config.get_custom_variable('root_pwd')
+        if not raptor_root_password:
+            logger.error("root_pwd not found in machines_info.json custom_variables")
+            return False
+        
         # Get SSH port from config.yaml
         ssh_port = config.config.get('ssh', {}).get('port', 22)
         
@@ -1825,23 +1831,70 @@ def prepare_appliance_for_patching(
             # Copy files from raptor to appliance /tmp/ using SCP (pull from appliance side)
             logger.info(f"\n➜ Copying patch files from raptor:{patches_source_dir} to {host}:/tmp/...")
             
+            # Try to use sshpass first, if not available use expect-like approach
+            logger.info("  Checking if sshpass is available...")
+            stdin, stdout, stderr = ssh_client.exec_command('which sshpass')
+            sshpass_available = stdout.channel.recv_exit_status() == 0
+            
             for patch_file in patch_files:
                 filename = os.path.basename(patch_file)
                 logger.info(f"  Copying {filename}...")
                 
-                # Use scp command from appliance to pull file from raptor
-                # Port is read from config.yaml (ssh.port)
-                # Force password authentication (disable key-based auth)
-                scp_command = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=yes -o PubkeyAuthentication=no root@{raptor_ip}:{patch_file} /tmp/{filename}"
-                
-                stdin, stdout, stderr = ssh_client.exec_command(scp_command)
-                exit_status = stdout.channel.recv_exit_status()
-                
-                if exit_status != 0:
-                    error = stderr.read().decode()
-                    logger.error(f"Failed to copy {filename}: {error}")
-                    ssh_client.close()
-                    return False
+                if sshpass_available:
+                    # Use sshpass if available
+                    scp_command = f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}"
+                    stdin, stdout, stderr = ssh_client.exec_command(scp_command)
+                    exit_status = stdout.channel.recv_exit_status()
+                    
+                    if exit_status != 0:
+                        error = stderr.read().decode()
+                        logger.error(f"Failed to copy {filename}: {error}")
+                        ssh_client.close()
+                        return False
+                else:
+                    # Use expect-like approach with invoke_shell
+                    logger.info("  Using interactive SCP (sshpass not available)...")
+                    channel = ssh_client.invoke_shell()
+                    time.sleep(0.5)
+                    
+                    # Clear initial output
+                    if channel.recv_ready():
+                        channel.recv(65535)
+                    
+                    # Send SCP command
+                    scp_cmd = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}\n"
+                    channel.send(scp_cmd.encode())
+                    
+                    # Wait for password prompt
+                    output = ""
+                    timeout = time.time() + 30
+                    while time.time() < timeout:
+                        if channel.recv_ready():
+                            chunk = channel.recv(4096).decode(errors='ignore')
+                            output += chunk
+                            if "password:" in output.lower():
+                                # Send password
+                                channel.send(f"{raptor_root_password}\n".encode())
+                                break
+                        time.sleep(0.1)
+                    
+                    # Wait for completion
+                    time.sleep(2)
+                    final_output = ""
+                    while channel.recv_ready():
+                        final_output += channel.recv(4096).decode(errors='ignore')
+                    
+                    channel.close()
+                    
+                    # Check if file was copied
+                    stdin, stdout, stderr = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
+                    result = stdout.read().decode().strip()
+                    
+                    if result != "OK":
+                        logger.error(f"Failed to copy {filename}")
+                        logger.error(f"SCP output: {output + final_output}")
+                        ssh_client.close()
+                        return False
             
             logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
             
