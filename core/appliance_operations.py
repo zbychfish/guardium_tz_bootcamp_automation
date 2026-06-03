@@ -5,6 +5,7 @@ Appliance Operations - Reusable functions for Guardium appliance operations
 """
 
 import time
+import random
 from typing import Optional, List
 from .appliance_client import ApplianceClient
 from .appliance_config_loader import ApplianceConfigLoader
@@ -1528,3 +1529,142 @@ def configure_system_settings(
             logger.error(traceback.format_exc())
         return False
 
+
+
+
+def set_product_gid(
+    config,
+    logger,
+    appliance_name: str,
+    gid: Optional[int] = None,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set product GID on Guardium appliance.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        gid: GID value (optional, generates random 1000-100000 if not provided)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    
+    Example:
+        set_product_gid(config, logger, 'cm02', gid=234674365)
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    # Generate random GID if not provided
+    if gid is None:
+        gid = random.randint(1000, 100000)
+        logger.info(f"Generated random GID: {gid}")
+    
+    logger.info("=" * 80)
+    logger.info(f"SET PRODUCT GID: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get user from config if not provided
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"GID: {gid}")
+    logger.info(f"User: {user}")
+    
+    try:
+        # Connect to appliance
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Set product GID
+        command = f"store product gid {gid}"
+        logger.info(f"\n➜ Executing: {command}")
+        output = client.execute_command(command)
+        logger.info(f"Command output:\n{output}")
+        
+        client.disconnect()
+        
+        # Verify success
+        # Note: execute_command filters out "ok" line, so we check for "Command ran on:" or absence of error
+        if "error" in output.lower() or "failed" in output.lower():
+            logger.error(f"✗ Command failed: {output}")
+            return False
+        elif "Command ran on:" in output or not output.strip():
+            # Success: either has timestamp or empty output (ok was filtered)
+            logger.info("=" * 80)
+            logger.info(f"✓ Product GID set successfully to {gid}")
+            logger.info("=" * 80)
+            return True
+        else:
+            logger.warning(f"⚠ Unexpected output (assuming success): {output}")
+            logger.info("=" * 80)
+            logger.info(f"✓ Product GID set successfully to {gid}")
+            logger.info("=" * 80)
+            return True
+        
+    except Exception as e:
+        logger.error(f"Error setting product GID: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False

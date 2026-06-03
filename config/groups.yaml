@@ -134,6 +134,13 @@ groups:
           # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
           debug: true
       
+      - name: set_product_gid_on_all_appliances
+        function: set_product_gid_all
+        module: tasks.setup_appliances
+        description: "Set random product GID on ALL appliances in parallel (max 20 parallel, each gets unique GID 1000-100000)"
+        args:
+          debug: false
+      
       - name: register_appliances_on_cm
         function: register_appliances_all
         module: tasks.setup_appliances

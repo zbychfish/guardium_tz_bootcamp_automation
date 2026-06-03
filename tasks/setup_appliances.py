@@ -1420,3 +1420,123 @@ def set_timezone_all(
     logger.info("=" * 80)
     
     return all_success
+
+
+
+def set_product_gid_all(
+    config,
+    logger,
+    verbose: bool = True,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Set random product GID on all appliances in parallel.
+    Each appliance gets a unique random GID between 1000-100000.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances configured successfully, False otherwise
+    """
+    from core.appliance_operations import set_product_gid
+    from core.appliance_config_loader import ApplianceConfigLoader
+    import random
+    
+    logger.info("=" * 80)
+    logger.info("SET PRODUCT GID ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Sort appliances by type: CM → Collectors → AppNodes
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    logger.info(f"Found {len(sorted_appliances)} appliances to configure")
+    
+    # Generate unique random GIDs for each appliance
+    appliance_gids = {}
+    used_gids = set()
+    for appliance_name, _ in sorted_appliances:
+        while True:
+            gid = random.randint(1000, 100000)
+            if gid not in used_gids:
+                used_gids.add(gid)
+                appliance_gids[appliance_name] = gid
+                logger.info(f"  - {appliance_name}: GID {gid}")
+                break
+    
+    # Define operation function
+    def set_gid_operation(appliance_name: str, **kwargs) -> bool:
+        # Get the pre-generated GID for this appliance
+        gid = appliance_gids.get(appliance_name)
+        return set_product_gid(
+            appliance_name=appliance_name,
+            gid=gid,
+            **kwargs
+        )
+    
+    # Prepare appliance list
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=set_gid_operation,
+        operation_name="set product GID",
+        logger=logger,
+        config=config,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    logger.info("PRODUCT GID CONFIGURATION SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"Successful: {success_count}")
+    logger.info(f"Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
+    if all_success:
+        logger.info("\n✓ Product GID set successfully on all appliances")
+    else:
+        logger.error("\n✗ Some appliances failed product GID configuration")
+    
+    logger.info("=" * 80)
+    
+    return all_success
