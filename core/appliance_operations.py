@@ -2519,14 +2519,14 @@ def monitor_patch_installation(
                 time.sleep(check_interval)
                 continue
             
-            # Execute show system patch install sys
-            logger.info(f"➜ Executing: show system patch install sys")
-            output = client.execute_command("show system patch install sys")
+            # Execute show system patch install
+            logger.info(f"➜ Executing: show system patch install")
+            output = client.execute_command("show system patch install")
             
             client.disconnect()
             
             if not output:
-                logger.warning(f"⚠ No output from 'show system patch install sys'")
+                logger.warning(f"⚠ No output from 'show system patch install'")
                 logger.info(f"  Waiting {check_interval} seconds before next check...")
                 time.sleep(check_interval)
                 continue

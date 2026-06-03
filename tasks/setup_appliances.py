@@ -1712,17 +1712,13 @@ def install_and_monitor_patches_all(
     else:
         logger.info(f"Using provided patch selection: {patch_selection}")
     
-    # TEMPORARY: Only patch coll2
-    appliance_names = ['coll2']
+    # Get list of all appliance names
+    appliance_names = list(all_appliances.keys())
     
-    logger.info(f"\n⚠ TEMPORARY: Only patching coll2 (not all appliances)")
-    logger.info(f"Found {len(appliance_names)} appliance(s) to patch:")
+    logger.info(f"\nFound {len(appliance_names)} appliances to patch:")
     for name in appliance_names:
-        if name in all_appliances:
-            appliance_type = all_appliances[name].get('type', 'unknown')
-            logger.info(f"  - {name} ({appliance_type})")
-        else:
-            logger.warning(f"  - {name} (NOT FOUND in appliances.yaml)")
+        appliance_type = all_appliances[name].get('type', 'unknown')
+        logger.info(f"  - {name} ({appliance_type})")
     
     # Define operation function
     def install_and_monitor_operation(appliance_name: str, **kwargs) -> bool:
