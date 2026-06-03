@@ -1791,7 +1791,15 @@ def prepare_appliance_for_patching(
         logger.info(f"  - {os.path.basename(patch_file)}")
     
     try:
-        # Step 1: Connect as cloudsupport and copy files using SFTP
+        # Get raptor IP from machines_info.json
+        raptor_ip = config.get_machine_ip('raptor', use_private=True)
+        if not raptor_ip:
+            logger.error("Could not find raptor IP in machines_info.json")
+            return False
+        
+        logger.info(f"Raptor IP: {raptor_ip}")
+        
+        # Step 1: Connect as cloudsupport and pull files from raptor using SCP
         logger.info(f"\n➜ Connecting to {host} as cloudsupport user...")
         
         import paramiko
@@ -1811,23 +1819,26 @@ def prepare_appliance_for_patching(
             
             logger.info(f"✓ Connected successfully")
             
-            # Copy files using SFTP
-            logger.info(f"\n➜ Copying patch files to {host}:/tmp/ using SFTP...")
-            sftp = ssh_client.open_sftp()
+            # Copy files from raptor to appliance /tmp/ using SCP (pull from appliance side)
+            logger.info(f"\n➜ Copying patch files from raptor:{patches_source_dir} to {host}:/tmp/...")
             
             for patch_file in patch_files:
                 filename = os.path.basename(patch_file)
                 logger.info(f"  Copying {filename}...")
                 
-                try:
-                    sftp.put(patch_file, f"/tmp/{filename}")
-                except Exception as e:
-                    logger.error(f"Failed to copy {filename}: {e}")
-                    sftp.close()
+                # Use scp command from appliance to pull file from raptor
+                # Note: This assumes raptor has SSH access configured for cloudsupport or root
+                scp_command = f"scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}"
+                
+                stdin, stdout, stderr = ssh_client.exec_command(scp_command)
+                exit_status = stdout.channel.recv_exit_status()
+                
+                if exit_status != 0:
+                    error = stderr.read().decode()
+                    logger.error(f"Failed to copy {filename}: {error}")
                     ssh_client.close()
                     return False
             
-            sftp.close()
             logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
             
             # Step 2: Use sudo to move files and set permissions
