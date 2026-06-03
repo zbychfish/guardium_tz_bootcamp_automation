@@ -58,7 +58,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm03"
+          appliance_name: "cm02"
           client_id: "BOOTCAMP"
            
       - name: create_demo_user
@@ -66,7 +66,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm03"  # Name from config/appliances.yaml
+          appliance_name: "cm02"  # Name from config/appliances.yaml
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
@@ -75,7 +75,7 @@ groups:
         args:
           # hostname: "custom"  # Optional - override hostname for all appliances
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
-          debug: true
+          debug: false
       
       - name: configure_network_ip_on_all_appliances
         function: configure_network_ip_all
@@ -123,7 +123,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm03"
+          appliance_name: "cm02"
           debug: false
 
       - name: set_shared_secret_on_all_appliances
@@ -132,7 +132,7 @@ groups:
         description: "Set shared secret on ALL appliances (CM → Collectors → AppNodes). Required before registration."
         args:
           # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
-          debug: true
+          debug: false
       
       - name: set_product_gid_on_all_appliances
         function: set_product_gid_all
