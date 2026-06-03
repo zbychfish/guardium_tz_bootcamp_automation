@@ -58,7 +58,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm03"
           client_id: "BOOTCAMP"
            
       - name: create_demo_user
@@ -66,7 +66,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm02"  # Name from config/appliances.yaml
+          appliance_name: "cm03"  # Name from config/appliances.yaml
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
@@ -123,7 +123,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm03"
           debug: false
 
       - name: set_shared_secret_on_all_appliances
@@ -143,6 +143,16 @@ groups:
           cm_port: 8443
           timeout: 900  # 15 minutes per appliance
           debug: true
+
+      - name: restart_all_appliances_after_setup
+        function: restart_appliance_all
+        module: tasks.setup_appliances
+        description: "Restart ALL appliances after initial setup (async with max 20 parallel)"
+        args:
+          debug: false
+          wait_for_availability: true
+          retry_interval: 15  # Seconds between retry attempts (default: 10)
+          max_retries: 40  # Maximum retry attempts (default: 60, total timeout = 40 * 15 = 600s = 10min)
 
       # - name: current_test
       #   function: current_test

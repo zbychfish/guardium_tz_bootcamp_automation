@@ -8,13 +8,13 @@ appliances:
     type: "collector"
     description: "Primary Guardium Collector"
   
-  cm02-suffix:
+  cm03-suffix:
     ip: "10.240.64.25"
     type: "cm"
     description: "Central Manager"
     port: 22
    
-  appnode2-suffix:
+  appnode3-suffix:
     ip: "10.240.64.24"
     type: "appnode"
     description: "Application Node"
