@@ -2112,19 +2112,28 @@ def get_patch_installation_order(
         client.disconnect()
         
         # Parse output to extract patch list with positions
+        # Format: P#      Description                                   Version Md5sum
+        #         1033    Security fix                                  12.0    5c2b54864dc774237b1a49654af7ed3c
         logger.info("\n➜ Parsing available patches...")
-        available_patches = {}  # {patch_name: position}
+        available_patches = {}  # {patch_number: position_in_list}
+        patch_list = []  # List of (position, patch_number) for display
         
         lines = output.split('\n')
+        position = 0
         for line in lines:
-            line = line.strip()
-            # Look for lines like: "1. SqlGuard-12.0p1033.tgz.enc.sig"
-            match = re.match(r'^(\d+)\.\s+(.+\.sig)\s*$', line)
+            line_stripped = line.strip()
+            # Skip header and empty lines
+            if not line_stripped or line_stripped.startswith('P#') or line_stripped.startswith('Attempting'):
+                continue
+            
+            # Look for lines starting with patch number (digits followed by whitespace)
+            match = re.match(r'^(\d+)\s+', line_stripped)
             if match:
-                position = match.group(1)
-                patch_name = match.group(2).strip()
-                available_patches[patch_name] = position
-                logger.info(f"  Position {position}: {patch_name}")
+                position += 1
+                patch_number = match.group(1)
+                available_patches[patch_number] = str(position)
+                patch_list.append((position, patch_number))
+                logger.info(f"  Position {position}: Patch {patch_number}")
         
         if not available_patches:
             logger.warning("No patches found in 'show system patch available' output")
@@ -2134,13 +2143,19 @@ def get_patch_installation_order(
         logger.info("\n➜ Mapping patch order to positions...")
         patch_positions = []
         
-        for patch_name in patch_order:
-            if patch_name in available_patches:
-                position = available_patches[patch_name]
-                patch_positions.append(position)
-                logger.info(f"  {patch_name} → position {position}")
+        for patch_spec in patch_order:
+            # Extract patch number from spec like "12.0p9997" -> "9997"
+            patch_match = re.search(r'p(\d+)', patch_spec)
+            if patch_match:
+                patch_number = patch_match.group(1)
+                if patch_number in available_patches:
+                    position = available_patches[patch_number]
+                    patch_positions.append(position)
+                    logger.info(f"  {patch_spec} (patch {patch_number}) → position {position}")
+                else:
+                    logger.warning(f"  {patch_spec} (patch {patch_number}) → NOT FOUND in available patches!")
             else:
-                logger.warning(f"  {patch_name} → NOT FOUND in available patches!")
+                logger.warning(f"  {patch_spec} → Could not extract patch number!")
         
         if not patch_positions:
             logger.error("No patches from patch_order.txt found in available patches")
