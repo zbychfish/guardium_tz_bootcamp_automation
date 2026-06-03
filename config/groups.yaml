@@ -171,6 +171,15 @@ groups:
           # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from machines_info.json
           debug: true
 
+      - name: get_patch_installation_order
+        function: get_patch_installation_order_task
+        module: tasks.setup_appliances
+        description: "Get patch installation order by mapping patch_order.txt to available patches on CM"
+        args:
+          appliance_name: "cm03"
+          patch_order_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt"
+          debug: true
+
       # - name: current_test
       #   function: current_test
       #   module: tasks.current_test

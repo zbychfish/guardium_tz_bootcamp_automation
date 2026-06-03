@@ -1628,3 +1628,58 @@ def prepare_appliances_for_patching_all(
     logger.info("=" * 80)
     
     return failed_count == 0
+
+
+
+def get_patch_installation_order_task(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: str = "cm03",
+    patch_order_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt",
+    debug: bool = True
+) -> bool:
+    """
+    Get patch installation order for CM appliance.
+    This is a test/diagnostic task to verify patch order mapping.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        appliance_name: Name of the CM appliance (default: cm03)
+        patch_order_file: Path to patch order file
+        debug: Enable debug output
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    from core.appliance_operations import get_patch_installation_order
+    
+    logger.info("=" * 80)
+    logger.info("GET PATCH INSTALLATION ORDER TASK")
+    logger.info("=" * 80)
+    
+    patch_selection = get_patch_installation_order(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        patch_order_file=patch_order_file,
+        debug=debug
+    )
+    
+    if patch_selection:
+        logger.info("\n" + "=" * 80)
+        logger.info("SUCCESS")
+        logger.info("=" * 80)
+        logger.info(f"Patch installation order: {patch_selection}")
+        logger.info("This can be used with: store system patch install sys")
+        logger.info("=" * 80)
+        return True
+    else:
+        logger.error("\n" + "=" * 80)
+        logger.error("FAILED")
+        logger.error("=" * 80)
+        logger.error("Could not determine patch installation order")
+        logger.error("=" * 80)
+        return False

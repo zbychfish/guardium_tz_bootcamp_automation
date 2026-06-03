@@ -6,6 +6,7 @@ Appliance Operations - Reusable functions for Guardium appliance operations
 
 import time
 import random
+import re
 from typing import Optional, List
 from .appliance_client import ApplianceClient
 from .appliance_config_loader import ApplianceConfigLoader
@@ -1994,3 +1995,168 @@ def prepare_appliance_for_patching(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
+
+def get_patch_installation_order(
+    config,
+    logger,
+    appliance_name: str,
+    patch_order_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    debug: bool = True
+) -> Optional[str]:
+    """
+    Get patch installation order by mapping patch names from patch_order.txt to positions from 'show system patch available'.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance (typically CM)
+        patch_order_file: Path to file containing patch names in installation order
+        user: SSH username (optional, uses 'cli' by default)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        debug: Enable debug output
+    
+    Returns:
+        String with comma-separated patch positions (e.g., "2,1,3") or None on error
+    """
+    import os
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return None
+    
+    logger.info("=" * 80)
+    logger.info(f"GET PATCH INSTALLATION ORDER: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return None
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return None
+    
+    # Get prompt regex for CLI user
+    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
+    if not cli_prompt_regex:
+        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
+    
+    # Get user (default to 'cli')
+    if not user:
+        user = 'cli'
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if not password:
+            logger.error("cli_pwd not found in machines_info.json custom_variables")
+            return None
+        logger.info("Using password from custom_variables (cli_pwd)")
+    
+    # Check if patch_order_file exists
+    if not os.path.exists(patch_order_file):
+        logger.error(f"Patch order file not found: {patch_order_file}")
+        return None
+    
+    # Read patch order from file
+    logger.info(f"\n➜ Reading patch order from: {patch_order_file}")
+    try:
+        with open(patch_order_file, 'r') as f:
+            patch_order = [line.strip() for line in f if line.strip()]
+        
+        logger.info(f"Patch order from file ({len(patch_order)} patches):")
+        for i, patch_name in enumerate(patch_order, 1):
+            logger.info(f"  {i}. {patch_name}")
+    except Exception as e:
+        logger.error(f"Failed to read patch order file: {e}")
+        return None
+    
+    # Connect to appliance as CLI user
+    logger.info(f"\n➜ Connecting to {appliance_name} ({host}) as CLI user...")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=cli_prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return None
+        
+        logger.info("✓ Connected successfully")
+        
+        # Execute show system patch available
+        logger.info("\n➜ Executing: show system patch available")
+        output = client.execute_command("show system patch available")
+        logger.info(f"Command output:\n{output}")
+        
+        client.disconnect()
+        
+        # Parse output to extract patch list with positions
+        logger.info("\n➜ Parsing available patches...")
+        available_patches = {}  # {patch_name: position}
+        
+        lines = output.split('\n')
+        for line in lines:
+            line = line.strip()
+            # Look for lines like: "1. SqlGuard-12.0p1033.tgz.enc.sig"
+            match = re.match(r'^(\d+)\.\s+(.+\.sig)\s*$', line)
+            if match:
+                position = match.group(1)
+                patch_name = match.group(2).strip()
+                available_patches[patch_name] = position
+                logger.info(f"  Position {position}: {patch_name}")
+        
+        if not available_patches:
+            logger.warning("No patches found in 'show system patch available' output")
+            return None
+        
+        # Map patch order to positions
+        logger.info("\n➜ Mapping patch order to positions...")
+        patch_positions = []
+        
+        for patch_name in patch_order:
+            if patch_name in available_patches:
+                position = available_patches[patch_name]
+                patch_positions.append(position)
+                logger.info(f"  {patch_name} → position {position}")
+            else:
+                logger.warning(f"  {patch_name} → NOT FOUND in available patches!")
+        
+        if not patch_positions:
+            logger.error("No patches from patch_order.txt found in available patches")
+            return None
+        
+        # Create comma-separated list
+        patch_selection = ','.join(patch_positions)
+        
+        logger.info("=" * 80)
+        logger.info(f"✓ Patch installation order: {patch_selection}")
+        logger.info("=" * 80)
+        
+        return patch_selection
+        
+    except Exception as e:
+        logger.error(f"Error getting patch installation order: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
