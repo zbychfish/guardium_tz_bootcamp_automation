@@ -149,6 +149,7 @@ groups:
           # cm_ip: "10.240.64.9"  # Optional - auto-detected from appliances.yaml
           cm_port: 8443
           timeout: 900  # 15 minutes per appliance
+          registration_check_delay: 120  # Seconds to wait before checking status after timeout or "Fail:" (default: 120)
           debug: true
 
       - name: restart_all_appliances_after_managed_by_cm

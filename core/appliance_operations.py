@@ -562,7 +562,8 @@ def register_appliance(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 600
+    timeout: int = 600,
+    registration_check_delay: int = 120
 ) -> bool:
     """
     Register appliance (Collector or AppNode) on Central Manager.
@@ -578,6 +579,7 @@ def register_appliance(
         prompt_regex: CLI prompt regex (optional, uses default from appliance type)
         debug: Enable debug output
         timeout: Command timeout in seconds (default: 600 - 10 minutes)
+        registration_check_delay: Delay in seconds before checking registration status after timeout or "Fail:" (default: 120)
     
     Returns:
         bool: True if successful, False otherwise
@@ -693,6 +695,47 @@ def register_appliance(
             output = client.execute_command(command, timeout=timeout)
             logger.info(f"Command output:\n{output}")
             
+            # If we got "Fail:" in output, disconnect and check unit type after delay
+            if "Fail:" in output or "fail:" in output:
+                logger.warning(f"⚠ Registration returned 'Fail:' - waiting {registration_check_delay} seconds and checking status...")
+                client.disconnect()
+                
+                # Wait before checking status
+                time.sleep(registration_check_delay)
+                
+                # Reconnect and check status
+                client = ApplianceClient(
+                    host=host,
+                    user=user,
+                    password=password,
+                    prompt_regex=prompt_regex,
+                    initial_pattern=None,
+                    timeout=60,
+                    strip_ansi=True,
+                    debug=debug
+                )
+                
+                if not client.connect():
+                    logger.error("Failed to reconnect to appliance")
+                    return False
+                
+                logger.info("\n➜ Checking unit type after 'Fail:' response...")
+                unit_type_output = client.execute_command("show unit type")
+                logger.info(f"Unit type:\n{unit_type_output}")
+                
+                client.disconnect()
+                
+                # Check if appliance is Managed
+                if "Managed" in unit_type_output or "managed" in unit_type_output.lower():
+                    logger.info("=" * 80)
+                    logger.info("✓ Appliance is Managed - registration successful despite 'Fail:' message")
+                    logger.info("=" * 80)
+                    return True
+                else:
+                    logger.error("✗ Appliance is not Managed - registration failed")
+                    return False
+            
+            # Normal success path
             # Check unit type after registration
             logger.info("\n➜ Checking unit type after registration...")
             unit_type_output = client.execute_command("show unit type")
@@ -700,8 +743,13 @@ def register_appliance(
             
             client.disconnect()
             
-            # Verify success
-            if "unit_type" in output.lower() or "registered" in output.lower():
+            # Verify success by checking if appliance is Managed
+            if "Managed" in unit_type_output or "managed" in unit_type_output.lower():
+                logger.info("=" * 80)
+                logger.info("✓ Appliance registered successfully (Managed)")
+                logger.info("=" * 80)
+                return True
+            elif "unit_type" in output.lower() or "registered" in output.lower():
                 logger.info("=" * 80)
                 logger.info("✓ Appliance registered successfully")
                 logger.info("=" * 80)
@@ -713,8 +761,8 @@ def register_appliance(
                 
         except TimeoutError:
             logger.warning("⚠ Registration command timeout")
-            logger.warning("This sometimes happens. Waiting 5 minutes and checking status...")
-            time.sleep(300)
+            logger.warning(f"This sometimes happens. Waiting {registration_check_delay} seconds and checking status...")
+            time.sleep(registration_check_delay)
             
             # Reconnect and check status
             client = ApplianceClient(
@@ -738,10 +786,16 @@ def register_appliance(
             
             client.disconnect()
             
-            logger.info("=" * 80)
-            logger.info("✓ Registration completed (after timeout)")
-            logger.info("=" * 80)
-            return True
+            # Check if appliance is Managed
+            if "Managed" in unit_type_output or "managed" in unit_type_output.lower():
+                logger.info("=" * 80)
+                logger.info("✓ Registration completed (after timeout) - appliance is Managed")
+                logger.info("=" * 80)
+                return True
+            else:
+                logger.warning("⚠ Registration timeout but appliance is not Managed")
+                logger.warning("Check the output above to verify registration status")
+                return False
         
     except Exception as e:
         logger.error(f"Error registering appliance: {e}")

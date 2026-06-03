@@ -1220,7 +1220,8 @@ def register_appliances_all(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 600
+    timeout: int = 600,
+    registration_check_delay: int = 120
 ) -> bool:
     """
     Register all Collectors and AppNodes on Central Manager sequentially.
@@ -1238,6 +1239,7 @@ def register_appliances_all(
         prompt_regex: CLI prompt regex (optional, uses default from appliance type)
         debug: Enable debug output
         timeout: Registration timeout in seconds (default: 600)
+        registration_check_delay: Delay in seconds before checking registration status after timeout or "Fail:" (default: 120)
     
     Returns:
         True if all appliances registered successfully, False otherwise
@@ -1296,7 +1298,8 @@ def register_appliances_all(
             password=password,
             prompt_regex=prompt_regex,
             debug=debug,
-            timeout=timeout
+            timeout=timeout,
+            registration_check_delay=registration_check_delay
         )
         
         if not success:
