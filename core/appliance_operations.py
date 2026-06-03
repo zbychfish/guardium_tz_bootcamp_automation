@@ -1798,9 +1798,9 @@ def prepare_appliance_for_patching(
             return False
         
         # Get root password for raptor from custom_variables
-        raptor_root_password = config.get_custom_variable('root_pwd')
+        raptor_root_password = config.get_custom_variable('pwd')
         if not raptor_root_password:
-            logger.error("root_pwd not found in machines_info.json custom_variables")
+            logger.error("pwd not found in machines_info.json custom_variables")
             return False
         
         # Get SSH port from config.yaml
