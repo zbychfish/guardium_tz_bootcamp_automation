@@ -158,6 +158,21 @@ class AutomationOrchestrator:
             self.logger.error(f"Group not found: {group_name}")
             return False
         
+        # Check if all stages in this group are already completed
+        # If so, mark the group as completed automatically
+        stages = self.group_manager.get_group_stages(group_name)
+        all_stages_completed = True
+        for stage_info in stages:
+            stage_name = stage_info.get('name')
+            stage_key = f"{group_name}.{stage_name}"
+            if not self.state.is_completed(stage_key):
+                all_stages_completed = False
+                break
+        
+        if all_stages_completed and not self.state.is_group_completed(group_name):
+            self.logger.info(f"All stages in group '{group_name}' are already completed. Marking group as completed.")
+            self.state.mark_group_completed(group_name)
+        
         # Determine if we should skip dependency check
         should_skip = skip_dependency_check if skip_dependency_check is not None else self.skip_deps
         
