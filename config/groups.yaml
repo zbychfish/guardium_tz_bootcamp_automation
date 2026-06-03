@@ -71,7 +71,7 @@ groups:
       - name: configure_system_settings_all
         function: configure_system_settings_all
         module: tasks.setup_appliances
-        description: "Configure hostname, domain, small_disk, and session timeouts on ALL appliances (CM → Collectors → AppNodes)"
+        description: "Configure hostname, domain, small_disk, and session timeouts on ALL appliances in parallel (max 20 parallel, CM → Collectors → AppNodes order)"
         args:
           # hostname: "custom"  # Optional - override hostname for all appliances
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
@@ -88,7 +88,7 @@ groups:
       - name: set_timezone_on_appliances
         function: set_timezone_all
         module: tasks.setup_appliances
-        description: "Set timezone on ALL appliances (defaults to Europe/Warsaw or from machines_info.json)"
+        description: "Set timezone on ALL appliances in parallel (max 20 parallel, defaults to Europe/Warsaw or from machines_info.json)"
         args:
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
           debug: false
@@ -96,7 +96,7 @@ groups:
       - name: configure_ntp_on_all_appliances
         function: configure_ntp_all
         module: tasks.setup_appliances
-        description: "Configure NTP servers and enable time synchronization on ALL appliances (CM → Collectors → AppNodes)"
+        description: "Configure NTP servers and enable time synchronization on ALL appliances in parallel (max 20 parallel, CM → Collectors → AppNodes order)"
         args:
           # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
           debug: false
@@ -104,7 +104,7 @@ groups:
       - name: configure_hosts_resolving_on_all_appliances
         function: configure_hosts_resolving_all
         module: tasks.setup_appliances
-        description: "Configure /etc/hosts resolving on ALL appliances for Unix machines (raptor, ceraptos, sauropod) and other Guardium appliances"
+        description: "Configure /etc/hosts resolving on ALL appliances in parallel (max 20 parallel) for Unix machines and other Guardium appliances"
         args:
           debug: false
 
@@ -123,7 +123,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm03"
+          appliance_name: "cm02"
           debug: false
 
       - name: set_shared_secret_on_all_appliances

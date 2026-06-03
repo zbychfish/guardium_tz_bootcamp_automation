@@ -828,56 +828,55 @@ def configure_hosts_resolving_all(
         logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
     logger.info("")
     
-    # Configure hosts on each appliance
-    success_count = 0
-    failed_count = 0
-    failed_appliances = []
+    # Define operation function
+    def configure_hosts_operation(appliance_name: str, **kwargs) -> bool:
+        return core_configure_hosts(
+            appliance_name=appliance_name,
+            **kwargs
+        )
     
-    for appliance_name in ordered_appliances:
-        logger.info(f"➜ Configuring hosts on appliance: {appliance_name}")
-        
-        try:
-            result = core_configure_hosts(
-                config=config,
-                logger=logger,
-                appliance_name=appliance_name,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                debug=debug
-            )
-            
-            if result:
-                success_count += 1
-                logger.info(f"✓ {appliance_name} hosts configured successfully\n")
-            else:
-                failed_count += 1
-                failed_appliances.append(appliance_name)
-                logger.error(f"✗ {appliance_name} hosts configuration failed\n")
-        
-        except Exception as e:
-            failed_count += 1
-            failed_appliances.append(appliance_name)
-            logger.error(f"✗ {appliance_name} hosts configuration failed with exception: {str(e)}\n")
-            if debug:
-                import traceback
-                logger.error(traceback.format_exc())
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=ordered_appliances,
+        operation_func=configure_hosts_operation,
+        operation_name="configure hosts resolving",
+        logger=logger,
+        config=config,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
     
     # Summary
-    logger.info("=" * 80)
+    logger.info("\n" + "=" * 80)
     logger.info("HOSTS CONFIGURATION SUMMARY")
     logger.info("=" * 80)
-    logger.info(f"Total appliances: {len(ordered_appliances)}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {failed_count}")
     
-    if failed_appliances:
-        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
+    if all_success:
+        logger.info("\n✓ All appliances configured successfully")
+    else:
+        logger.error("\n✗ Some appliances failed configuration")
     
     logger.info("=" * 80)
     
-    # Return True only if all succeeded
-    return failed_count == 0
+    return all_success
 
 def configure_ntp_all(
     config,
@@ -948,57 +947,56 @@ def configure_ntp_all(
         logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
     logger.info("")
     
-    # Configure NTP on each appliance
-    success_count = 0
-    failed_count = 0
-    failed_appliances = []
+    # Define operation function
+    def configure_ntp_operation(appliance_name: str, **kwargs) -> bool:
+        return core_configure_ntp(
+            appliance_name=appliance_name,
+            **kwargs
+        )
     
-    for appliance_name in ordered_appliances:
-        logger.info(f"➜ Configuring NTP on appliance: {appliance_name}")
-        
-        try:
-            result = core_configure_ntp(
-                config=config,
-                logger=logger,
-                appliance_name=appliance_name,
-                ntp_servers=ntp_servers,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                debug=debug
-            )
-            
-            if result:
-                success_count += 1
-                logger.info(f"✓ {appliance_name} NTP configured successfully\n")
-            else:
-                failed_count += 1
-                failed_appliances.append(appliance_name)
-                logger.error(f"✗ {appliance_name} NTP configuration failed\n")
-        
-        except Exception as e:
-            failed_count += 1
-            failed_appliances.append(appliance_name)
-            logger.error(f"✗ {appliance_name} NTP configuration failed with exception: {str(e)}\n")
-            if debug:
-                import traceback
-                logger.error(traceback.format_exc())
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=ordered_appliances,
+        operation_func=configure_ntp_operation,
+        operation_name="configure NTP",
+        logger=logger,
+        config=config,
+        ntp_servers=ntp_servers,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
     
     # Summary
-    logger.info("=" * 80)
+    logger.info("\n" + "=" * 80)
     logger.info("NTP CONFIGURATION SUMMARY")
     logger.info("=" * 80)
-    logger.info(f"Total appliances: {len(ordered_appliances)}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {failed_count}")
     
-    if failed_appliances:
-        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
+    if all_success:
+        logger.info("\n✓ All appliances configured successfully")
+    else:
+        logger.error("\n✗ Some appliances failed configuration")
     
     logger.info("=" * 80)
     
-    # Return True only if all succeeded
-    return failed_count == 0
+    return all_success
 
 def configure_system_settings_all(
     config,
@@ -1055,58 +1053,57 @@ def configure_system_settings_all(
         logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
     logger.info("")
     
-    # Configure each appliance
-    success_count = 0
-    failed_count = 0
-    failed_appliances = []
+    # Define operation function
+    def configure_settings_operation(appliance_name: str, **kwargs) -> bool:
+        return core_configure_system_settings(
+            appliance_name=appliance_name,
+            **kwargs
+        )
     
-    for appliance_name in ordered_appliances:
-        logger.info(f"➜ Configuring appliance: {appliance_name}")
-        
-        try:
-            result = core_configure_system_settings(
-                config=config,
-                logger=logger,
-                appliance_name=appliance_name,
-                hostname=hostname,
-                domain=domain,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                debug=debug
-            )
-            
-            if result:
-                success_count += 1
-                logger.info(f"✓ {appliance_name} configured successfully\n")
-            else:
-                failed_count += 1
-                failed_appliances.append(appliance_name)
-                logger.error(f"✗ {appliance_name} configuration failed\n")
-        
-        except Exception as e:
-            failed_count += 1
-            failed_appliances.append(appliance_name)
-            logger.error(f"✗ {appliance_name} configuration failed with exception: {str(e)}\n")
-            if debug:
-                import traceback
-                logger.error(traceback.format_exc())
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=ordered_appliances,
+        operation_func=configure_settings_operation,
+        operation_name="configure system settings",
+        logger=logger,
+        config=config,
+        hostname=hostname,
+        domain=domain,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
     
     # Summary
-    logger.info("=" * 80)
+    logger.info("\n" + "=" * 80)
     logger.info("CONFIGURATION SUMMARY")
     logger.info("=" * 80)
-    logger.info(f"Total appliances: {len(ordered_appliances)}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {failed_count}")
     
-    if failed_appliances:
-        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
+    if all_success:
+        logger.info("\n✓ All appliances configured successfully")
+    else:
+        logger.error("\n✗ Some appliances failed configuration")
     
     logger.info("=" * 80)
     
-    # Return True only if all succeeded
-    return failed_count == 0
+    return all_success
 
 def set_shared_secret_all(
     config,
@@ -1370,34 +1367,56 @@ def set_timezone_all(
     
     logger.info(f"Found {len(sorted_appliances)} appliances to configure")
     
-    # Process all appliances in order
-    all_success = True
-    for appliance_name, config_data in sorted_appliances:
-        appliance_type = config_data.get('type', 'unknown')
-        logger.info(f"\n{'='*80}")
-        logger.info(f"Processing {appliance_type.upper()}: {appliance_name}")
-        logger.info(f"{'='*80}")
-        
-        success = set_timezone(
-            config=config,
-            logger=logger,
+    # Define operation function
+    def set_timezone_operation(appliance_name: str, **kwargs) -> bool:
+        return set_timezone(
             appliance_name=appliance_name,
-            timezone=timezone,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            debug=debug
+            **kwargs
         )
-        if not success:
-            logger.error(f"Failed to set timezone on {appliance_name}")
-            all_success = False
+    
+    # Prepare appliance list
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    # Execute operation on all appliances asynchronously
+    from core.appliance_operations import execute_on_appliances_async
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=set_timezone_operation,
+        operation_name="set timezone",
+        logger=logger,
+        config=config,
+        timezone=timezone,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug
+    )
     
     # Summary
     logger.info("\n" + "=" * 80)
+    logger.info("TIMEZONE CONFIGURATION SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"Successful: {success_count}")
+    logger.info(f"Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = all(results.values())
+    
     if all_success:
-        logger.info("✓ Timezone set successfully on all appliances")
+        logger.info("\n✓ Timezone set successfully on all appliances")
     else:
-        logger.error("✗ Some appliances failed timezone configuration")
+        logger.error("\n✗ Some appliances failed timezone configuration")
+    
     logger.info("=" * 80)
     
     return all_success
