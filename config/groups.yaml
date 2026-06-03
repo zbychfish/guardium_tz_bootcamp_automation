@@ -176,7 +176,7 @@ groups:
         module: tasks.setup_appliances
         description: "Get patch installation order by mapping patch_order.txt to available patches on CM"
         args:
-          appliance_name: "cm03"
+          appliance_name: "cm02"
           patch_order_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt"
           debug: true
 
