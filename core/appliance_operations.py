@@ -686,24 +686,31 @@ def register_appliance(
         unit_type_output = client.execute_command("show unit type")
         logger.info(f"Unit type:\n{unit_type_output}")
         
-        # Register appliance
+        # Register appliance using early fail detection
         command = f"register management {cm_ip} {cm_port}"
         logger.info(f"\n➜ Executing: {command}")
         logger.info("⌛ This can take several minutes (up to 10 minutes)...")
         
         try:
-            output = client.execute_command(command, timeout=timeout)
+            # Use special method that detects "Fail:" early
+            output, fail_detected = client.execute_command_with_early_fail_detection(
+                command,
+                fail_pattern="Fail:",
+                timeout=timeout
+            )
             logger.info(f"Command output:\n{output}")
             
-            # If we got "Fail:" in output, disconnect and check unit type after delay
-            if "Fail:" in output or "fail:" in output:
-                logger.warning(f"⚠ Registration returned 'Fail:' - waiting {registration_check_delay} seconds and checking status...")
+            # If "Fail:" was detected, disconnect and check unit type after delay
+            if fail_detected:
+                logger.warning(f"⚠ Registration returned 'Fail:' - disconnecting and waiting {registration_check_delay} seconds before checking status...")
                 client.disconnect()
                 
                 # Wait before checking status
+                logger.info(f"⏳ Waiting {registration_check_delay} seconds...")
                 time.sleep(registration_check_delay)
                 
                 # Reconnect and check status
+                logger.info("➜ Reconnecting to check registration status...")
                 client = ApplianceClient(
                     host=host,
                     user=user,

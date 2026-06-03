@@ -248,6 +248,112 @@ class ApplianceClient:
         
         return "\n".join(filtered_lines)
     
+    def execute_command_with_early_fail_detection(
+        self,
+        command: str,
+        fail_pattern: str = "Fail:",
+        timeout: Optional[int] = None
+    ) -> tuple[str, bool]:
+        """
+        Execute command with early detection of failure patterns.
+        If fail_pattern is detected, immediately return without waiting for prompt.
+        
+        Args:
+            command: Command to execute
+            fail_pattern: Pattern that indicates early failure (default: "Fail:")
+            timeout: Optional timeout in seconds
+        
+        Returns:
+            Tuple of (output, fail_detected)
+            - output: Command output received so far
+            - fail_detected: True if fail_pattern was detected
+        
+        Raises:
+            RuntimeError: If not connected
+            TimeoutError: If timeout reached
+        """
+        if not self.channel:
+            raise RuntimeError("Not connected")
+        
+        # Flush buffer
+        time.sleep(0.05)
+        while self.channel.recv_ready():
+            self.channel.recv(65535)
+        
+        # Send command
+        self.channel.send((command + "\r\n").encode())
+        
+        # Read until prompt or fail pattern
+        cmd_timeout = timeout if timeout is not None else self.timeout
+        buf = ""
+        deadline = time.time() + cmd_timeout
+        fail_detected = False
+        
+        if self.debug:
+            print(f"[DEBUG] Executing with fail detection: {command} (timeout: {cmd_timeout}s)", file=sys.stderr)
+        
+        while time.time() < deadline:
+            if self.channel.recv_ready():
+                chunk = self.channel.recv(65535).decode(errors="replace")
+                buf += chunk
+                
+                if self.debug:
+                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk[:100])}", file=sys.stderr)
+            
+            # Check for fail pattern first
+            buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
+            if fail_pattern in buf_for_match:
+                if self.debug:
+                    print(f"[DEBUG] Fail pattern '{fail_pattern}' detected!", file=sys.stderr)
+                fail_detected = True
+                break
+            
+            # Check for prompt
+            if self.prompt_re.search(buf_for_match):
+                if self.debug:
+                    print(f"[DEBUG] Prompt matched! Buffer length: {len(buf)}", file=sys.stderr)
+                break
+            
+            if self.channel.closed:
+                raise RuntimeError("Channel closed unexpectedly")
+            
+            time.sleep(0.05)
+        
+        if time.time() >= deadline and not fail_detected:
+            if self.debug:
+                print(f"[DEBUG] Timeout! Buffer content: {repr(buf[:200])}", file=sys.stderr)
+            raise TimeoutError(f"Timeout waiting for prompt or fail pattern after {cmd_timeout}s")
+        
+        # Clean output
+        working = strip_ansi(buf) if self.strip_ansi_flag else buf
+        last_span = _find_last_prompt_span(working, self.prompt_re)
+        output_region = working[: last_span[0]] if last_span else working
+        
+        lines = output_region.splitlines()
+        
+        # Remove empty lines and command echo
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        
+        if lines:
+            first = lines[0].rstrip("\r\n")
+            if first.strip() == command.strip():
+                lines = lines[1:]
+        
+        # Filter out unwanted lines
+        filtered_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped == "ok":
+                continue
+            if self.prompt_re.search(stripped):
+                continue
+            filtered_lines.append(line)
+        
+        return "\n".join(filtered_lines), fail_detected
+    
     def execute_command_with_confirmation(
         self,
         command: str,
