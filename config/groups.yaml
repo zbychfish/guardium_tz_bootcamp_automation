@@ -77,6 +77,14 @@ groups:
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
           debug: true
       
+      - name: configure_network_ip_on_all_appliances
+        function: configure_network_ip_all
+        module: tasks.setup_appliances
+        description: "Configure network IP addresses on ALL appliances using IPs from appliances.yaml (CM → Collectors → AppNodes)"
+        args:
+          # prefix: "/24"  # Optional - network prefix (default: /24)
+          debug: false
+      
       - name: set_timezone_on_appliances
         function: set_timezone_all
         module: tasks.setup_appliances
