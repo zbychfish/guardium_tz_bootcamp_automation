@@ -1377,7 +1377,7 @@ def configure_system_settings(
             output = client1.execute_command_with_confirmation(
                 command=f"store system hostname {hostname}",
                 confirmation_pattern=r"Is it a newly cloned appliance\s*\(y/n\)\?",
-                response="n"
+                response="y"
             )
             if debug and output:
                 logger.info(f"  Command output: {output}")
