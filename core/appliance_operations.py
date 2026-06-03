@@ -1791,46 +1791,16 @@ def prepare_appliance_for_patching(
         logger.info(f"  - {os.path.basename(patch_file)}")
     
     try:
-        # Step 1: Copy files to /tmp/ as cloudsupport user
-        logger.info(f"\n➜ Copying patch files to {host}:/tmp/ as cloudsupport user...")
-        
-        for patch_file in patch_files:
-            filename = os.path.basename(patch_file)
-            logger.info(f"  Copying {filename}...")
-            
-            # Use scp with sshpass to copy as cloudsupport user
-            cmd = [
-                "sshpass", "-p", cloudsupport_password,
-                "scp",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                patch_file,
-                f"cloudsupport@{host}:/tmp/{filename}"
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            
-            if result.returncode != 0:
-                logger.error(f"Failed to copy {filename}: {result.stderr.strip()}")
-                return False
-        
-        logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
-        
-        # Step 2: Connect as cloudsupport and use sudo to move files and set permissions
-        logger.info(f"\n➜ Moving files to /var/log/guard/patches/ and setting permissions...")
+        # Step 1: Connect as cloudsupport and copy files using SFTP
+        logger.info(f"\n➜ Connecting to {host} as cloudsupport user...")
         
         import paramiko
         
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
         try:
-            client.connect(
+            ssh_client.connect(
                 hostname=host,
                 username='cloudsupport',
                 password=cloudsupport_password,
@@ -1839,40 +1809,67 @@ def prepare_appliance_for_patching(
                 timeout=30
             )
             
+            logger.info(f"✓ Connected successfully")
+            
+            # Copy files using SFTP
+            logger.info(f"\n➜ Copying patch files to {host}:/tmp/ using SFTP...")
+            sftp = ssh_client.open_sftp()
+            
+            for patch_file in patch_files:
+                filename = os.path.basename(patch_file)
+                logger.info(f"  Copying {filename}...")
+                
+                try:
+                    sftp.put(patch_file, f"/tmp/{filename}")
+                except Exception as e:
+                    logger.error(f"Failed to copy {filename}: {e}")
+                    sftp.close()
+                    ssh_client.close()
+                    return False
+            
+            sftp.close()
+            logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
+            
+            # Step 2: Use sudo to move files and set permissions
+            logger.info(f"\n➜ Moving files to /var/log/guard/patches/ and setting permissions...")
+            
             # Create target directory if it doesn't exist
             logger.info("  Creating /var/log/guard/patches/ directory if needed...")
-            stdin, stdout, stderr = client.exec_command('sudo mkdir -p /var/log/guard/patches/')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo mkdir -p /var/log/guard/patches/')
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
                 error = stderr.read().decode()
                 logger.error(f"Failed to create directory: {error}")
+                ssh_client.close()
                 return False
             
             # Move files from /tmp/ to /var/log/guard/patches/
             logger.info("  Moving files from /tmp/ to /var/log/guard/patches/...")
-            stdin, stdout, stderr = client.exec_command('sudo mv /tmp/*.sig /var/log/guard/patches/')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo mv /tmp/*.sig /var/log/guard/patches/')
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
                 error = stderr.read().decode()
                 logger.error(f"Failed to move files: {error}")
+                ssh_client.close()
                 return False
             
             # Set ownership to tomcat:tomcat
             logger.info("  Setting ownership to tomcat:tomcat...")
-            stdin, stdout, stderr = client.exec_command('sudo chown tomcat:tomcat /var/log/guard/patches/*.sig')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo chown tomcat:tomcat /var/log/guard/patches/*.sig')
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:
                 error = stderr.read().decode()
                 logger.error(f"Failed to set ownership: {error}")
+                ssh_client.close()
                 return False
             
             # Verify files exist
             logger.info("  Verifying files...")
-            stdin, stdout, stderr = client.exec_command('sudo ls -la /var/log/guard/patches/*.sig')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo ls -la /var/log/guard/patches/*.sig')
             output = stdout.read().decode()
             logger.info(f"Files in /var/log/guard/patches/:\n{output}")
             
-            client.close()
+            ssh_client.close()
             
             logger.info("=" * 80)
             logger.info(f"✓ Appliance {appliance_name} prepared for patching successfully")
@@ -1880,18 +1877,11 @@ def prepare_appliance_for_patching(
             return True
             
         except Exception as e:
-            logger.error(f"SSH error: {e}")
+            logger.error(f"SSH/SFTP error: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            client.close()
+            ssh_client.close()
             return False
-        
-    except FileNotFoundError:
-        logger.error("sshpass not found. Install: apt-get install sshpass")
-        return False
-    except subprocess.TimeoutExpired:
-        logger.error("SCP timeout")
-        return False
     except Exception as e:
         logger.error(f"Error preparing appliance for patching: {e}")
         import traceback
