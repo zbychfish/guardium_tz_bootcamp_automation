@@ -1424,8 +1424,6 @@ def set_timezone_all(
     
     return all_success
 
-
-
 def set_product_gid_all(
     config,
     logger,
@@ -1544,8 +1542,6 @@ def set_product_gid_all(
     
     return all_success
 
-
-
 def prepare_appliances_for_patching_all(
     config,
     logger,
@@ -1629,57 +1625,156 @@ def prepare_appliances_for_patching_all(
     
     return failed_count == 0
 
-
-
-def get_patch_installation_order_task(
+def install_and_monitor_patches_all(
     config,
     logger,
     verbose: bool = True,
-    appliance_name: str = "cm03",
-    patch_order_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt",
+    patch_selection: Optional[str] = None,
+    reinstall_answer: str = "y",
+    check_interval: int = 60,
+    max_checks: int = 60,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
     """
-    Get patch installation order for CM appliance.
-    This is a test/diagnostic task to verify patch order mapping.
+    Install and monitor patches on all appliances in parallel.
+    
+    This function:
+    1. Gets patch installation order from CM (if patch_selection not provided)
+    2. Installs patches on all appliances in parallel
+    3. Monitors installation progress on all appliances in parallel
     
     Args:
         config: Configuration object
         logger: Logger instance
         verbose: Enable verbose output
-        appliance_name: Name of the CM appliance (default: cm03)
-        patch_order_file: Path to patch order file
+        patch_selection: Comma-separated patch positions (e.g., "2,1,3"). If None, will be determined from CM.
+        reinstall_answer: Answer to reinstall question ("y" or "n", default: "y")
+        check_interval: Seconds between status checks (default: 60)
+        max_checks: Maximum number of checks (default: 60)
+        user: SSH username (optional, uses 'cli' by default)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
         debug: Enable debug output
     
     Returns:
-        True if successful, False otherwise
+        True if all appliances patched successfully, False otherwise
     """
-    from core.appliance_operations import get_patch_installation_order
+    from core.appliance_operations import (
+        get_patch_installation_order,
+        install_and_monitor_patches,
+        execute_on_appliances_async
+    )
+    from core.appliance_config_loader import ApplianceConfigLoader
     
     logger.info("=" * 80)
-    logger.info("GET PATCH INSTALLATION ORDER TASK")
+    logger.info("INSTALL AND MONITOR PATCHES ON ALL APPLIANCES")
     logger.info("=" * 80)
     
-    patch_selection = get_patch_installation_order(
-        config=config,
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Get patch selection if not provided
+    if not patch_selection:
+        logger.info("\n➜ Patch selection not provided, determining from CM...")
+        
+        # Find CM
+        cm_appliances = {name: cfg for name, cfg in all_appliances.items() 
+                        if cfg.get('type', '').lower() == 'cm'}
+        
+        if not cm_appliances:
+            logger.error("No Central Manager found in appliances.yaml")
+            return False
+        
+        cm_name = list(cm_appliances.keys())[0]
+        logger.info(f"Using CM: {cm_name}")
+        
+        # Get patch installation order from CM
+        patch_selection = get_patch_installation_order(
+            config=config,
+            logger=logger,
+            appliance_name=cm_name,
+            user=user,
+            password=password,
+            debug=debug
+        )
+        
+        if not patch_selection:
+            logger.error("Failed to determine patch installation order from CM")
+            return False
+        
+        logger.info(f"✓ Patch selection determined: {patch_selection}")
+    else:
+        logger.info(f"Using provided patch selection: {patch_selection}")
+    
+    # TEMPORARY: Only patch cm02
+    appliance_names = ['cm02']
+    
+    logger.info(f"\n⚠ TEMPORARY: Only patching cm02 (not all appliances)")
+    logger.info(f"Found {len(appliance_names)} appliance(s) to patch:")
+    for name in appliance_names:
+        if name in all_appliances:
+            appliance_type = all_appliances[name].get('type', 'unknown')
+            logger.info(f"  - {name} ({appliance_type})")
+        else:
+            logger.warning(f"  - {name} (NOT FOUND in appliances.yaml)")
+    
+    # Define operation function
+    def install_and_monitor_operation(appliance_name: str, **kwargs) -> bool:
+        return install_and_monitor_patches(
+            appliance_name=appliance_name,
+            **kwargs
+        )
+    
+    # Execute operation on all appliances asynchronously
+    logger.info("\n" + "=" * 80)
+    logger.info("Starting parallel patch installation and monitoring...")
+    logger.info("=" * 80)
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=install_and_monitor_operation,
+        operation_name="install and monitor patches",
         logger=logger,
-        appliance_name=appliance_name,
-        patch_order_file=patch_order_file,
+        config=config,
+        patch_selection=patch_selection,
+        reinstall_answer=reinstall_answer,
+        check_interval=check_interval,
+        max_checks=max_checks,
+        user=user,
+        password=password,
         debug=debug
     )
     
-    if patch_selection:
-        logger.info("\n" + "=" * 80)
-        logger.info("SUCCESS")
-        logger.info("=" * 80)
-        logger.info(f"Patch installation order: {patch_selection}")
-        logger.info("This can be used with: store system patch install sys")
-        logger.info("=" * 80)
-        return True
+    # Summary
+    logger.info("\n" + "=" * 80)
+    logger.info("PATCH INSTALLATION SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    total_count = len(results)
+    
+    logger.info(f"Total appliances: {total_count}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {total_count - success_count}")
+    
+    if errors:
+        logger.error("\nErrors encountered:")
+        for appliance_name, error_msg in errors.items():
+            logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    all_success = success_count == total_count
+    
+    if all_success:
+        logger.info("\n✓ All appliances patched successfully")
     else:
-        logger.error("\n" + "=" * 80)
-        logger.error("FAILED")
-        logger.error("=" * 80)
-        logger.error("Could not determine patch installation order")
-        logger.error("=" * 80)
-        return False
+        logger.error("\n✗ Some appliances failed patching")
+    
+    logger.info("=" * 80)
+    
+    return all_success

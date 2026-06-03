@@ -171,13 +171,15 @@ groups:
           # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from machines_info.json
           debug: true
 
-      - name: get_patch_installation_order
-        function: get_patch_installation_order_task
+      - name: install_and_monitor_patches_all
+        function: install_and_monitor_patches_all
         module: tasks.setup_appliances
-        description: "Get patch installation order by mapping patch_order.txt to available patches on CM"
+        description: "Install and monitor patches on ALL appliances in parallel (max 20). Automatically gets patch order from CM if not specified."
         args:
-          appliance_name: "cm02"
-          patch_order_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt"
+          # patch_selection: "4,1,3"  # Optional - comma-separated positions. If not provided, will be determined from CM using patch_order.txt
+          reinstall_answer: "y"  # Answer to reinstall question (default: "y")
+          check_interval: 60  # Seconds between status checks (default: 60)
+          max_checks: 60  # Maximum number of checks before timeout (default: 60 = 1 hour with 60s interval)
           debug: true
 
       # - name: current_test

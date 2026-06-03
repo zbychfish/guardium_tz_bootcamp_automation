@@ -2175,3 +2175,487 @@ def get_patch_installation_order(
         import traceback
         logger.error(traceback.format_exc())
         return None
+
+
+def install_patch_on_appliance(
+    config,
+    logger,
+    appliance_name: str,
+    patch_selection: str,
+    reinstall_answer: str = "y",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Install patches on a Guardium appliance using interactive CLI.
+    
+    This function:
+    1. Connects to appliance as CLI user
+    2. Executes 'store system patch install sys'
+    3. Responds to patch selection prompt with patch_selection
+    4. Responds to reinstall prompt with reinstall_answer
+    5. Waits for command completion
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        patch_selection: Comma-separated patch positions (e.g., "2,1,3" or "1-3")
+        reinstall_answer: Answer to reinstall question ("y" or "n", default: "y")
+        user: SSH username (optional, uses 'cli' by default)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        debug: Enable debug output
+    
+    Returns:
+        True if installation started successfully, False otherwise
+    """
+    import socket
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    if not patch_selection:
+        logger.error("patch_selection is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"INSTALL PATCHES: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get prompt regex for CLI user
+    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
+    if not cli_prompt_regex:
+        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
+    
+    # Get user (default to 'cli')
+    if not user:
+        user = 'cli'
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if not password:
+            logger.error("cli_pwd not found in machines_info.json custom_variables")
+            return False
+        logger.info("Using password from custom_variables (cli_pwd)")
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"Patch selection: {patch_selection}")
+    logger.info(f"Reinstall answer: {reinstall_answer}")
+    
+    try:
+        # Connect to appliance
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=cli_prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        logger.info("✓ Connected successfully")
+        
+        # Get the SSH channel for interactive communication
+        channel = client.channel
+        if not channel:
+            logger.error("No SSH channel available")
+            client.disconnect()
+            return False
+        
+        channel.settimeout(0.1)
+        
+        # Send patch install command
+        command = "store system patch install sys"
+        logger.info(f"\n➜ Executing: {command}")
+        logger.info("⌛ Waiting for patch selection prompt...")
+        
+        channel.send((command + "\r").encode())
+        
+        # Read output and respond to prompts
+        buf = ""
+        patch_selected = False
+        reinstall_answered = False
+        last_activity = time.time()
+        
+        while True:
+            try:
+                chunk = channel.recv(4096).decode('utf-8', errors='replace')
+                if chunk:
+                    buf += chunk
+                    last_activity = time.time()
+                    
+                    if debug:
+                        # Print chunk without ANSI codes for cleaner output
+                        import re
+                        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                        clean_chunk = ansi_escape.sub('', chunk)
+                        print(clean_chunk, end='', flush=True)
+                    
+                    # Remove ANSI codes for pattern matching
+                    import re
+                    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                    buf_clean = ansi_escape.sub('', buf)
+                    
+                    # Check for patch selection prompt
+                    if not patch_selected and ("Please choose patches" in buf_clean or "or q to quit" in buf_clean):
+                        last_line = buf_clean.strip().split('\n')[-1]
+                        if last_line.endswith(':'):
+                            # Wait a moment to ensure prompt is complete
+                            time.sleep(1.0)
+                            try:
+                                extra = channel.recv(4096).decode('utf-8', errors='replace')
+                                if extra:
+                                    buf += extra
+                                    if debug:
+                                        clean_extra = ansi_escape.sub('', extra)
+                                        print(clean_extra, end='', flush=True)
+                            except:
+                                pass
+                            
+                            logger.info(f"\n>>> Sending patch selection: {patch_selection} <<<")
+                            channel.send((patch_selection + "\r").encode())
+                            patch_selected = True
+                            last_activity = time.time()
+                            time.sleep(0.5)
+                    
+                    # Check for reinstall prompt
+                    if patch_selected and not reinstall_answered and "Do you really want to install again" in buf_clean:
+                        if "(yes or no)?" in buf_clean:
+                            # Wait a moment to ensure prompt is complete
+                            time.sleep(1.0)
+                            try:
+                                extra = channel.recv(4096).decode('utf-8', errors='replace')
+                                if extra:
+                                    buf += extra
+                                    if debug:
+                                        clean_extra = ansi_escape.sub('', extra)
+                                        print(clean_extra, end='', flush=True)
+                            except:
+                                pass
+                            
+                            logger.info(f"\n>>> Sending reinstall answer: {reinstall_answer} <<<")
+                            channel.send((reinstall_answer + "\r").encode())
+                            reinstall_answered = True
+                            last_activity = time.time()
+                            time.sleep(0.5)
+                    
+                    # Check if we're back at prompt (command completed)
+                    if patch_selected and (cli_prompt_regex and re.search(cli_prompt_regex, buf_clean)):
+                        # Wait a moment for any final output
+                        time.sleep(1)
+                        try:
+                            while True:
+                                chunk = channel.recv(4096).decode('utf-8', errors='replace')
+                                if chunk:
+                                    if debug:
+                                        clean_chunk = ansi_escape.sub('', chunk)
+                                        print(clean_chunk, end='', flush=True)
+                                else:
+                                    break
+                        except:
+                            pass
+                        
+                        logger.info("\n\n=== Patch installation command completed ===")
+                        client.disconnect()
+                        
+                        logger.info("=" * 80)
+                        logger.info(f"✓ Patch installation initiated on {appliance_name}")
+                        logger.info("=" * 80)
+                        return True
+                
+            except socket.timeout:
+                # Timeout is normal - no data available
+                # Check if too much time passed without activity
+                if time.time() - last_activity > 300:  # 5 minutes without activity
+                    logger.warning("\n\n⚠ No activity for 5 minutes")
+                    break
+                time.sleep(0.1)
+            except Exception as e:
+                logger.error(f"\nUnexpected error during patch installation: {e}")
+                break
+            
+            # Check if channel is still open
+            if channel.closed:
+                logger.warning("\nChannel closed unexpectedly")
+                break
+        
+        client.disconnect()
+        logger.warning("Patch installation may not have completed successfully")
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error installing patches: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
+
+def monitor_patch_installation(
+    config,
+    logger,
+    appliance_name: str,
+    check_interval: int = 60,
+    max_checks: int = 60,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+    """
+    Monitor patch installation progress on an appliance.
+    
+    This function periodically checks 'show system patch status' to monitor installation progress.
+    It counts how many patches are still being installed and reports progress.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        check_interval: Seconds between status checks (default: 60)
+        max_checks: Maximum number of checks before giving up (default: 60 = 1 hour with 60s interval)
+        user: SSH username (optional, uses 'cli' by default)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        debug: Enable debug output
+    
+    Returns:
+        True if all patches installed successfully, False otherwise
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"MONITOR PATCH INSTALLATION: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get prompt regex for CLI user
+    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
+    if not cli_prompt_regex:
+        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
+    
+    # Get user (default to 'cli')
+    if not user:
+        user = 'cli'
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if not password:
+            logger.error("cli_pwd not found in machines_info.json custom_variables")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"Check interval: {check_interval} seconds")
+    logger.info(f"Max checks: {max_checks} (timeout: {check_interval * max_checks} seconds)")
+    
+    check_count = 0
+    
+    while check_count < max_checks:
+        check_count += 1
+        logger.info(f"\n{'=' * 80}")
+        logger.info(f"Check #{check_count}/{max_checks} for {appliance_name}")
+        logger.info(f"{'=' * 80}")
+        
+        try:
+            # Connect to appliance
+            client = ApplianceClient(
+                host=host,
+                user=user,
+                password=password,
+                prompt_regex=cli_prompt_regex,
+                initial_pattern=None,
+                timeout=60,
+                strip_ansi=True,
+                debug=debug
+            )
+            
+            if not client.connect():
+                logger.warning(f"⚠ Failed to connect to {appliance_name} (attempt {check_count}/{max_checks})")
+                logger.info(f"  Appliance may be restarting or unavailable")
+                logger.info(f"  Waiting {check_interval} seconds before next check...")
+                time.sleep(check_interval)
+                continue
+            
+            # Execute show system patch status
+            logger.info(f"➜ Executing: show system patch status")
+            output = client.execute_command("show system patch status")
+            
+            client.disconnect()
+            
+            if not output:
+                logger.warning(f"⚠ No output from 'show system patch status'")
+                logger.info(f"  Waiting {check_interval} seconds before next check...")
+                time.sleep(check_interval)
+                continue
+            
+            logger.info(f"Patch status:\n{output}")
+            
+            # Parse output to count patches in progress
+            # Look for lines with "Installing" or "In Progress" status
+            lines = output.split('\n')
+            patches_in_progress = 0
+            patches_completed = 0
+            patches_failed = 0
+            
+            for line in lines:
+                line_lower = line.lower()
+                if 'installing' in line_lower or 'in progress' in line_lower:
+                    patches_in_progress += 1
+                elif 'installed' in line_lower or 'completed' in line_lower or 'success' in line_lower:
+                    patches_completed += 1
+                elif 'failed' in line_lower or 'error' in line_lower:
+                    patches_failed += 1
+            
+            logger.info(f"\n📊 Status summary:")
+            logger.info(f"  ⏳ In progress: {patches_in_progress}")
+            logger.info(f"  ✓ Completed: {patches_completed}")
+            logger.info(f"  ✗ Failed: {patches_failed}")
+            
+            # Check if installation is complete
+            if patches_in_progress == 0:
+                if patches_failed > 0:
+                    logger.error(f"\n✗ Patch installation completed with {patches_failed} failures")
+                    logger.error("=" * 80)
+                    return False
+                else:
+                    logger.info(f"\n✓ All patches installed successfully!")
+                    logger.info("=" * 80)
+                    return True
+            
+            # Still patches in progress
+            logger.info(f"\n⏳ {patches_in_progress} patch(es) still installing...")
+            logger.info(f"  Waiting {check_interval} seconds before next check...")
+            time.sleep(check_interval)
+            
+        except Exception as e:
+            logger.warning(f"⚠ Error checking patch status (attempt {check_count}/{max_checks}): {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            logger.info(f"  Waiting {check_interval} seconds before next check...")
+            time.sleep(check_interval)
+    
+    # Max checks reached
+    logger.error(f"\n✗ Maximum checks ({max_checks}) reached without completion")
+    logger.error("=" * 80)
+    return False
+
+
+def install_and_monitor_patches(
+    config,
+    logger,
+    appliance_name: str,
+    patch_selection: str,
+    reinstall_answer: str = "y",
+    check_interval: int = 60,
+    max_checks: int = 60,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Install patches on an appliance and monitor the installation progress.
+    
+    This is a convenience function that combines install_patch_on_appliance and monitor_patch_installation.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        patch_selection: Comma-separated patch positions (e.g., "2,1,3")
+        reinstall_answer: Answer to reinstall question ("y" or "n", default: "y")
+        check_interval: Seconds between status checks (default: 60)
+        max_checks: Maximum number of checks (default: 60)
+        user: SSH username (optional, uses 'cli' by default)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        debug: Enable debug output
+    
+    Returns:
+        True if installation and monitoring completed successfully, False otherwise
+    """
+    logger.info("=" * 80)
+    logger.info(f"INSTALL AND MONITOR PATCHES: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Step 1: Install patches
+    logger.info("\n📦 Step 1: Installing patches...")
+    install_success = install_patch_on_appliance(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        patch_selection=patch_selection,
+        reinstall_answer=reinstall_answer,
+        user=user,
+        password=password,
+        debug=debug
+    )
+    
+    if not install_success:
+        logger.error(f"✗ Failed to initiate patch installation on {appliance_name}")
+        return False
+    
+    logger.info(f"\n✓ Patch installation initiated successfully")
+    logger.info(f"⏳ Waiting {check_interval} seconds before starting monitoring...")
+    time.sleep(check_interval)
+    
+    # Step 2: Monitor installation
+    logger.info("\n📊 Step 2: Monitoring patch installation...")
+    monitor_success = monitor_patch_installation(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        check_interval=check_interval,
+        max_checks=max_checks,
+        user=user,
+        password=password,
+        debug=False  # Less verbose during monitoring
+    )
+    
+    if not monitor_success:
+        logger.error(f"✗ Patch installation monitoring failed for {appliance_name}")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"✓ Patches installed and verified successfully on {appliance_name}")
+    logger.info("=" * 80)
+    return True
