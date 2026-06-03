@@ -1797,7 +1797,10 @@ def prepare_appliance_for_patching(
             logger.error("Could not find raptor IP in machines_info.json")
             return False
         
-        logger.info(f"Raptor IP: {raptor_ip}")
+        # Get SSH port from config.yaml
+        ssh_port = config.config.get('ssh', {}).get('port', 22)
+        
+        logger.info(f"Raptor IP: {raptor_ip}, SSH port: {ssh_port}")
         
         # Step 1: Connect as cloudsupport and pull files from raptor using SCP
         logger.info(f"\n➜ Connecting to {host} as cloudsupport user...")
@@ -1827,8 +1830,8 @@ def prepare_appliance_for_patching(
                 logger.info(f"  Copying {filename}...")
                 
                 # Use scp command from appliance to pull file from raptor
-                # Note: This assumes raptor has SSH access configured for cloudsupport or root
-                scp_command = f"scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}"
+                # Port is read from config.yaml (ssh.port)
+                scp_command = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}"
                 
                 stdin, stdout, stderr = ssh_client.exec_command(scp_command)
                 exit_status = stdout.channel.recv_exit_status()
