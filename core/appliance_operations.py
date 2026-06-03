@@ -1831,7 +1831,8 @@ def prepare_appliance_for_patching(
                 
                 # Use scp command from appliance to pull file from raptor
                 # Port is read from config.yaml (ssh.port)
-                scp_command = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}"
+                # Force password authentication (disable key-based auth)
+                scp_command = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PasswordAuthentication=yes -o PubkeyAuthentication=no root@{raptor_ip}:{patch_file} /tmp/{filename}"
                 
                 stdin, stdout, stderr = ssh_client.exec_command(scp_command)
                 exit_status = stdout.channel.recv_exit_status()
