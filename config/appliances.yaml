@@ -4,18 +4,18 @@
 
 appliances:
   coll2-suffix:
-    ip: "10.240.64.23"
+    ip: "10.240.64.29"
     type: "collector"
     description: "Primary Guardium Collector"
   
   cm03-suffix:
-    ip: "10.240.64.25"
+    ip: "10.240.64.31"
     type: "cm"
     description: "Central Manager"
     port: 22
    
   appnode3-suffix:
-    ip: "10.240.64.24"
+    ip: "10.240.64.30"
     type: "appnode"
     description: "Application Node"
 
