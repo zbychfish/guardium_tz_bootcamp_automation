@@ -1762,10 +1762,16 @@ def prepare_appliance_for_patching(
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
     
+    appliance_type = appliance_config.get('type')
     host = appliance_config.get('ip')
     if not host:
         logger.error(f"No IP address configured for appliance '{appliance_name}'")
         return False
+    
+    # Get prompt regex for CLI user
+    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
+    if not cli_prompt_regex:
+        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
     
     # Get cloudsupport password from custom_variables if not provided
     if not cloudsupport_password:
@@ -1939,8 +1945,41 @@ def prepare_appliance_for_patching(
             
             ssh_client.close()
             
+            # Step 3: Register patches using CLI user
+            logger.info(f"\n➜ Registering patches on appliance as CLI user...")
+            
+            # Get CLI password from custom_variables
+            cli_password = config.get_custom_variable('cli_pwd')
+            if not cli_password:
+                logger.error("cli_pwd not found in machines_info.json custom_variables")
+                return False
+            
+            # Connect as CLI user to register patches
+            cli_client = ApplianceClient(
+                host=host,
+                user='cli',
+                password=cli_password,
+                prompt_regex=cli_prompt_regex,
+                initial_pattern=None,
+                timeout=60,
+                strip_ansi=True,
+                debug=debug
+            )
+            
+            if not cli_client.connect():
+                logger.error("Failed to connect to appliance as CLI user")
+                return False
+            
+            # Execute show system patch available to register patches
+            logger.info("  Executing: show system patch available")
+            patch_output = cli_client.execute_command("show system patch available")
+            logger.info(f"Available patches:\n{patch_output}")
+            
+            cli_client.disconnect()
+            
             logger.info("=" * 80)
             logger.info(f"✓ Appliance {appliance_name} prepared for patching successfully")
+            logger.info(f"✓ Patches registered and available for installation")
             logger.info("=" * 80)
             return True
             
