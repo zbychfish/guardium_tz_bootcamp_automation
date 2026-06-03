@@ -1712,10 +1712,10 @@ def install_and_monitor_patches_all(
     else:
         logger.info(f"Using provided patch selection: {patch_selection}")
     
-    # TEMPORARY: Only patch cm02
-    appliance_names = ['cm02']
+    # TEMPORARY: Only patch coll2
+    appliance_names = ['coll2']
     
-    logger.info(f"\n⚠ TEMPORARY: Only patching cm02 (not all appliances)")
+    logger.info(f"\n⚠ TEMPORARY: Only patching coll2 (not all appliances)")
     logger.info(f"Found {len(appliance_names)} appliance(s) to patch:")
     for name in appliance_names:
         if name in all_appliances:

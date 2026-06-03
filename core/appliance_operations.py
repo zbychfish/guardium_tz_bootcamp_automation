@@ -2419,6 +2419,7 @@ def monitor_patch_installation(
     config,
     logger,
     appliance_name: str,
+    patch_numbers: Optional[List[str]] = None,
     check_interval: int = 60,
     max_checks: int = 60,
     user: Optional[str] = None,
@@ -2428,13 +2429,15 @@ def monitor_patch_installation(
     """
     Monitor patch installation progress on an appliance.
     
-    This function periodically checks 'show system patch status' to monitor installation progress.
-    It counts how many patches are still being installed and reports progress.
+    This function periodically checks 'show system patch install sys' to monitor installation progress.
+    It checks each patch by number and verifies status is "DONE: Patch installation Succeeded."
+    For patch 9997, WARNING is also accepted as success.
     
     Args:
         config: Configuration object
         logger: Logger instance
         appliance_name: Name of the appliance
+        patch_numbers: List of patch numbers to monitor (e.g., ['9997', '1033', '223']). If None, monitors all patches.
         check_interval: Seconds between status checks (default: 60)
         max_checks: Maximum number of checks before giving up (default: 60 = 1 hour with 60s interval)
         user: SSH username (optional, uses 'cli' by default)
@@ -2516,49 +2519,121 @@ def monitor_patch_installation(
                 time.sleep(check_interval)
                 continue
             
-            # Execute show system patch status
-            logger.info(f"➜ Executing: show system patch status")
-            output = client.execute_command("show system patch status")
+            # Execute show system patch install sys
+            logger.info(f"➜ Executing: show system patch install sys")
+            output = client.execute_command("show system patch install sys")
             
             client.disconnect()
             
             if not output:
-                logger.warning(f"⚠ No output from 'show system patch status'")
+                logger.warning(f"⚠ No output from 'show system patch install sys'")
                 logger.info(f"  Waiting {check_interval} seconds before next check...")
                 time.sleep(check_interval)
                 continue
             
-            logger.info(f"Patch status:\n{output}")
+            if debug:
+                logger.info(f"Patch installation status:\n{output}")
             
-            # Parse output to count patches in progress
-            # Look for lines with "Installing" or "In Progress" status
+            # Parse output to check each patch status
+            # Format: P#      Who       Description                     Request Time         Status
+            #         9997    CLI       Health Check for GPU and Bundle 2026-06-03 19:13:50  DONE: Patch installation Succeeded.
+            
             lines = output.split('\n')
+            patch_status = {}  # {patch_number: status_line}
+            
+            for line in lines:
+                line_stripped = line.strip()
+                # Skip header and empty lines
+                if not line_stripped or line_stripped.startswith('P#') or 'Request Time' in line_stripped:
+                    continue
+                
+                # Look for lines starting with patch number
+                match = re.match(r'^(\d+)\s+', line_stripped)
+                if match:
+                    patch_number = match.group(1)
+                    patch_status[patch_number] = line_stripped
+            
+            # If patch_numbers not specified, monitor all patches found
+            if not patch_numbers:
+                patch_numbers_to_check = list(patch_status.keys())
+            else:
+                patch_numbers_to_check = patch_numbers
+            
+            if not patch_numbers_to_check:
+                logger.warning("⚠ No patches found to monitor")
+                logger.info(f"  Waiting {check_interval} seconds before next check...")
+                time.sleep(check_interval)
+                continue
+            
+            # Check status of each patch
             patches_in_progress = 0
             patches_completed = 0
             patches_failed = 0
+            patches_with_warning = 0
             
-            for line in lines:
-                line_lower = line.lower()
-                if 'installing' in line_lower or 'in progress' in line_lower:
-                    patches_in_progress += 1
-                elif 'installed' in line_lower or 'completed' in line_lower or 'success' in line_lower:
-                    patches_completed += 1
-                elif 'failed' in line_lower or 'error' in line_lower:
+            logger.info(f"\n📊 Checking status of {len(patch_numbers_to_check)} patch(es):")
+            
+            for patch_num in patch_numbers_to_check:
+                if patch_num not in patch_status:
+                    logger.warning(f"  ⚠ Patch {patch_num}: NOT FOUND in output")
                     patches_failed += 1
+                    continue
+                
+                status_line = patch_status[patch_num]
+                
+                # Check for success: "DONE: Patch installation Succeeded."
+                if "DONE: Patch installation Succeeded" in status_line:
+                    logger.info(f"  ✓ Patch {patch_num}: Succeeded")
+                    patches_completed += 1
+                # Special case for patch 9997: WARNING is acceptable
+                elif patch_num == "9997" and "WARNING:" in status_line:
+                    logger.warning(f"  ⚠ Patch {patch_num}: Completed with WARNING (acceptable for 9997)")
+                    # Extract warning message
+                    warning_match = re.search(r'WARNING:\s*(.+)', status_line)
+                    if warning_match:
+                        warning_msg = warning_match.group(1)
+                        logger.warning(f"    Warning message: {warning_msg}")
+                    patches_completed += 1
+                    patches_with_warning += 1
+                # Check for in-progress states
+                elif any(keyword in status_line for keyword in ["Preparing", "STEP:", "Executing", "Applying", "POST:"]):
+                    # Extract the status message
+                    status_match = re.search(r'(Preparing|STEP:|Executing|Applying|POST:)\s*(.+)', status_line)
+                    if status_match:
+                        status_msg = status_match.group(0)
+                        logger.info(f"  ⏳ Patch {patch_num}: {status_msg}")
+                    else:
+                        logger.info(f"  ⏳ Patch {patch_num}: In progress")
+                    patches_in_progress += 1
+                # Check for failure
+                elif "FAIL" in status_line.upper() or "ERROR" in status_line.upper():
+                    logger.error(f"  ✗ Patch {patch_num}: FAILED")
+                    logger.error(f"    Status: {status_line}")
+                    patches_failed += 1
+                else:
+                    # Unknown status - treat as in progress
+                    logger.info(f"  ? Patch {patch_num}: Unknown status")
+                    logger.info(f"    Status: {status_line}")
+                    patches_in_progress += 1
             
-            logger.info(f"\n📊 Status summary:")
+            logger.info(f"\n📊 Summary:")
             logger.info(f"  ⏳ In progress: {patches_in_progress}")
             logger.info(f"  ✓ Completed: {patches_completed}")
+            if patches_with_warning > 0:
+                logger.info(f"  ⚠ With warnings: {patches_with_warning}")
             logger.info(f"  ✗ Failed: {patches_failed}")
             
             # Check if installation is complete
             if patches_in_progress == 0:
                 if patches_failed > 0:
-                    logger.error(f"\n✗ Patch installation completed with {patches_failed} failures")
+                    logger.error(f"\n✗ Patch installation completed with {patches_failed} failure(s)")
                     logger.error("=" * 80)
                     return False
                 else:
-                    logger.info(f"\n✓ All patches installed successfully!")
+                    if patches_with_warning > 0:
+                        logger.info(f"\n✓ All patches installed successfully ({patches_with_warning} with acceptable warnings)")
+                    else:
+                        logger.info(f"\n✓ All patches installed successfully!")
                     logger.info("=" * 80)
                     return True
             
@@ -2617,8 +2692,102 @@ def install_and_monitor_patches(
     logger.info(f"INSTALL AND MONITOR PATCHES: {appliance_name}")
     logger.info("=" * 80)
     
-    # Step 1: Install patches
-    logger.info("\n📦 Step 1: Installing patches...")
+    # Step 1: Get patch numbers from patch_selection
+    # We need to map positions back to patch numbers by querying available patches
+    logger.info("\n📋 Step 1: Determining patch numbers from selection...")
+    
+    # Load appliance configuration
+    from core.appliance_config_loader import ApplianceConfigLoader
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get CLI credentials
+    cli_user = user if user else 'cli'
+    cli_password = password if password else config.get_custom_variable('cli_pwd')
+    
+    if not cli_password:
+        logger.error("cli_pwd not found in custom_variables")
+        return False
+    
+    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else r'[\w-]+(\.demo\.guardium)?> '
+    
+    if not cli_prompt_regex:
+        logger.error("Could not determine CLI prompt regex")
+        return False
+    
+    # Connect and get available patches to map positions to numbers
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=cli_user,
+            password=cli_password,
+            prompt_regex=cli_prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=False
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance to get patch numbers")
+            return False
+        
+        output = client.execute_command("show system patch available")
+        client.disconnect()
+        
+        # Parse to get patch numbers by position
+        available_patches = {}  # {position: patch_number}
+        lines = output.split('\n')
+        position = 0
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped or line_stripped.startswith('P#') or line_stripped.startswith('Attempting'):
+                continue
+            match = re.match(r'^(\d+)\s+', line_stripped)
+            if match:
+                position += 1
+                patch_number = match.group(1)
+                available_patches[position] = patch_number
+        
+        # Map patch_selection positions to patch numbers
+        patch_numbers = []
+        positions = [p.strip() for p in patch_selection.split(',')]
+        
+        for pos_str in positions:
+            try:
+                pos = int(pos_str)
+                if pos in available_patches:
+                    patch_numbers.append(available_patches[pos])
+                    logger.info(f"  Position {pos} → Patch {available_patches[pos]}")
+                else:
+                    logger.warning(f"  Position {pos} → NOT FOUND")
+            except ValueError:
+                logger.warning(f"  Invalid position: {pos_str}")
+        
+        if not patch_numbers:
+            logger.error("Could not determine patch numbers from selection")
+            return False
+        
+        logger.info(f"✓ Will monitor patches: {', '.join(patch_numbers)}")
+        
+    except Exception as e:
+        logger.warning(f"Could not determine patch numbers: {e}")
+        logger.info("Will monitor all patches")
+        patch_numbers = None
+    
+    # Step 2: Install patches
+    logger.info("\n📦 Step 2: Installing patches...")
     install_success = install_patch_on_appliance(
         config=config,
         logger=logger,
@@ -2638,12 +2807,13 @@ def install_and_monitor_patches(
     logger.info(f"⏳ Waiting {check_interval} seconds before starting monitoring...")
     time.sleep(check_interval)
     
-    # Step 2: Monitor installation
-    logger.info("\n📊 Step 2: Monitoring patch installation...")
+    # Step 3: Monitor installation
+    logger.info("\n📊 Step 3: Monitoring patch installation...")
     monitor_success = monitor_patch_installation(
         config=config,
         logger=logger,
         appliance_name=appliance_name,
+        patch_numbers=patch_numbers,
         check_interval=check_interval,
         max_checks=max_checks,
         user=user,
