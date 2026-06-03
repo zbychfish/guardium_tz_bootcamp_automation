@@ -1721,3 +1721,190 @@ def set_product_gid(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
+
+def prepare_appliance_for_patching(
+    config,
+    logger,
+    appliance_name: str,
+    patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Prepare appliance for patching by copying patch files (*.sig) to /var/log/guard/patches/
+    
+    This function:
+    1. Copies *.sig files from local patches directory to appliance's /tmp/ as cloudsupport user
+    2. Uses sudo to move files from /tmp/ to /var/log/guard/patches/
+    3. Sets ownership to tomcat:tomcat
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        patches_source_dir: Local directory containing patch files (default: /opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/)
+        cloudsupport_password: Password for cloudsupport user (optional, uses custom_variables)
+        debug: Enable debug output
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    import os
+    import glob
+    import subprocess
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"PREPARE APPLIANCE FOR PATCHING: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get cloudsupport password from custom_variables if not provided
+    if not cloudsupport_password:
+        cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
+        if not cloudsupport_password:
+            logger.error("cloudsupport_pwd not found in machines_info.json custom_variables")
+            return False
+        logger.info("Using cloudsupport password from custom_variables")
+    
+    # Check if patches directory exists
+    if not os.path.exists(patches_source_dir):
+        logger.error(f"Patches directory not found: {patches_source_dir}")
+        return False
+    
+    # Find all *.sig files
+    patch_files = glob.glob(os.path.join(patches_source_dir, "*.sig"))
+    if not patch_files:
+        logger.error(f"No *.sig files found in {patches_source_dir}")
+        return False
+    
+    logger.info(f"Found {len(patch_files)} patch files to copy")
+    for patch_file in patch_files:
+        logger.info(f"  - {os.path.basename(patch_file)}")
+    
+    try:
+        # Step 1: Copy files to /tmp/ as cloudsupport user
+        logger.info(f"\n➜ Copying patch files to {host}:/tmp/ as cloudsupport user...")
+        
+        for patch_file in patch_files:
+            filename = os.path.basename(patch_file)
+            logger.info(f"  Copying {filename}...")
+            
+            # Use scp with sshpass to copy as cloudsupport user
+            cmd = [
+                "sshpass", "-p", cloudsupport_password,
+                "scp",
+                "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                patch_file,
+                f"cloudsupport@{host}:/tmp/{filename}"
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"Failed to copy {filename}: {result.stderr.strip()}")
+                return False
+        
+        logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
+        
+        # Step 2: Connect as cloudsupport and use sudo to move files and set permissions
+        logger.info(f"\n➜ Moving files to /var/log/guard/patches/ and setting permissions...")
+        
+        import paramiko
+        
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        try:
+            client.connect(
+                hostname=host,
+                username='cloudsupport',
+                password=cloudsupport_password,
+                look_for_keys=False,
+                allow_agent=False,
+                timeout=30
+            )
+            
+            # Create target directory if it doesn't exist
+            logger.info("  Creating /var/log/guard/patches/ directory if needed...")
+            stdin, stdout, stderr = client.exec_command('sudo mkdir -p /var/log/guard/patches/')
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status != 0:
+                error = stderr.read().decode()
+                logger.error(f"Failed to create directory: {error}")
+                return False
+            
+            # Move files from /tmp/ to /var/log/guard/patches/
+            logger.info("  Moving files from /tmp/ to /var/log/guard/patches/...")
+            stdin, stdout, stderr = client.exec_command('sudo mv /tmp/*.sig /var/log/guard/patches/')
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status != 0:
+                error = stderr.read().decode()
+                logger.error(f"Failed to move files: {error}")
+                return False
+            
+            # Set ownership to tomcat:tomcat
+            logger.info("  Setting ownership to tomcat:tomcat...")
+            stdin, stdout, stderr = client.exec_command('sudo chown tomcat:tomcat /var/log/guard/patches/*.sig')
+            exit_status = stdout.channel.recv_exit_status()
+            if exit_status != 0:
+                error = stderr.read().decode()
+                logger.error(f"Failed to set ownership: {error}")
+                return False
+            
+            # Verify files exist
+            logger.info("  Verifying files...")
+            stdin, stdout, stderr = client.exec_command('sudo ls -la /var/log/guard/patches/*.sig')
+            output = stdout.read().decode()
+            logger.info(f"Files in /var/log/guard/patches/:\n{output}")
+            
+            client.close()
+            
+            logger.info("=" * 80)
+            logger.info(f"✓ Appliance {appliance_name} prepared for patching successfully")
+            logger.info("=" * 80)
+            return True
+            
+        except Exception as e:
+            logger.error(f"SSH error: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            client.close()
+            return False
+        
+    except FileNotFoundError:
+        logger.error("sshpass not found. Install: apt-get install sshpass")
+        return False
+    except subprocess.TimeoutExpired:
+        logger.error("SCP timeout")
+        return False
+    except Exception as e:
+        logger.error(f"Error preparing appliance for patching: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False

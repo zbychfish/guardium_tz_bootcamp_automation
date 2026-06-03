@@ -1543,3 +1543,88 @@ def set_product_gid_all(
     logger.info("=" * 80)
     
     return all_success
+
+
+
+def prepare_appliances_for_patching_all(
+    config,
+    logger,
+    verbose: bool = True,
+    patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Prepare all appliances for patching by copying patch files to each appliance.
+    Executes in parallel (max 20 workers) for all appliances.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        patches_source_dir: Local directory containing patch files
+        cloudsupport_password: Password for cloudsupport user (optional, uses custom_variables)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances prepared successfully, False otherwise
+    """
+    from core.appliance_operations import prepare_appliance_for_patching, execute_on_appliances_async
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("PREPARE ALL APPLIANCES FOR PATCHING")
+    logger.info("=" * 80)
+    
+    # Load all appliances
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    # Sort by type: CM → Collectors → AppNodes
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    logger.info(f"Found {len(appliance_names)} appliances to prepare")
+    for name, cfg in sorted_appliances:
+        logger.info(f"  - {name} ({cfg.get('type')})")
+    
+    # Execute in parallel (max 20 workers)
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=prepare_appliance_for_patching,
+        operation_name="prepare_for_patching",
+        logger=logger,
+        config=config,
+        patches_source_dir=patches_source_dir,
+        cloudsupport_password=cloudsupport_password,
+        debug=debug
+    )
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    logger.info("PREPARE FOR PATCHING SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    failed_count = len(results) - success_count
+    
+    logger.info(f"✓ Successful: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
+        for appliance_name, success in results.items():
+            if not success:
+                error_msg = errors.get(appliance_name, "Unknown error")
+                logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    logger.info("=" * 80)
+    
+    return failed_count == 0
