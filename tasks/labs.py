@@ -321,9 +321,6 @@ def install_gim_on_raptor(
         logger.error("=" * 80)
         return False
 
-# Made with Bob
-
-
 
 def install_stap_on_raptor(
     config,
@@ -332,6 +329,7 @@ def install_stap_on_raptor(
     appliance_name: Optional[str] = None,
     collector_name: Optional[str] = None,
     client_ip: Optional[str] = None,
+    module: str = "BUNDLE-STAP",
     module_version: str = "STAP-12.2.2.0_r123489_",
     use_tls: str = "1",
     statistics: str = "-3",
@@ -439,7 +437,7 @@ def install_stap_on_raptor(
         logger=logger,
         appliance_name=appliance_name,
         client_ip=client_ip,
-        module="BUNDLE-STAP",
+        module=module,
         module_version=module_version,
         params=stap_params,
         demo_user=demo_user,

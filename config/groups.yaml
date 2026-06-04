@@ -177,7 +177,8 @@ groups:
         args:
           appliance_name: "cm02"
           collector_name: "coll2"
-          module_version: "STAP-12.2.2.0_r123489_1"
+          module: "BUNDLE-STAP"
+          module_version: "12.2.2.0_r123489_1"
           debug: true
 
       # - name: current_test
