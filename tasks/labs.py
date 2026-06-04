@@ -151,4 +151,146 @@ def import_gim_modules(
         logger.error("=" * 80)
         return False
 
+
+def install_gim_on_raptor(
+    config,
+    logger,
+    verbose: bool = False,
+    gim_installer_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh",
+    install_dir: str = "/opt/guardium",
+    tapip: Optional[str] = None,
+    sqlguardip: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+    """
+    Install GIM (Guardium Installation Manager) on raptor machine.
+    
+    This function executes the GIM shell installer with required parameters:
+    - --dir: Installation directory (default: /opt/guardium)
+    - --tapip: TAP IP address (raptor's own IP, auto-detected from machines_info if not provided)
+    - --sqlguardip: SQL Guard IP address (collector IP, auto-detected from appliances.yaml if not provided)
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        gim_installer_path: Path to GIM installer shell script
+        install_dir: Installation directory (default: /opt/guardium)
+        tapip: TAP IP address (optional, auto-detected from raptor machine in machines_info)
+        sqlguardip: SQL Guard IP address (optional, auto-detected from first collector in appliances.yaml)
+        debug: Enable debug output
+    
+    Returns:
+        True if installation successful, False otherwise
+    
+    Example:
+        install_gim_on_raptor(
+            config=config,
+            logger=logger,
+            gim_installer_path="/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
+        )
+    """
+    import subprocess
+    import os
+    
+    logger.info("=" * 80)
+    logger.info("INSTALL GIM ON RAPTOR")
+    logger.info("=" * 80)
+    
+    # Check if installer exists
+    if not os.path.exists(gim_installer_path):
+        logger.error(f"GIM installer not found: {gim_installer_path}")
+        return False
+    
+    logger.info(f"GIM installer: {gim_installer_path}")
+    
+    # Auto-detect tapip from machines_info if not provided
+    if not tapip:
+        machines_info = config.get('machines_info', {})
+        raptor_info = machines_info.get('raptor', {})
+        tapip = raptor_info.get('private_ip')
+        
+        if tapip:
+            logger.info(f"Auto-detected TAP IP from machines_info: {tapip}")
+        else:
+            logger.error("TAP IP not provided and not found in machines_info for raptor")
+            return False
+    
+    # Auto-detect sqlguardip from appliances.yaml if not provided
+    if not sqlguardip:
+        appliance_loader = ApplianceConfigLoader()
+        collectors = appliance_loader.get_appliances_by_type('collector')
+        
+        if collectors:
+            # Get first collector
+            first_collector_name = list(collectors.keys())[0]
+            first_collector = collectors[first_collector_name]
+            sqlguardip = first_collector.get('ip')
+            
+            if sqlguardip:
+                logger.info(f"Auto-detected SQL Guard IP from first collector ({first_collector_name}): {sqlguardip}")
+            else:
+                logger.error(f"Collector '{first_collector_name}' has no IP address configured")
+                return False
+        else:
+            logger.error("SQL Guard IP not provided and no collectors found in appliances.yaml")
+            return False
+    
+    logger.info(f"Installation parameters:")
+    logger.info(f"  - Install directory: {install_dir}")
+    logger.info(f"  - TAP IP: {tapip}")
+    logger.info(f"  - SQL Guard IP: {sqlguardip}")
+    
+    # Build command
+    command = [
+        gim_installer_path,
+        "--",
+        "--dir", install_dir,
+        "--tapip", tapip,
+        "--sqlguardip", sqlguardip
+    ]
+    
+    logger.info(f"\n➜ Executing GIM installer...")
+    logger.info(f"Command: {' '.join(command)}")
+    
+    try:
+        # Run installer
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minutes timeout
+        )
+        
+        if debug and result.stdout:
+            logger.info(f"Installer output:\n{result.stdout}")
+        
+        if result.stderr and debug:
+            logger.warning(f"Installer stderr:\n{result.stderr}")
+        
+        logger.info("✓ GIM installation completed successfully")
+        logger.info("=" * 80)
+        return True
+        
+    except subprocess.TimeoutExpired:
+        logger.error("✗ GIM installation timeout (exceeded 5 minutes)")
+        logger.error("=" * 80)
+        return False
+    except subprocess.CalledProcessError as e:
+        logger.error(f"✗ GIM installation failed with exit code {e.returncode}")
+        if e.stdout:
+            logger.error(f"Output:\n{e.stdout}")
+        if e.stderr:
+            logger.error(f"Error:\n{e.stderr}")
+        logger.error("=" * 80)
+        return False
+    except Exception as e:
+        logger.error(f"✗ Unexpected error during GIM installation: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        logger.error("=" * 80)
+        return False
+
 # Made with Bob
