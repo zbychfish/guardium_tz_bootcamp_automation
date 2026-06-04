@@ -138,16 +138,33 @@ groups:
 
   gim_lab:
     name: "GIM Lab"
-    description: "Install GIM on raptor and import GIM modules for Guardium Installation Manager training"
+    description: "Install GIM on raptor, import GIM modules, and install STAP agent"
     auto_execute: false  # Executed on demand
     dependencies: [initial_preparation, setup_appliances, other_praparations]  # Requires initial_preparation and setup_appliances
     stages:
+      - name: install_gim_on_raptor
+        function: install_gim_on_raptor
+        module: tasks.labs
+        description: "Install GIM (Guardium Installation Manager) on raptor machine"
+        args:
+          gim_installer_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
+          debug: false
+      
       - name: import_gim_modules
         function: import_gim_modules
         module: tasks.labs
         description: "Import GIM module files to Guardium appliance"
         args:
           appliance_name: "cm02"
+          debug: false
+      
+      - name: install_stap_on_raptor
+        function: install_stap_on_raptor
+        module: tasks.labs
+        description: "Install STAP (S-TAP) agent on raptor using GIM"
+        args:
+          appliance_name: "cm02"
+          module_version: "STAP-12.2.2.0_r123489_"
           debug: false
 
   atap_lab:
