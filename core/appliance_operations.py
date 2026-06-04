@@ -3595,7 +3595,8 @@ def install_gim_module(
         logger.info(f"\n➜ Scheduling installation...")
         schedule_response = api.gim_schedule_install(
             client_ip=client_ip,
-            date="now"
+            date="now",
+            module=module
         )
         
         if debug:
@@ -3609,9 +3610,49 @@ def install_gim_module(
             time.sleep(installation_delay)
             
             logger.info(f"➜ Monitoring installation progress...")
-            logger.info("Note: Monitoring implementation depends on your requirements")
-            logger.info("You can check installation status via GUI or additional API calls")
-            # TODO: Implement monitoring if needed (e.g., using gim_list_client_modules)
+            
+            # Monitor until all modules are installed
+            import re
+            pending = ["initial"]  # Initialize to enter loop
+            while pending:
+                modules = api.gim_list_client_modules(client_ip=client_ip)
+                msg = modules.get("Message", "")
+                
+                # Parse module entries
+                entries = [
+                    e.strip()
+                    for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", msg)
+                    if e.strip()
+                ]
+                
+                result = []
+                for entry in entries:
+                    entry_str: str = str(entry)
+                    def g(p: str) -> str | None:
+                        m = re.search(p, entry_str)
+                        return m.group(1) if m else None
+                    
+                    result.append({
+                        "module_id": g(r"MODULE_ID:\s+(-?\d+)"),
+                        "name": g(r"NAME:\s+([A-Z0-9\-]+)"),
+                        "installed_version": g(r"INSTALLED_VERSION\s+([0-9][^\s]+)"),
+                        "scheduled_version": g(r"SCHEDULED_VERSION\s+([0-9][^\s]+)"),
+                        "state": g(r"STATE:\s+([A-Z\-]+)"),
+                        "is_scheduled": g(r"IS_SCHEDULED:\s+([NY])"),
+                        "schedule_time": g(r"IS_SCHEDULED:\s+[NY]\s+\(([^)]+)\)")
+                    })
+                
+                # Check for pending installations
+                pending = [m for m in result if m["state"] != "INSTALLED"]
+                
+                if pending:
+                    logger.info(f"  ⌛ {len(pending)} module(s) still installing. Waiting 30 seconds before next check...")
+                    if debug:
+                        for m in pending:
+                            logger.debug(f"    - {m['name']}: {m['state']}")
+                    time.sleep(30)
+                else:
+                    logger.info("  ✓ All modules installed successfully!")
         
         logger.info("\n" + "=" * 80)
         logger.info(f"✓ GIM MODULE INSTALLATION COMPLETED")

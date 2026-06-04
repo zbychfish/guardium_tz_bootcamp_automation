@@ -439,6 +439,35 @@ class GuardiumRestAPI:
         response.raise_for_status()
         
         return response.json()
+    def gim_list_client_modules(self, client_ip: str) -> dict:
+        """
+        Retrieves list of GIM modules assigned to client.
+        
+        Args:
+            client_ip: Client IP address (required)
+        
+        Returns:
+            Dictionary with list of GIM modules for the given client
+        
+        Raises:
+            RuntimeError: If token has not been retrieved yet
+            requests.exceptions.RequestException: In case of HTTP error
+        
+        Example:
+            modules = api.gim_list_client_modules(client_ip="10.10.9.100")
+        """
+        url = f'{self.base_url}/restAPI/gim_list_client_modules'
+        headers = self.get_headers()
+        
+        params = {
+            'clientIP': client_ip
+        }
+        
+        response = requests.get(url, headers=headers, params=params, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
+
 
 
 
