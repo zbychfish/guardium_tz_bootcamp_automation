@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional
 from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.guardium_rest_api import GuardiumRestAPI
+from core.appliance_operations import copy_files_to_appliance
 
 logger = get_logger(__name__)
 
@@ -22,16 +23,18 @@ def import_gim_modules(
     demo_user: str = "demo",
     demo_password: Optional[str] = None,
     gim_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/agents/gim",
+    gim_target_dir: str = "/var/IBM/Guardium/gim/packages",
     debug: bool = False
 ) -> bool:
     """
     Import GIM (Guardium Installation Manager) modules to Guardium appliance.
     
     This function:
-    1. Loads appliance configuration
-    2. Creates GuardiumRestAPI client
-    3. Authenticates using demo user credentials
-    4. Imports all *.gim files from the specified directory
+    1. Copies GIM files from raptor to appliance
+    2. Loads appliance configuration
+    3. Creates GuardiumRestAPI client
+    4. Authenticates using demo user credentials
+    5. Imports all *.gim files using REST API
     
     Args:
         config: Configuration object
@@ -39,7 +42,8 @@ def import_gim_modules(
         appliance_name: Name of the appliance (required)
         demo_user: Demo user username (default: "demo")
         demo_password: Demo user password (optional, uses custom_variables if not provided)
-        gim_directory: Directory containing GIM files (default: /opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/agents/gim)
+        gim_directory: Directory containing GIM files on raptor (default: /opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/agents/gim)
+        gim_target_dir: Target directory on appliance (default: /var/IBM/Guardium/gim/packages)
         debug: Enable debug output
     
     Returns:
@@ -70,6 +74,31 @@ def import_gim_modules(
     
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     
+    # Step 1: Copy GIM files to appliance
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 1: Copy GIM files to appliance")
+    logger.info(f"{'=' * 80}")
+    
+    copy_success = copy_files_to_appliance(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        source_dir=gim_directory,
+        file_pattern="*.gim",
+        target_dir=gim_target_dir,
+        owner="tomcat:tomcat",
+        debug=debug
+    )
+    
+    if not copy_success:
+        logger.error("✗ Failed to copy GIM files to appliance")
+        return False
+    
+    # Step 2: Import GIM modules using REST API
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 2: Import GIM modules using REST API")
+    logger.info(f"{'=' * 80}")
+    
     # Get demo user password
     if not demo_password:
         try:
@@ -94,24 +123,9 @@ def import_gim_modules(
         logger.error(f"Failed to get client_secret from custom_variables: {e}")
         return False
     
-    # Check if GIM directory exists
-    if not os.path.exists(gim_directory):
-        logger.error(f"GIM directory not found: {gim_directory}")
-        return False
-    
-    # Check for GIM files
-    gim_files = glob.glob(os.path.join(gim_directory, "*.gim"))
-    if not gim_files:
-        logger.error(f"No *.gim files found in {gim_directory}")
-        return False
-    
-    logger.info(f"Found {len(gim_files)} GIM file(s) in {gim_directory}:")
-    for gim_file in gim_files:
-        logger.info(f"  - {os.path.basename(gim_file)}")
-    
     # Create REST API client
     base_url = f"https://{host}"
-    logger.info(f"\nConnecting to Guardium REST API at {base_url}")
+    logger.info(f"Connecting to Guardium REST API at {base_url}")
     
     try:
         api = GuardiumRestAPI(
