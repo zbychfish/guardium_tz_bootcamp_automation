@@ -204,16 +204,16 @@ def install_gim_on_raptor(
     
     logger.info(f"GIM installer: {gim_installer_path}")
     
-    # Auto-detect tapip from machines_info if not provided
+    # Auto-detect tapip from machines if not provided
     if not tapip:
-        machines_info = config.get('machines_info', {})
-        raptor_info = machines_info.get('raptor', {})
+        machines = config.get('machines', {})
+        raptor_info = machines.get('raptor', {})
         tapip = raptor_info.get('private_ip')
         
         if tapip:
-            logger.info(f"Auto-detected TAP IP from machines_info: {tapip}")
+            logger.info(f"Auto-detected TAP IP from machines config: {tapip}")
         else:
-            logger.error("TAP IP not provided and not found in machines_info for raptor")
+            logger.error("TAP IP not provided and not found in machines config for raptor")
             return False
     
     # Auto-detect sqlguardip from appliances.yaml if not provided (use CM, not collector)
