@@ -44,12 +44,23 @@ groups:
     name: "ATAP Lab"
     description: "PostgreSQL deployment for ATAP training"
     auto_execute: false  # Executed after marker, on demand
-    dependencies: [initial_preparation]  # Requires initial_preparation to be completed
+    dependencies: [initial_preparation, setup_appliances, gim_lab]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_postgres_on_raptor
         function: deploy_postgres_on_raptor
         module: tasks.deploy_postgres
-        description: "Deploy PostgreSQL 16 on raptor"
+
+  gim_lab:
+    name: "GIM Lab"
+    description: "Import GIM modules for Guardium Installation Manager training"
+    auto_execute: false  # Executed on demand
+    dependencies: [initial_preparation, setup_appliances]  # Requires initial_preparation and setup_appliances
+    stages:
+      - name: import_gim_modules
+        function: import_gim_modules
+        module: tasks.labs
+        description: "Import GIM module files to Guardium appliance"
+        appliances: [cm]  # Execute on Central Manager
 
   setup_appliances:
     name: "Setup Appliances"

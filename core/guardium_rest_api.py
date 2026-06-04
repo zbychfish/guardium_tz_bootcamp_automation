@@ -262,6 +262,36 @@ class GuardiumRestAPI:
         response.raise_for_status()
         
         return response.json()
+    
+    def get_gim_package(self, filename: str) -> dict:
+        """
+        Retrieves GIM (Guardium Installation Manager) package from Guardium.
+        
+        Args:
+            filename: GIM package filename (required). Use wildcards like "*.gim" to get all packages.
+        
+        Returns:
+            Dictionary with API response containing GIM package information
+        
+        Raises:
+            RuntimeError: If token has not been retrieved yet
+            requests.exceptions.RequestException: In case of HTTP error
+        
+        Example:
+            api.get_gim_package("*.gim")  # Get all GIM packages
+            api.get_gim_package("specific_package.gim")  # Get specific package
+        """
+        url = f'{self.base_url}/restAPI/gim_package'
+        headers = self.get_headers()
+        
+        params = {
+            'filename': filename
+        }
+        
+        response = requests.get(url, headers=headers, params=params, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
 
 
 
