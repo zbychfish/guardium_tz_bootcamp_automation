@@ -114,44 +114,12 @@ def import_gim_modules(
         logger.error("Provide demo_password in args or set 'pwd' in custom_variables")
         return False
     
-    # Get OAuth client secret from .client_secret file
+    # Create REST API client using helper function
     try:
-        from pathlib import Path
-        project_root = config.config_file.parent.parent
-        secret_file = project_root / ".client_secret"
+        from core.guardium_rest_api import create_guardium_api
         
-        if not secret_file.exists():
-            logger.error(f"client_secret file not found: {secret_file}")
-            logger.error("Run 'create_oauth_client' stage first to generate the client secret")
-            return False
-        
-        with open(secret_file, 'r') as f:
-            client_secret = f.read().strip()
-        
-        if not client_secret:
-            logger.error("client_secret file is empty")
-            return False
-        
-        logger.info(f"Using client_secret from file: {secret_file}")
-        
-    except Exception as e:
-        logger.error(f"Failed to read client_secret from file: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    
-    # Create REST API client
-    base_url = f"https://{host}"
-    logger.info(f"Connecting to Guardium REST API at {base_url}")
-    
-    try:
-        api = GuardiumRestAPI(
-            base_url=base_url,
-            client_id="BOOTCAMP",
-            client_secret=client_secret,
-            verify_ssl=False
-        )
+        api = create_guardium_api(config, logger, appliance_name)
+        logger.info("✓ GuardiumRestAPI client created successfully")
         
         # Get OAuth token
         logger.info(f"Authenticating as user '{demo_user}'...")
