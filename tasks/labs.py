@@ -382,6 +382,23 @@ def install_stap_on_raptor(
     
     logger.info(f"Using SQL Guard IP from collector '{collector_name}': {sqlguard_ip}")
     
+    # Install kernel-devel and kernel-headers locally before STAP installation
+    logger.info("\n" + "=" * 80)
+    logger.info("Installing kernel-devel and kernel-headers")
+    logger.info("=" * 80)
+    
+    from core.utils import execute_commands
+    
+    commands = [
+        "dnf install -y kernel-devel-$(uname -r) kernel-headers-$(uname -r)"
+    ]
+    
+    if not execute_commands(commands, logger, verbose=True):
+        logger.error("Failed to install kernel packages")
+        return False
+    
+    logger.info("✓ Kernel packages installed successfully")
+    
     # Prepare STAP parameters
     stap_params = {
         "STAP_SQLGUARD_IP": sqlguard_ip,
@@ -390,7 +407,9 @@ def install_stap_on_raptor(
         "STAP_CONNECTION_POOL_SIZE": connection_pool_size
     }
     
-    logger.info(f"STAP Configuration:")
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STAP Configuration:")
+    logger.info(f"{'=' * 80}")
     logger.info(f"  - Client IP (raptor): {client_ip}")
     logger.info(f"  - SQL Guard IP (collector): {sqlguard_ip}")
     logger.info(f"  - Use TLS: {use_tls}")
