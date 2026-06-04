@@ -3622,6 +3622,14 @@ def install_gim_module(
                 if debug:
                     logger.debug(f"  Full API response: {modules}")
                 
+                # Check for API errors
+                if "ErrorCode" in modules or "ErrorMessage" in modules:
+                    error_code = modules.get("ErrorCode", "N/A")
+                    error_msg = modules.get("ErrorMessage", "N/A")
+                    logger.error(f"  ✗ API Error: Code={error_code}, Message={error_msg}")
+                    logger.error(f"  This usually means the client IP is not registered or modules not assigned")
+                    return False
+                
                 msg = modules.get("Message", "")
                 
                 if debug:
