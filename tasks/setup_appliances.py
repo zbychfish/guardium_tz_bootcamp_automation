@@ -631,372 +631,6 @@ def restart_appliance_all(
     # Return True only if all succeeded
     return failed_count == 0
 
-def configure_network_ip_all(
-    config,
-    logger,
-    verbose: bool = True,
-    prefix: str = "/24",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Configure network IP addresses on all appliances in order: CM → Collectors → AppNodes
-    Uses IP addresses from appliances.yaml configuration.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        prefix: Network prefix (default: /24)
-        user: SSH username (optional)
-        password: SSH password (optional)
-        prompt_regex: CLI prompt regex (optional)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
-    from core.appliance_operations import configure_network_ip as core_configure_network_ip
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("CONFIGURE NETWORK IP ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
-        return False
-    
-    # Group appliances by type
-    cms = []
-    collectors = []
-    appnodes = []
-    others = []
-    
-    for name, appliance_config in all_appliances.items():
-        appliance_type = appliance_config.get('type', '').lower()
-        if appliance_type == 'cm':
-            cms.append(name)
-        elif appliance_type == 'collector':
-            collectors.append(name)
-        elif appliance_type == 'appnode':
-            appnodes.append(name)
-        else:
-            others.append(name)
-    
-    # Order: CM → Collectors → AppNodes → Others
-    ordered_appliances = cms + collectors + appnodes + others
-    
-    logger.info(f"Found {len(ordered_appliances)} appliances:")
-    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
-    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
-    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
-    if others:
-        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
-    logger.info("")
-    
-    # Configure network IP on each appliance
-    success_count = 0
-    failed_count = 0
-    failed_appliances = []
-    
-    for appliance_name in ordered_appliances:
-        logger.info(f"➜ Configuring network IP on appliance: {appliance_name}")
-        
-        try:
-            result = core_configure_network_ip(
-                config=config,
-                logger=logger,
-                appliance_name=appliance_name,
-                ip_address=None,  # Use IP from appliances.yaml
-                prefix=prefix,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                debug=debug
-            )
-            
-            if result:
-                success_count += 1
-                logger.info(f"✓ {appliance_name} network IP configured successfully\n")
-            else:
-                failed_count += 1
-                failed_appliances.append(appliance_name)
-                logger.error(f"✗ {appliance_name} network IP configuration failed\n")
-        
-        except Exception as e:
-            failed_count += 1
-            failed_appliances.append(appliance_name)
-            logger.error(f"✗ {appliance_name} network IP configuration failed with exception: {str(e)}\n")
-            if debug:
-                import traceback
-                logger.error(traceback.format_exc())
-    
-    # Summary
-    logger.info("=" * 80)
-    logger.info("NETWORK IP CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    logger.info(f"Total appliances: {len(ordered_appliances)}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {failed_count}")
-    
-    if failed_appliances:
-        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
-    
-    logger.info("=" * 80)
-    logger.info("Note: Changes will take effect after network restart on each appliance")
-    logger.info("=" * 80)
-    
-    # Return True only if all succeeded
-    return failed_count == 0
-    
-    # Return True only if all succeeded
-    return failed_count == 0
-
-def configure_hosts_resolving_all(
-    config,
-    logger,
-    verbose: bool = True,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Configure /etc/hosts resolving on all appliances in order: CM → Collectors → AppNodes
-    Adds entries for:
-    - Unix machines (raptor, ceraptos, sauropod) from machines_info.json
-    - Other Guardium appliances from appliances.yaml
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("CONFIGURE HOSTS RESOLVING ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
-        return False
-    
-    # Group appliances by type
-    cms = []
-    collectors = []
-    appnodes = []
-    others = []
-    
-    for name, appliance_config in all_appliances.items():
-        appliance_type = appliance_config.get('type', '').lower()
-        if appliance_type == 'cm':
-            cms.append(name)
-        elif appliance_type == 'collector':
-            collectors.append(name)
-        elif appliance_type == 'appnode':
-            appnodes.append(name)
-        else:
-            others.append(name)
-    
-    # Order: CM → Collectors → AppNodes → Others
-    ordered_appliances = cms + collectors + appnodes + others
-    
-    logger.info(f"Found {len(ordered_appliances)} appliances:")
-    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
-    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
-    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
-    if others:
-        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
-    logger.info("")
-    
-    # Define operation function
-    def configure_hosts_operation(appliance_name: str, **kwargs) -> bool:
-        return core_configure_hosts(
-            appliance_name=appliance_name,
-            **kwargs
-        )
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
-    results, errors = execute_on_appliances_async(
-        appliances=ordered_appliances,
-        operation_func=configure_hosts_operation,
-        operation_name="configure hosts resolving",
-        logger=logger,
-        config=config,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    logger.info("HOSTS CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    total_count = len(results)
-    
-    logger.info(f"Total appliances: {total_count}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {total_count - success_count}")
-    
-    if errors:
-        logger.error("\nErrors encountered:")
-        for appliance_name, error_msg in errors.items():
-            logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    all_success = all(results.values())
-    
-    if all_success:
-        logger.info("\n✓ All appliances configured successfully")
-    else:
-        logger.error("\n✗ Some appliances failed configuration")
-    
-    logger.info("=" * 80)
-    
-    return all_success
-
-def configure_ntp_all(
-    config,
-    logger,
-    verbose: bool = True,
-    ntp_servers: Optional[list] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Configure NTP on all appliances in order: CM → Collectors → AppNodes
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        ntp_servers: List of NTP servers (optional, defaults to pool.ntp.org)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
-    from core.appliance_operations import configure_ntp as core_configure_ntp
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("CONFIGURE NTP ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
-        return False
-    
-    # Group appliances by type
-    cms = []
-    collectors = []
-    appnodes = []
-    others = []
-    
-    for name, appliance_config in all_appliances.items():
-        appliance_type = appliance_config.get('type', '').lower()
-        if appliance_type == 'cm':
-            cms.append(name)
-        elif appliance_type == 'collector':
-            collectors.append(name)
-        elif appliance_type == 'appnode':
-            appnodes.append(name)
-        else:
-            others.append(name)
-    
-    # Order: CM → Collectors → AppNodes → Others
-    ordered_appliances = cms + collectors + appnodes + others
-    
-    logger.info(f"Found {len(ordered_appliances)} appliances:")
-    logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
-    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
-    logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
-    if others:
-        logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
-    logger.info("")
-    
-    # Define operation function
-    def configure_ntp_operation(appliance_name: str, **kwargs) -> bool:
-        return core_configure_ntp(
-            appliance_name=appliance_name,
-            **kwargs
-        )
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
-    results, errors = execute_on_appliances_async(
-        appliances=ordered_appliances,
-        operation_func=configure_ntp_operation,
-        operation_name="configure NTP",
-        logger=logger,
-        config=config,
-        ntp_servers=ntp_servers,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    logger.info("NTP CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    total_count = len(results)
-    
-    logger.info(f"Total appliances: {total_count}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {total_count - success_count}")
-    
-    if errors:
-        logger.error("\nErrors encountered:")
-        for appliance_name, error_msg in errors.items():
-            logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    all_success = all(results.values())
-    
-    if all_success:
-        logger.info("\n✓ All appliances configured successfully")
-    else:
-        logger.error("\n✗ Some appliances failed configuration")
-    
-    logger.info("=" * 80)
-    
-    return all_success
 
 def configure_system_settings_all(
     config,
@@ -1004,17 +638,59 @@ def configure_system_settings_all(
     verbose: bool = True,
     hostname: Optional[str] = None,
     domain: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    prefix: str = "/24",
+    timezone: Optional[str] = None,
+    ntp_servers: Optional[list] = None,
+    configure_hosts: bool = True,
+    shared_secret: Optional[str] = None,
+    gid: Optional[int] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-
-    from core.appliance_operations import configure_system_settings as core_configure_system_settings
+    """
+    CONSOLIDATED FUNCTION: Configure all system settings on all appliances in a single CLI session per appliance.
+    
+    This function replaces the following old functions:
+    - configure_system_settings_all (hostname, domain, small_disk, timeouts)
+    - configure_network_ip_all (network IP configuration)
+    - set_timezone_all (timezone configuration)
+    - configure_ntp_all (NTP configuration)
+    - configure_hosts_resolving_all (hosts file configuration)
+    - set_shared_secret_all (shared secret configuration)
+    - set_product_gid_all (product GID configuration)
+    
+    All operations are executed in a single CLI session per appliance to avoid multiple logins.
+    Execution order: system settings → network IP → timezone → NTP → hosts resolving → shared secret → product GID
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        hostname: Hostname to set (optional, derived from appliance_name if not provided)
+        domain: Domain to set (optional, defaults to demo.guardium)
+        ip_address: IP address to set (optional, uses IP from appliances.yaml if not provided)
+        prefix: Network prefix (default: /24)
+        timezone: Timezone to set (optional, defaults to Europe/Warsaw or from machines_info.json)
+        ntp_servers: List of NTP servers (optional, defaults to pool.ntp.org)
+        configure_hosts: Whether to configure /etc/hosts (default: True)
+        shared_secret: Shared secret value (optional, uses value from machines_info.json if not provided)
+        gid: Product GID value (optional, generates random 1000-100000 if not provided)
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        True if all appliances configured successfully, False otherwise
+    """
+    from core.appliance_operations import configure_system_settings_consolidated
     from core.appliance_config_loader import ApplianceConfigLoader
     
     logger.info("=" * 80)
-    logger.info("CONFIGURE SYSTEM SETTINGS ON ALL APPLIANCES")
+    logger.info("CONFIGURE ALL SYSTEM SETTINGS (CONSOLIDATED)")
     logger.info("=" * 80)
     
     # Load all appliances
@@ -1054,8 +730,8 @@ def configure_system_settings_all(
     logger.info("")
     
     # Define operation function
-    def configure_settings_operation(appliance_name: str, **kwargs) -> bool:
-        return core_configure_system_settings(
+    def configure_consolidated_operation(appliance_name: str, **kwargs) -> bool:
+        return configure_system_settings_consolidated(
             appliance_name=appliance_name,
             **kwargs
         )
@@ -1065,12 +741,19 @@ def configure_system_settings_all(
     
     results, errors = execute_on_appliances_async(
         appliances=ordered_appliances,
-        operation_func=configure_settings_operation,
-        operation_name="configure system settings",
+        operation_func=configure_consolidated_operation,
+        operation_name="configure all system settings (consolidated)",
         logger=logger,
         config=config,
         hostname=hostname,
         domain=domain,
+        ip_address=ip_address,
+        prefix=prefix,
+        timezone=timezone,
+        ntp_servers=ntp_servers,
+        configure_hosts=configure_hosts,
+        shared_secret=shared_secret,
+        gid=gid,
         user=user,
         password=password,
         prompt_regex=prompt_regex,
@@ -1079,7 +762,7 @@ def configure_system_settings_all(
     
     # Summary
     logger.info("\n" + "=" * 80)
-    logger.info("CONFIGURATION SUMMARY")
+    logger.info("CONSOLIDATED CONFIGURATION SUMMARY")
     logger.info("=" * 80)
     
     success_count = sum(1 for success in results.values() if success)
@@ -1098,113 +781,9 @@ def configure_system_settings_all(
     
     if all_success:
         logger.info("\n✓ All appliances configured successfully")
+        logger.info("Note: All operations completed in single CLI session per appliance")
     else:
         logger.error("\n✗ Some appliances failed configuration")
-    
-    logger.info("=" * 80)
-    
-    return all_success
-
-def set_shared_secret_all(
-    config,
-    logger,
-    verbose: bool = True,
-    shared_secret: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Set shared secret on all appliances in order: CM → Collectors → AppNodes
-    This must be done before registering appliances on Central Manager.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        shared_secret: Shared secret value (optional, uses value from machines_info.json custom_variables)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
-    from core.appliance_operations import set_shared_secret
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("SET SHARED SECRET ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
-        return False
-    
-    # Sort appliances by type: CM → Collectors → AppNodes
-    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
-    sorted_appliances = sorted(
-        all_appliances.items(),
-        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
-    )
-    
-    logger.info(f"Found {len(sorted_appliances)} appliances to configure")
-    
-    # Define operation function
-    def set_secret_operation(appliance_name: str, **kwargs) -> bool:
-        return set_shared_secret(
-            appliance_name=appliance_name,
-            **kwargs
-        )
-    
-    # Prepare appliance list
-    appliance_names = [name for name, _ in sorted_appliances]
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
-    results, errors = execute_on_appliances_async(
-        appliances=appliance_names,
-        operation_func=set_secret_operation,
-        operation_name="set shared secret",
-        logger=logger,
-        config=config,
-        shared_secret=shared_secret,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    logger.info("SHARED SECRET CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    total_count = len(results)
-    
-    logger.info(f"Total appliances: {total_count}")
-    logger.info(f"Successful: {success_count}")
-    logger.info(f"Failed: {total_count - success_count}")
-    
-    if errors:
-        logger.error("\nErrors encountered:")
-        for appliance_name, error_msg in errors.items():
-            logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    all_success = all(results.values())
-    
-    if all_success:
-        logger.info("\n✓ Shared secret set successfully on all appliances")
-    else:
-        logger.error("\n✗ Some appliances failed shared secret configuration")
     
     logger.info("=" * 80)
     
@@ -1224,9 +803,9 @@ def register_appliances_all(
     registration_check_delay: int = 120
 ) -> bool:
     """
-    Register all Collectors and AppNodes on Central Manager sequentially.
+    Register all Collectors and AppNodes on Central Manager in parallel.
     Note: CM itself is not registered. Shared secret must be set on all appliances first.
-    Registers appliances one by one to avoid potential conflicts.
+    Registers appliances in parallel (max 20 workers) for faster execution.
     
     Args:
         config: Configuration object
@@ -1244,11 +823,11 @@ def register_appliances_all(
     Returns:
         True if all appliances registered successfully, False otherwise
     """
-    from core.appliance_operations import register_appliance
+    from core.appliance_operations import register_appliance, execute_on_appliances_async
     from core.appliance_config_loader import ApplianceConfigLoader
     
     logger.info("=" * 80)
-    logger.info("REGISTER APPLIANCES ON CENTRAL MANAGER")
+    logger.info("REGISTER APPLIANCES ON CENTRAL MANAGER (PARALLEL)")
     logger.info("=" * 80)
     
     # Load all appliances
@@ -1279,134 +858,46 @@ def register_appliances_all(
     logger.info(f"Found {len(sorted_appliances)} appliances to register")
     for name, cfg in sorted_appliances:
         logger.info(f"  - {name} ({cfg.get('type')})")
+    logger.info("")
     
-    # Register appliances sequentially (one by one)
-    all_success = True
-    for appliance_name, appliance_config in sorted_appliances:
-        appliance_type = appliance_config.get('type', 'unknown')
-        logger.info(f"\n{'='*80}")
-        logger.info(f"Registering {appliance_type.upper()}: {appliance_name}")
-        logger.info(f"{'='*80}")
-        
-        success = register_appliance(
-            config=config,
-            logger=logger,
+    # Prepare appliance list
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    # Define operation function
+    def register_operation(appliance_name: str, **kwargs) -> bool:
+        return register_appliance(
             appliance_name=appliance_name,
-            cm_ip=cm_ip,
-            cm_port=cm_port,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            debug=debug,
-            timeout=timeout,
-            registration_check_delay=registration_check_delay
+            **kwargs
         )
-        
-        if not success:
-            logger.error(f"Failed to register {appliance_name}")
-            all_success = False
+    
+    # Execute registration on all appliances asynchronously
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=register_operation,
+        operation_name="register appliance",
+        logger=logger,
+        config=config,
+        cm_ip=cm_ip,
+        cm_port=cm_port,
+        user=user,
+        password=password,
+        prompt_regex=prompt_regex,
+        debug=debug,
+        timeout=timeout,
+        registration_check_delay=registration_check_delay
+    )
     
     # Summary
     logger.info("\n" + "=" * 80)
     logger.info("APPLIANCE REGISTRATION SUMMARY")
     logger.info("=" * 80)
     
-    if all_success:
-        logger.info("✓ All appliances registered successfully")
-    else:
-        logger.error("✗ Some appliances failed registration")
-    
-    logger.info("=" * 80)
-    
-    return all_success
-
-def set_timezone_all(
-    config,
-    logger,
-    verbose: bool = True,
-    timezone: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Set timezone on all appliances in order: CM → Collectors → AppNodes
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        timezone: Timezone string (optional, defaults to Europe/Warsaw or from machines_info.json)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
-    from core.appliance_operations import set_timezone
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("SET TIMEZONE ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
-        return False
-    
-    # Sort appliances by type: CM → Collectors → AppNodes
-    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
-    sorted_appliances = sorted(
-        all_appliances.items(),
-        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
-    )
-    
-    logger.info(f"Found {len(sorted_appliances)} appliances to configure")
-    
-    # Define operation function
-    def set_timezone_operation(appliance_name: str, **kwargs) -> bool:
-        return set_timezone(
-            appliance_name=appliance_name,
-            **kwargs
-        )
-    
-    # Prepare appliance list
-    appliance_names = [name for name, _ in sorted_appliances]
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
-    results, errors = execute_on_appliances_async(
-        appliances=appliance_names,
-        operation_func=set_timezone_operation,
-        operation_name="set timezone",
-        logger=logger,
-        config=config,
-        timezone=timezone,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    logger.info("TIMEZONE CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    
     success_count = sum(1 for success in results.values() if success)
     total_count = len(results)
     
     logger.info(f"Total appliances: {total_count}")
-    logger.info(f"Successful: {success_count}")
-    logger.info(f"Failed: {total_count - success_count}")
+    logger.info(f"✓ Successful: {success_count}")
+    logger.info(f"✗ Failed: {total_count - success_count}")
     
     if errors:
         logger.error("\nErrors encountered:")
@@ -1416,127 +907,9 @@ def set_timezone_all(
     all_success = all(results.values())
     
     if all_success:
-        logger.info("\n✓ Timezone set successfully on all appliances")
+        logger.info("\n✓ All appliances registered successfully")
     else:
-        logger.error("\n✗ Some appliances failed timezone configuration")
-    
-    logger.info("=" * 80)
-    
-    return all_success
-
-def set_product_gid_all(
-    config,
-    logger,
-    verbose: bool = True,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Set random product GID on all appliances in parallel.
-    Each appliance gets a unique random GID between 1000-100000.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
-    from core.appliance_operations import set_product_gid
-    from core.appliance_config_loader import ApplianceConfigLoader
-    import random
-    
-    logger.info("=" * 80)
-    logger.info("SET PRODUCT GID ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
-        return False
-    
-    # Sort appliances by type: CM → Collectors → AppNodes
-    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
-    sorted_appliances = sorted(
-        all_appliances.items(),
-        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
-    )
-    
-    logger.info(f"Found {len(sorted_appliances)} appliances to configure")
-    
-    # Generate unique random GIDs for each appliance
-    appliance_gids = {}
-    used_gids = set()
-    for appliance_name, _ in sorted_appliances:
-        while True:
-            gid = random.randint(1000, 100000)
-            if gid not in used_gids:
-                used_gids.add(gid)
-                appliance_gids[appliance_name] = gid
-                logger.info(f"  - {appliance_name}: GID {gid}")
-                break
-    
-    # Define operation function
-    def set_gid_operation(appliance_name: str, **kwargs) -> bool:
-        # Get the pre-generated GID for this appliance
-        gid = appliance_gids.get(appliance_name)
-        return set_product_gid(
-            appliance_name=appliance_name,
-            gid=gid,
-            **kwargs
-        )
-    
-    # Prepare appliance list
-    appliance_names = [name for name, _ in sorted_appliances]
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
-    results, errors = execute_on_appliances_async(
-        appliances=appliance_names,
-        operation_func=set_gid_operation,
-        operation_name="set product GID",
-        logger=logger,
-        config=config,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug
-    )
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    logger.info("PRODUCT GID CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    total_count = len(results)
-    
-    logger.info(f"Total appliances: {total_count}")
-    logger.info(f"Successful: {success_count}")
-    logger.info(f"Failed: {total_count - success_count}")
-    
-    if errors:
-        logger.error("\nErrors encountered:")
-        for appliance_name, error_msg in errors.items():
-            logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    all_success = all(results.values())
-    
-    if all_success:
-        logger.info("\n✓ Product GID set successfully on all appliances")
-    else:
-        logger.error("\n✗ Some appliances failed product GID configuration")
+        logger.error("\n✗ Some appliances failed registration")
     
     logger.info("=" * 80)
     

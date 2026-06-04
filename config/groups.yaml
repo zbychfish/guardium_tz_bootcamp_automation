@@ -51,7 +51,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm01"
+          appliance_name: "cm02"
           client_id: "BOOTCAMP"
            
       - name: create_demo_user
@@ -59,46 +59,22 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm01"  # Name from config/appliances.yaml
+          appliance_name: "cm02"  # Name from config/appliances.yaml
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
         module: tasks.setup_appliances
-        description: "Configure hostname, domain, small_disk, and session timeouts on ALL appliances in parallel (max 20 parallel, CM → Collectors → AppNodes order)"
+        description: "CONSOLIDATED: Configure ALL system settings in single CLI session per appliance (hostname, domain, small_disk, timeouts, network IP, timezone, NTP, hosts resolving, shared secret, product GID). Executes in parallel (max 20), CM → Collectors → AppNodes order."
         args:
           # hostname: "custom"  # Optional - override hostname for all appliances
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
-          debug: false
-      
-      - name: configure_network_ip_on_all_appliances
-        function: configure_network_ip_all
-        module: tasks.setup_appliances
-        description: "Configure network IP addresses on ALL appliances using IPs from appliances.yaml (CM → Collectors → AppNodes)"
-        args:
+          # ip_address: "10.240.64.9"  # Optional - uses IP from appliances.yaml if not provided
           # prefix: "/24"  # Optional - network prefix (default: /24)
-          debug: false
-      
-      - name: set_timezone_on_appliances
-        function: set_timezone_all
-        module: tasks.setup_appliances
-        description: "Set timezone on ALL appliances in parallel (max 20 parallel, defaults to Europe/Warsaw or from machines_info.json)"
-        args:
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
-          debug: false
-      
-      - name: configure_ntp_on_all_appliances
-        function: configure_ntp_all
-        module: tasks.setup_appliances
-        description: "Configure NTP servers and enable time synchronization on ALL appliances in parallel (max 20 parallel, CM → Collectors → AppNodes order)"
-        args:
           # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
-          debug: false
-      
-      - name: configure_hosts_resolving_on_all_appliances
-        function: configure_hosts_resolving_all
-        module: tasks.setup_appliances
-        description: "Configure /etc/hosts resolving on ALL appliances in parallel (max 20 parallel) for Unix machines and other Guardium appliances"
-        args:
+          configure_hosts: true  # Optional - whether to configure /etc/hosts (default: true)
+          # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
+          # gid: 12345  # Optional - product GID, generates random 1000-100000 if not provided
           debug: false
 
       - name: restart_all_appliances_after_initial_setup
@@ -116,22 +92,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm01"
-          debug: false
-
-      - name: set_shared_secret_on_all_appliances
-        function: set_shared_secret_all
-        module: tasks.setup_appliances
-        description: "Set shared secret on ALL appliances (CM → Collectors → AppNodes). Required before registration."
-        args:
-          # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
-          debug: false
-      
-      - name: set_product_gid_on_all_appliances
-        function: set_product_gid_all
-        module: tasks.setup_appliances
-        description: "Set random product GID on ALL appliances in parallel (max 20 parallel, each gets unique GID 1000-100000)"
-        args:
+          appliance_name: "cm02"
           debug: false
       
       - name: register_appliances_on_cm

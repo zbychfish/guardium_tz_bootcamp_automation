@@ -3,19 +3,19 @@
 # Credentials (user/password) are provided separately via environment variables or parameters
 
 appliances:
-  coll1-suffix:
-    ip: "10.240.64.8"
+  coll2-suffix:
+    ip: "10.240.64.11"
     type: "collector"
     description: "Primary Guardium Collector"
   
-  cm01-suffix:
-    ip: "10.240.64.7"
+  cm02-suffix:
+    ip: "10.240.64.10"
     type: "cm"
     description: "Central Manager"
     port: 22
    
-  appnode1-suffix:
-    ip: "10.240.64.9"
+  appnode2-suffix:
+    ip: "10.240.64.12"
     type: "appnode"
     description: "Application Node"
 
