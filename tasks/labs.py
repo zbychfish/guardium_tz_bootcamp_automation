@@ -204,6 +204,27 @@ def install_gim_on_raptor(
     
     logger.info(f"GIM installer: {gim_installer_path}")
     
+    # Add execute permission to all *.sh files in shell directory
+    shell_dir = os.path.dirname(gim_installer_path)
+    logger.info(f"\n➜ Adding execute permission to *.sh files in {shell_dir}")
+    
+    try:
+        chmod_command = f"chmod +x {shell_dir}/*.sh"
+        chmod_result = run_local_command(
+            command=chmod_command,
+            shell=True,
+            timeout=30,
+            check=True
+        )
+        logger.info(f"✓ Execute permission added to shell scripts")
+        
+        if debug and chmod_result.stdout:
+            logger.debug(f"chmod output: {chmod_result.stdout}")
+            
+    except Exception as e:
+        logger.warning(f"⚠ Failed to add execute permission: {e}")
+        logger.warning("Continuing anyway - installer might still work")
+    
     # Auto-detect tapip from machines if not provided
     if not tapip:
         machines = config.get('machines', {})
