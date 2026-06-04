@@ -40,28 +40,6 @@ groups:
         module: tasks.deploy_oracle
         description: "Deploy Oracle 21c on sauropod"
 
-  atap_lab:
-    name: "ATAP Lab"
-    description: "PostgreSQL deployment for ATAP training"
-    auto_execute: false  # Executed after marker, on demand
-    dependencies: [initial_preparation, setup_appliances, gim_lab]  # Requires initial_preparation to be completed
-    stages:
-      - name: deploy_postgres_on_raptor
-        function: deploy_postgres_on_raptor
-        module: tasks.deploy_postgres
-
-  gim_lab:
-    name: "GIM Lab"
-    description: "Import GIM modules for Guardium Installation Manager training"
-    auto_execute: false  # Executed on demand
-    dependencies: [initial_preparation, setup_appliances]  # Requires initial_preparation and setup_appliances
-    stages:
-      - name: import_gim_modules
-        function: import_gim_modules
-        module: tasks.labs
-        description: "Import GIM module files to Guardium appliance"
-        appliances: [cm]  # Execute on Central Manager
-
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
@@ -196,6 +174,29 @@ groups:
           check_interval: 120  # Seconds between status checks (default: 60)
           max_checks: 60  # Maximum number of checks before timeout (default: 60 = 1 hour with 60s interval)
           debug: true
+
+  gim_lab:
+    name: "GIM Lab"
+    description: "Import GIM modules for Guardium Installation Manager training"
+    auto_execute: false  # Executed on demand
+    dependencies: [initial_preparation, setup_appliances, other_praparations]  # Requires initial_preparation and setup_appliances
+    stages:
+      - name: import_gim_modules
+        function: import_gim_modules
+        module: tasks.labs
+        description: "Import GIM module files to Guardium appliance"
+        appliances: [cm]  # Execute on Central Manager
+
+  atap_lab:
+    name: "ATAP Lab"
+    description: "PostgreSQL deployment for ATAP training"
+    auto_execute: false  # Executed after marker, on demand
+    dependencies: [initial_preparation, setup_appliances, other_praparations, gim]  # Requires initial_preparation to be completed
+    stages:
+      - name: deploy_postgres_on_raptor
+        function: deploy_postgres_on_raptor
+        module: tasks.deploy_postgres
+
 
       # - name: current_test
       #   function: current_test
