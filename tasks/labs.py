@@ -204,6 +204,28 @@ def install_gim_on_raptor(
     
     logger.info(f"GIM installer: {gim_installer_path}")
     
+    # Install required Perl packages
+    logger.info(f"\n➜ Installing required Perl packages...")
+    
+    try:
+        dnf_command = "dnf install -y perl-File-Copy perl-Sys-Hostname"
+        logger.info(f"Executing: {dnf_command}")
+        dnf_result = run_local_command(
+            command=dnf_command,
+            shell=True,
+            timeout=180,  # 3 minutes timeout for package installation
+            check=True
+        )
+        logger.info(f"✓ Perl packages installed successfully")
+        
+        if debug and dnf_result.stdout:
+            logger.debug(f"dnf output: {dnf_result.stdout}")
+            
+    except Exception as e:
+        logger.error(f"✗ Failed to install Perl packages: {e}")
+        logger.error("GIM installation requires perl-File-Copy and perl-Sys-Hostname")
+        return False
+    
     # Add execute permission to all *.sh files in shell directory
     shell_dir = os.path.dirname(gim_installer_path)
     logger.info(f"\n➜ Adding execute permission to *.sh files in {shell_dir}")
