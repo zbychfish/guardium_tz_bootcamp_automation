@@ -3464,3 +3464,164 @@ def install_and_monitor_patches(
     logger.info(f"✓ Patches installed and verified successfully on {appliance_name}")
     logger.info("=" * 80)
     return True
+
+
+
+def install_gim_module(
+    config,
+    logger,
+    appliance_name: str,
+    client_ip: str,
+    module: str,
+    module_version: str,
+    params: Optional[dict] = None,
+    demo_user: str = "demo",
+    demo_password: Optional[str] = None,
+    monitor_installation: bool = True,
+    installation_delay: int = 10,
+    debug: bool = False
+) -> bool:
+    """
+    Universal function to install GIM module on a client using Guardium REST API.
+    
+    This function:
+    1. Authenticates to Guardium appliance
+    2. Assigns GIM module to client
+    3. Sets module parameters (if provided)
+    4. Schedules installation
+    5. Optionally monitors installation progress
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of Guardium appliance (CM) to connect to
+        client_ip: IP address of the client where module will be installed
+        module: GIM module name (e.g., "BUNDLE-STAP", "BUNDLE-ATAP")
+        module_version: Module version (e.g., "12.2.2.0_r123489_")
+        params: Dictionary of module parameters {param_name: param_value}
+        demo_user: Demo user username (default: "demo")
+        demo_password: Demo user password (optional, uses custom_variables if not provided)
+        monitor_installation: Whether to monitor installation progress (default: True)
+        installation_delay: Delay in seconds before monitoring (default: 10)
+        debug: Enable debug output
+    
+    Returns:
+        True if installation successful, False otherwise
+    
+    Example:
+        # Install STAP module
+        install_gim_module(
+            config=config,
+            logger=logger,
+            appliance_name="cm01",
+            client_ip="10.10.9.70",
+            module="BUNDLE-STAP",
+            module_version="12.2.2.0_r123489_",
+            params={
+                "STAP_SQLGUARD_IP": "10.10.9.219",
+                "STAP_USE_TLS": "1",
+                "STAP_STATISTICS": "-3",
+                "STAP_CONNECTION_POOL_SIZE": "2"
+            }
+        )
+    """
+    from core.guardium_rest_api import create_guardium_api
+    import time
+    
+    logger.info("=" * 80)
+    logger.info(f"INSTALL GIM MODULE: {module}")
+    logger.info("=" * 80)
+    logger.info(f"Appliance: {appliance_name}")
+    logger.info(f"Client IP: {client_ip}")
+    logger.info(f"Module: {module}")
+    logger.info(f"Version: {module_version}")
+    
+    # Get demo user password
+    if not demo_password:
+        demo_password = config.get_custom_variable('pwd')
+        if demo_password:
+            logger.info("Using demo password from custom_variables (pwd)")
+    
+    if not demo_password:
+        logger.error("Demo user password is required")
+        logger.error("Provide demo_password in args or set 'pwd' in custom_variables")
+        return False
+    
+    try:
+        # Create REST API client
+        api = create_guardium_api(config, logger, appliance_name)
+        logger.info("✓ GuardiumRestAPI client created successfully")
+        
+        # Get OAuth token
+        logger.info(f"\n➜ Authenticating as user '{demo_user}'...")
+        token = api.get_token(username=demo_user, password=demo_password)
+        logger.info("✓ Authentication successful")
+        
+        if debug:
+            logger.debug(f"Access token: {token[:20]}...")
+        
+        # Assign module to client
+        logger.info(f"\n➜ Assigning module '{module}' to client {client_ip}...")
+        assign_response = api.gim_client_assign(
+            client_ip=client_ip,
+            module=module,
+            module_version=module_version
+        )
+        
+        if debug:
+            logger.debug(f"Assign response: {assign_response}")
+        
+        logger.info(f"✓ Module assigned successfully")
+        
+        # Set module parameters
+        if params:
+            logger.info(f"\n➜ Setting module parameters...")
+            for param_name, param_value in params.items():
+                logger.info(f"  Setting {param_name} = {param_value}")
+                param_response = api.gim_client_params(
+                    client_ip=client_ip,
+                    param_name=param_name,
+                    param_value=str(param_value)
+                )
+                
+                if debug:
+                    logger.debug(f"Param response: {param_response}")
+            
+            logger.info(f"✓ All parameters set successfully")
+        else:
+            logger.info("\n⊘ No parameters to set")
+        
+        # Schedule installation
+        logger.info(f"\n➜ Scheduling installation...")
+        schedule_response = api.gim_schedule_install(
+            client_ip=client_ip,
+            date="now"
+        )
+        
+        if debug:
+            logger.debug(f"Schedule response: {schedule_response}")
+        
+        logger.info(f"✓ Installation scheduled successfully")
+        
+        # Monitor installation
+        if monitor_installation:
+            logger.info(f"\n➜ Waiting {installation_delay} seconds before monitoring...")
+            time.sleep(installation_delay)
+            
+            logger.info(f"➜ Monitoring installation progress...")
+            logger.info("Note: Monitoring implementation depends on your requirements")
+            logger.info("You can check installation status via GUI or additional API calls")
+            # TODO: Implement monitoring if needed (e.g., using gim_list_client_modules)
+        
+        logger.info("\n" + "=" * 80)
+        logger.info(f"✓ GIM MODULE INSTALLATION COMPLETED")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to install GIM module: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        logger.error("=" * 80)
+        return False

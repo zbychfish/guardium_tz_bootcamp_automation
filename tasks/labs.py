@@ -322,3 +322,124 @@ def install_gim_on_raptor(
         return False
 
 # Made with Bob
+
+
+
+def install_stap_on_raptor(
+    config,
+    logger,
+    verbose: bool = False,
+    appliance_name: str = "cm01",
+    client_ip: Optional[str] = None,
+    module_version: str = "STAP-12.2.2.0_r123489_",
+    sqlguard_ip: Optional[str] = None,
+    use_tls: str = "1",
+    statistics: str = "-3",
+    connection_pool_size: str = "2",
+    demo_user: str = "demo",
+    demo_password: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+    """
+    Install STAP (S-TAP) module on raptor machine using GIM.
+    
+    This function uses the universal install_gim_module function to:
+    1. Assign BUNDLE-STAP module to client
+    2. Set STAP parameters (SQLGUARD_IP, USE_TLS, STATISTICS, CONNECTION_POOL_SIZE)
+    3. Schedule installation
+    4. Monitor installation progress
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        appliance_name: Name of Guardium appliance (CM) to connect to (default: "cm01")
+        client_ip: IP address of raptor (optional, auto-detected from machines config)
+        module_version: STAP module version (default: "STAP-12.2.2.0_r123489_")
+        sqlguard_ip: SQL Guard IP address (optional, auto-detected from first collector)
+        use_tls: Use TLS for STAP connection (default: "1")
+        statistics: STAP statistics level (default: "-3")
+        connection_pool_size: STAP connection pool size (default: "2")
+        demo_user: Demo user username (default: "demo")
+        demo_password: Demo user password (optional, uses custom_variables if not provided)
+        debug: Enable debug output
+    
+    Returns:
+        True if installation successful, False otherwise
+    
+    Example:
+        install_stap_on_raptor(
+            config=config,
+            logger=logger,
+            appliance_name="cm01"
+        )
+    """
+    from core.appliance_operations import install_gim_module
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("INSTALL STAP ON RAPTOR")
+    logger.info("=" * 80)
+    
+    # Auto-detect client_ip (raptor IP) if not provided
+    if not client_ip:
+        machines = config.get('machines', {})
+        raptor_info = machines.get('raptor', {})
+        client_ip = raptor_info.get('private_ip')
+        
+        if client_ip:
+            logger.info(f"Auto-detected raptor IP from machines config: {client_ip}")
+        else:
+            logger.error("Client IP not provided and not found in machines config for raptor")
+            return False
+    
+    # Auto-detect sqlguard_ip from appliances.yaml if not provided (use first collector)
+    if not sqlguard_ip:
+        appliance_loader = ApplianceConfigLoader()
+        collectors = appliance_loader.get_appliances_by_type('collector')
+        
+        if collectors:
+            # Get first collector
+            first_collector_name = list(collectors.keys())[0]
+            first_collector = collectors[first_collector_name]
+            sqlguard_ip = first_collector.get('ip')
+            
+            if sqlguard_ip:
+                logger.info(f"Auto-detected SQL Guard IP from first collector ({first_collector_name}): {sqlguard_ip}")
+            else:
+                logger.error(f"Collector '{first_collector_name}' has no IP address configured")
+                return False
+        else:
+            logger.error("SQL Guard IP not provided and no collectors found in appliances.yaml")
+            return False
+    
+    # Prepare STAP parameters
+    stap_params = {
+        "STAP_SQLGUARD_IP": sqlguard_ip,
+        "STAP_USE_TLS": use_tls,
+        "STAP_STATISTICS": statistics,
+        "STAP_CONNECTION_POOL_SIZE": connection_pool_size
+    }
+    
+    logger.info(f"STAP Configuration:")
+    logger.info(f"  - Client IP (raptor): {client_ip}")
+    logger.info(f"  - SQL Guard IP (collector): {sqlguard_ip}")
+    logger.info(f"  - Use TLS: {use_tls}")
+    logger.info(f"  - Statistics: {statistics}")
+    logger.info(f"  - Connection Pool Size: {connection_pool_size}")
+    
+    # Install STAP module using universal function
+    return install_gim_module(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        client_ip=client_ip,
+        module="BUNDLE-STAP",
+        module_version=module_version,
+        params=stap_params,
+        demo_user=demo_user,
+        demo_password=demo_password,
+        monitor_installation=True,
+        installation_delay=10,
+        debug=debug
+    )

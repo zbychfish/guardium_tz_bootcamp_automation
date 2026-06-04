@@ -292,6 +292,153 @@ class GuardiumRestAPI:
         response.raise_for_status()
         
         return response.json()
+    
+    def gim_client_assign(
+        self,
+        client_ip: str,
+        module: str,
+        module_version: str
+    ) -> dict:
+        """
+        Assigns GIM module to client.
+        
+        Args:
+            client_ip: Client IP address (required)
+            module: GIM module name (required)
+            module_version: Module version (required)
+        
+        Returns:
+            Dictionary with API response
+        
+        Raises:
+            RuntimeError: If token has not been retrieved yet
+            requests.exceptions.RequestException: In case of HTTP error
+        
+        Example:
+            api.gim_client_assign(
+                client_ip="10.10.9.100",
+                module="BUNDLE-STAP",
+                module_version="12.2.2.0_r123489_"
+            )
+        """
+        url = f'{self.base_url}/restAPI/gim_client_assign'
+        headers = self.get_headers()
+        
+        data = {
+            'clientIP': client_ip,
+            'module': module,
+            'moduleVersion': module_version
+        }
+        
+        response = requests.put(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
+    
+    def gim_client_params(
+        self,
+        client_ip: str,
+        param_name: str,
+        param_value: Optional[str] = None
+    ) -> dict:
+        """
+        Sets GIM client parameters.
+        
+        Args:
+            client_ip: Target client IP address (required)
+            param_name: Parameter name (required)
+            param_value: Parameter value (optional)
+        
+        Returns:
+            Dictionary with API response
+        
+        Raises:
+            RuntimeError: If token has not been retrieved yet
+            requests.exceptions.RequestException: In case of HTTP error
+        
+        Example:
+            # Set STAP parameters
+            api.gim_client_params(
+                client_ip="10.10.9.100",
+                param_name="STAP_SQLGUARD_IP",
+                param_value="10.10.9.219"
+            )
+            
+            api.gim_client_params(
+                client_ip="10.10.9.100",
+                param_name="STAP_USE_TLS",
+                param_value="1"
+            )
+        """
+        url = f'{self.base_url}/restAPI/gim_client_params'
+        headers = self.get_headers()
+        
+        data = {
+            'clientIP': client_ip,
+            'paramName': param_name
+        }
+        
+        # Add optional parameter value
+        if param_value is not None:
+            data['paramValue'] = param_value
+        
+        response = requests.put(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
+    
+    def gim_schedule_install(
+        self,
+        client_ip: str,
+        date: str,
+        module: Optional[str] = None
+    ) -> dict:
+        """
+        Schedules GIM module(s) installation on client.
+        
+        Args:
+            client_ip: Client IP address (required)
+            date: Installation date in format "now" or "yyyy-MM-dd HH:mm" (required)
+            module: GIM module name (optional). If not provided, all modules
+                   for the given client will be scheduled for installation.
+        
+        Returns:
+            Dictionary with API response
+        
+        Raises:
+            RuntimeError: If token has not been retrieved yet
+            requests.exceptions.RequestException: In case of HTTP error
+        
+        Example:
+            # Schedule installation immediately
+            api.gim_schedule_install(
+                client_ip="10.10.9.100",
+                date="now"
+            )
+            
+            # Schedule installation for specific date
+            api.gim_schedule_install(
+                client_ip="10.10.9.100",
+                date="2026-03-27 14:30",
+                module="BUNDLE-STAP"
+            )
+        """
+        url = f'{self.base_url}/restAPI/gim_schedule_install'
+        headers = self.get_headers()
+        
+        data = {
+            'clientIP': client_ip,
+            'date': date
+        }
+        
+        # Add optional module parameter
+        if module:
+            data['module'] = module
+        
+        response = requests.put(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
 
 
 
