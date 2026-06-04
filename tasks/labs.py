@@ -24,7 +24,7 @@ def import_gim_modules(
     demo_user: str = "demo",
     demo_password: Optional[str] = None,
     gim_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim",
-    gim_target_dir: str = "/var/IBM/Guardium/gim/packages",
+    gim_target_dir: str = "/var/dump",
     debug: bool = False
 ) -> bool:
     """
