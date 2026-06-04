@@ -88,12 +88,12 @@ def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
     
     # Step 4: RH packages installation for different tasks
     if verbose:
-        logger.info("Step 3: Downloading supporting files from Box")
+        logger.info("Step 4: Installing required packages")
     commands = [
-        "dnf install unzip -y"
+        "dnf install unzip lsof -y"
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("System update failed")
+        logger.error("Package installation failed")
         return False
     
     return True

@@ -6,6 +6,7 @@ general:
   project_name: "Machine Automation"
   environment: "development"  # development, staging, production
   log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  raptor_kernel: "5.14.0-570.114.1.el9_6.x86_64"
 
 # SSH connection defaults
 ssh:
