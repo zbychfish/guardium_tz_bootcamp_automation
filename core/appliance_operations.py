@@ -1592,10 +1592,13 @@ def configure_system_settings_consolidated(
             logger.info(f"  Command output: {output}")
         logger.info("✓ Time synchronization enabled")
         
+        # Track operation number
+        operation_num = 5
+        
         # ===== OPERATION 5: Configure hosts resolving =====
         if configure_hosts:
             logger.info(f"\n{'='*60}")
-            logger.info("OPERATION 5: Configure hosts resolving")
+            logger.info(f"OPERATION {operation_num}: Configure hosts resolving")
             logger.info(f"{'='*60}")
             
             # Get machines from config
@@ -1665,54 +1668,55 @@ def configure_system_settings_consolidated(
                 logger.info(f"✓ Hosts configuration complete: {configured_count} added, {skipped_count} skipped")
             else:
                 logger.info("⊘ No machines or appliances to configure")
+            operation_num += 1
         else:
-            logger.info("\n⊘ Skipping hosts configuration (configure_hosts=False)")
+            logger.info(f"\n⊘ Skipping OPERATION {operation_num}: hosts configuration (configure_hosts=False)")
+            operation_num += 1
         
-        # ===== OPERATION 6: Set shared secret =====
-        if shared_secret is not None or config.get_custom_variable('shared_secret'):
-            logger.info(f"\n{'='*60}")
-            logger.info("OPERATION 6: Set shared secret")
-            logger.info(f"{'='*60}")
-            
-            # Use shared_secret from custom_variables if not provided
-            target_shared_secret = shared_secret
-            if not target_shared_secret:
-                target_shared_secret = config.get_custom_variable('shared_secret')
-                if target_shared_secret:
-                    logger.info("Using shared_secret from custom_variables")
-            
+        # ===== OPERATION 6: Set shared secret (ALWAYS) =====
+        logger.info(f"\n{'='*60}")
+        logger.info(f"OPERATION {operation_num}: Set shared secret")
+        logger.info(f"{'='*60}")
+        
+        # Use shared_secret from custom_variables if not provided
+        target_shared_secret = shared_secret
+        if not target_shared_secret:
+            target_shared_secret = config.get_custom_variable('shared_secret')
             if target_shared_secret:
-                command = f"store system shared secret {target_shared_secret}"
-                logger.info(f"➜ Setting shared secret...")
-                output = client.execute_command(command)
-                if debug and output:
-                    logger.info(f"  Command output: {output}")
-                logger.info("✓ Shared secret set")
-            else:
-                logger.info("⊘ No shared_secret provided, skipping")
-        else:
-            logger.info("\n⊘ Skipping shared secret configuration (not provided)")
+                logger.info("Using shared_secret from custom_variables")
         
-        # ===== OPERATION 7: Set product GID =====
-        if gid is not None or gid == 0:  # Allow explicit gid=0 or any provided value
-            logger.info(f"\n{'='*60}")
-            logger.info("OPERATION 7: Set product GID")
-            logger.info(f"{'='*60}")
-            
-            target_gid = gid
-            if target_gid is None:
-                # Generate random GID
-                target_gid = random.randint(1000, 100000)
-                logger.info(f"Generated random GID: {target_gid}")
-            
-            command = f"store product gid {target_gid}"
-            logger.info(f"➜ Setting product GID to: {target_gid}")
-            output = client.execute_command(command)
-            if debug and output:
-                logger.info(f"  Command output: {output}")
-            logger.info(f"✓ Product GID set to: {target_gid}")
-        else:
-            logger.info("\n⊘ Skipping product GID configuration (not provided)")
+        if not target_shared_secret:
+            logger.error("✗ Shared secret is required but not provided!")
+            logger.error("  Provide it via parameter or set 'shared_secret' in custom_variables")
+            client.disconnect()
+            return False
+        
+        command = f"store system shared secret {target_shared_secret}"
+        logger.info(f"➜ Setting shared secret...")
+        output = client.execute_command(command)
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info("✓ Shared secret set")
+        operation_num += 1
+        
+        # ===== OPERATION 7: Set product GID (ALWAYS) =====
+        logger.info(f"\n{'='*60}")
+        logger.info(f"OPERATION {operation_num}: Set product GID")
+        logger.info(f"{'='*60}")
+        
+        target_gid = gid
+        if target_gid is None:
+            # Generate random GID
+            target_gid = random.randint(1000, 100000)
+            logger.info(f"Generated random GID: {target_gid}")
+        
+        command = f"store product gid {target_gid}"
+        logger.info(f"➜ Setting product GID to: {target_gid}")
+        output = client.execute_command(command)
+        if debug and output:
+            logger.info(f"  Command output: {output}")
+        logger.info(f"✓ Product GID set to: {target_gid}")
+        operation_num += 1
         
         # Disconnect
         client.disconnect()
