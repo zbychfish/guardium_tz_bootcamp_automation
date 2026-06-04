@@ -3618,10 +3618,18 @@ def install_gim_module(
                 logger.info(f"\n  Check #{check_count}: Querying module status...")
                 
                 modules = api.gim_list_client_modules(client_ip=client_ip)
+                
+                if debug:
+                    logger.debug(f"  Full API response: {modules}")
+                
                 msg = modules.get("Message", "")
                 
                 if debug:
                     logger.debug(f"  Raw API response Message:\n{msg}")
+                
+                if not msg:
+                    logger.warning(f"  ⚠ API returned empty Message field")
+                    logger.warning(f"  Full response keys: {list(modules.keys())}")
                 
                 # Parse module entries
                 entries = [
