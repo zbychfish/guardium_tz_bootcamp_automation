@@ -158,14 +158,6 @@ groups:
           appliance_name: "cm02"
           debug: false
       
-      - name: install_stap_on_raptor
-        function: install_stap_on_raptor
-        module: tasks.labs
-        description: "Install STAP (S-TAP) agent on raptor using GIM"
-        args:
-          appliance_name: "cm02"
-          module_version: "STAP-12.2.2.0_r123489_"
-          debug: false
 
   atap_lab:
     name: "ATAP Lab"
@@ -185,6 +177,14 @@ groups:
           gim_installer_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
           debug: false
     
+      - name: install_stap_on_raptor
+        function: install_stap_on_raptor
+        module: tasks.labs
+        description: "Install STAP (S-TAP) agent on raptor using GIM"
+        args:
+          appliance_name: "cm02"
+          module_version: "STAP-12.2.2.0_r123489_"
+          debug: false
 
       # - name: current_test
       #   function: current_test
