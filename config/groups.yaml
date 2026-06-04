@@ -142,14 +142,7 @@ groups:
     auto_execute: false  # Executed on demand
     dependencies: [initial_preparation, setup_appliances, other_praparations]  # Requires initial_preparation and setup_appliances
     stages:
-      - name: install_gim_on_raptor
-        function: install_gim_on_raptor
-        module: tasks.labs
-        description: "Install GIM (Guardium Installation Manager) on raptor machine"
-        args:
-          gim_installer_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
-          debug: false
-      
+     
       - name: import_gim_modules
         function: import_gim_modules
         module: tasks.labs
@@ -157,6 +150,8 @@ groups:
         args:
           debug: false
       
+      
+
   atap_lab:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
