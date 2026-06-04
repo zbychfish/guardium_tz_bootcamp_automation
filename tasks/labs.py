@@ -328,11 +328,11 @@ def install_gim_on_raptor(
 def install_stap_on_raptor(
     config,
     logger,
+    appliance_name: str,
+    collector_name: str,
     verbose: bool = False,
-    appliance_name: str = "cm01",
     client_ip: Optional[str] = None,
     module_version: str = "STAP-12.2.2.0_r123489_",
-    sqlguard_ip: Optional[str] = None,
     use_tls: str = "1",
     statistics: str = "-3",
     connection_pool_size: str = "2",
@@ -352,11 +352,11 @@ def install_stap_on_raptor(
     Args:
         config: Configuration object
         logger: Logger instance
+        appliance_name: Name of Guardium appliance (GIM server, e.g., "cm02") - REQUIRED
+        collector_name: Name of collector appliance for SQLGUARD_IP (e.g., "coll2") - REQUIRED
         verbose: Enable verbose output
-        appliance_name: Name of Guardium appliance (CM) to connect to (default: "cm01")
         client_ip: IP address of raptor (optional, auto-detected from machines config)
         module_version: STAP module version (default: "STAP-12.2.2.0_r123489_")
-        sqlguard_ip: SQL Guard IP address (optional, auto-detected from first collector)
         use_tls: Use TLS for STAP connection (default: "1")
         statistics: STAP statistics level (default: "-3")
         connection_pool_size: STAP connection pool size (default: "2")
@@ -371,7 +371,8 @@ def install_stap_on_raptor(
         install_stap_on_raptor(
             config=config,
             logger=logger,
-            appliance_name="cm01"
+            appliance_name="cm02",
+            collector_name="coll2"
         )
     """
     from core.appliance_operations import install_gim_module
@@ -393,25 +394,20 @@ def install_stap_on_raptor(
             logger.error("Client IP not provided and not found in machines config for raptor")
             return False
     
-    # Auto-detect sqlguard_ip from appliances.yaml if not provided (use first collector)
+    # Get sqlguard_ip from collector_name
+    appliance_loader = ApplianceConfigLoader()
+    collector_config = appliance_loader.get_appliance(collector_name)
+    
+    if not collector_config:
+        logger.error(f"Collector '{collector_name}' not found in appliances.yaml")
+        return False
+    
+    sqlguard_ip = collector_config.get('ip')
     if not sqlguard_ip:
-        appliance_loader = ApplianceConfigLoader()
-        collectors = appliance_loader.get_appliances_by_type('collector')
-        
-        if collectors:
-            # Get first collector
-            first_collector_name = list(collectors.keys())[0]
-            first_collector = collectors[first_collector_name]
-            sqlguard_ip = first_collector.get('ip')
-            
-            if sqlguard_ip:
-                logger.info(f"Auto-detected SQL Guard IP from first collector ({first_collector_name}): {sqlguard_ip}")
-            else:
-                logger.error(f"Collector '{first_collector_name}' has no IP address configured")
-                return False
-        else:
-            logger.error("SQL Guard IP not provided and no collectors found in appliances.yaml")
-            return False
+        logger.error(f"Collector '{collector_name}' has no IP address configured")
+        return False
+    
+    logger.info(f"Using SQL Guard IP from collector '{collector_name}': {sqlguard_ip}")
     
     # Prepare STAP parameters
     stap_params = {
@@ -443,3 +439,165 @@ def install_stap_on_raptor(
         installation_delay=10,
         debug=debug
     )
+
+
+def debug_stap_installation(
+    config,
+    logger,
+    appliance_name: str,
+    collector_name: str,
+    client_ip: Optional[str] = None,
+    module_version: str = "STAP-12.2.2.0_r123489_",
+    demo_user: str = "demo",
+    demo_password: Optional[str] = None
+) -> bool:
+    """
+    DEBUG function to test STAP installation step by step.
+    Tests each API call individually with detailed output.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of Guardium appliance (GIM server, e.g., "cm02") - REQUIRED
+        collector_name: Name of collector appliance for SQLGUARD_IP (e.g., "coll2") - REQUIRED
+        client_ip: IP address of raptor (optional, auto-detected from machines config)
+        module_version: STAP module version
+        demo_user: Demo user username
+        demo_password: Demo user password (optional, uses custom_variables if not provided)
+    """
+    from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("DEBUG: STAP INSTALLATION STEP BY STEP")
+    logger.info("=" * 80)
+    
+    # Auto-detect client_ip
+    if not client_ip:
+        machines = config.get('machines', {})
+        raptor_info = machines.get('raptor', {})
+        client_ip = raptor_info.get('private_ip')
+        logger.info(f"✓ Auto-detected client IP: {client_ip}")
+    
+    if not client_ip:
+        logger.error("✗ Client IP is required")
+        return False
+    
+    # Get sqlguard_ip from collector_name
+    appliance_loader = ApplianceConfigLoader()
+    collector_config = appliance_loader.get_appliance(collector_name)
+    
+    if not collector_config:
+        logger.error(f"✗ Collector '{collector_name}' not found in appliances.yaml")
+        return False
+    
+    sqlguard_ip = collector_config.get('ip')
+    if not sqlguard_ip:
+        logger.error(f"✗ Collector '{collector_name}' has no IP address configured")
+        return False
+    
+    logger.info(f"✓ Using SQL Guard IP from collector '{collector_name}': {sqlguard_ip}")
+    
+    # Get demo password
+    if not demo_password:
+        demo_password = config.get_custom_variable('pwd')
+        logger.info("✓ Got demo password from custom_variables")
+    
+    if not demo_password:
+        logger.error("✗ Demo password is required")
+        return False
+    
+    try:
+        # STEP 1: Create API client
+        logger.info("\n" + "=" * 80)
+        logger.info("STEP 1: Create API client")
+        logger.info("=" * 80)
+        api = create_guardium_api(config, logger, appliance_name)
+        logger.info(f"✓ API client created for appliance: {appliance_name}")
+        logger.info(f"  Base URL: {api.base_url}")
+        
+        # STEP 2: Get token
+        logger.info("\n" + "=" * 80)
+        logger.info("STEP 2: Get OAuth token")
+        logger.info("=" * 80)
+        logger.info(f"  Username: {demo_user}")
+        token = api.get_token(username=demo_user, password=demo_password)
+        logger.info(f"✓ Token received: {token[:30]}...")
+        
+        # STEP 3: Assign module
+        logger.info("\n" + "=" * 80)
+        logger.info("STEP 3: Assign BUNDLE-STAP module")
+        logger.info("=" * 80)
+        logger.info(f"  Client IP: {client_ip}")
+        logger.info(f"  Module: BUNDLE-STAP")
+        logger.info(f"  Version: {module_version}")
+        
+        assign_response = api.gim_client_assign(
+            client_ip=client_ip,
+            module="BUNDLE-STAP",
+            module_version=module_version
+        )
+        logger.info(f"✓ Module assigned")
+        logger.info(f"  Response: {assign_response}")
+        
+        # STEP 4: Set parameters
+        logger.info("\n" + "=" * 80)
+        logger.info("STEP 4: Set STAP parameters")
+        logger.info("=" * 80)
+        
+        params = {
+            "STAP_SQLGUARD_IP": sqlguard_ip,
+            "STAP_USE_TLS": "1",
+            "STAP_STATISTICS": "-3",
+            "STAP_CONNECTION_POOL_SIZE": "2"
+        }
+        
+        for param_name, param_value in params.items():
+            logger.info(f"\n  Setting: {param_name} = {param_value}")
+            param_response = api.gim_client_params(
+                client_ip=client_ip,
+                param_name=param_name,
+                param_value=str(param_value)
+            )
+            logger.info(f"  ✓ Response: {param_response}")
+        
+        # STEP 5: Schedule installation
+        logger.info("\n" + "=" * 80)
+        logger.info("STEP 5: Schedule installation")
+        logger.info("=" * 80)
+        logger.info(f"  Client IP: {client_ip}")
+        logger.info(f"  Date: now")
+        
+        schedule_response = api.gim_schedule_install(
+            client_ip=client_ip,
+            date="now"
+        )
+        logger.info(f"✓ Installation scheduled")
+        logger.info(f"  Response: {schedule_response}")
+        
+        # STEP 6: Check modules
+        logger.info("\n" + "=" * 80)
+        logger.info("STEP 6: List client modules")
+        logger.info("=" * 80)
+        logger.info(f"  Client IP: {client_ip}")
+        
+        import time
+        time.sleep(5)
+        
+        modules_response = api.gim_list_client_modules(client_ip=client_ip)
+        logger.info(f"✓ Modules list received")
+        logger.info(f"  Full response: {modules_response}")
+        
+        if "Message" in modules_response:
+            logger.info(f"\n  Message field:\n{modules_response['Message']}")
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ DEBUG COMPLETED SUCCESSFULLY")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"\n✗ DEBUG FAILED: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False

@@ -3552,16 +3552,37 @@ def install_gim_module(
         api = create_guardium_api(config, logger, appliance_name)
         logger.info("✓ GuardiumRestAPI client created successfully")
         
+        if debug:
+            logger.debug(f"API Base URL: {api.base_url}")
+        
         # Get OAuth token
-        logger.info(f"\n➜ Authenticating as user '{demo_user}'...")
+        logger.info(f"\n{'=' * 80}")
+        logger.info("STEP 1: OAuth Authentication")
+        logger.info(f"{'=' * 80}")
+        logger.info(f"➜ Authenticating as user '{demo_user}'...")
+        
+        if debug:
+            logger.debug(f"API Call: get_token(username='{demo_user}', password='***')")
+        
         token = api.get_token(username=demo_user, password=demo_password)
         logger.info("✓ Authentication successful")
         
         if debug:
-            logger.debug(f"Access token: {token[:20]}...")
+            logger.debug(f"Access token (first 30 chars): {token[:30]}...")
         
         # Assign module to client
-        logger.info(f"\n➜ Assigning module '{module}' (version: {module_version}) to client {client_ip}...")
+        logger.info(f"\n{'=' * 80}")
+        logger.info("STEP 2: Assign GIM Module to Client")
+        logger.info(f"{'=' * 80}")
+        logger.info(f"➜ Assigning module '{module}' (version: {module_version}) to client {client_ip}...")
+        
+        if debug:
+            logger.debug(f"API Call: gim_client_assign(")
+            logger.debug(f"  client_ip='{client_ip}',")
+            logger.debug(f"  module='{module}',")
+            logger.debug(f"  module_version='{module_version}'")
+            logger.debug(f")")
+        
         assign_response = api.gim_client_assign(
             client_ip=client_ip,
             module=module,
@@ -3570,29 +3591,54 @@ def install_gim_module(
         
         logger.info(f"✓ Module assigned successfully")
         if debug:
-            logger.debug(f"Assign response: {assign_response}")
+            logger.debug(f"API Response: {assign_response}")
         
         # Set module parameters
         if params:
-            logger.info(f"\n➜ Setting {len(params)} module parameter(s)...")
+            logger.info(f"\n{'=' * 80}")
+            logger.info(f"STEP 3: Set Module Parameters ({len(params)} parameter(s))")
+            logger.info(f"{'=' * 80}")
+            
             for param_name, param_value in params.items():
-                logger.info(f"  • {param_name} = {param_value}")
+                logger.info(f"➜ Setting parameter: {param_name} = {param_value}")
+                
+                if debug:
+                    logger.debug(f"API Call: gim_client_params(")
+                    logger.debug(f"  client_ip='{client_ip}',")
+                    logger.debug(f"  param_name='{param_name}',")
+                    logger.debug(f"  param_value='{param_value}'")
+                    logger.debug(f")")
+                
                 param_response = api.gim_client_params(
                     client_ip=client_ip,
                     param_name=param_name,
                     param_value=str(param_value)
                 )
                 
+                logger.info(f"  ✓ Parameter set successfully")
                 if debug:
-                    logger.debug(f"    Response: {param_response}")
+                    logger.debug(f"  API Response: {param_response}")
             
-            logger.info(f"✓ All {len(params)} parameter(s) set successfully")
+            logger.info(f"\n✓ All {len(params)} parameter(s) set successfully")
         else:
-            logger.info("\n⊘ No parameters to set")
+            logger.info(f"\n{'=' * 80}")
+            logger.info("STEP 3: Set Module Parameters")
+            logger.info(f"{'=' * 80}")
+            logger.info("⊘ No parameters to set")
         
         # Schedule installation
-        logger.info(f"\n➜ Scheduling installation for client {client_ip}...")
+        logger.info(f"\n{'=' * 80}")
+        logger.info("STEP 4: Schedule Installation")
+        logger.info(f"{'=' * 80}")
+        logger.info(f"➜ Scheduling installation for client {client_ip}...")
         logger.info(f"  Installation time: now")
+        
+        if debug:
+            logger.debug(f"API Call: gim_schedule_install(")
+            logger.debug(f"  client_ip='{client_ip}',")
+            logger.debug(f"  date='now'")
+            logger.debug(f")")
+        
         schedule_response = api.gim_schedule_install(
             client_ip=client_ip,
             date="now"
@@ -3600,7 +3646,7 @@ def install_gim_module(
         
         logger.info(f"✓ Installation scheduled successfully")
         if debug:
-            logger.debug(f"Schedule response: {schedule_response}")
+            logger.debug(f"API Response: {schedule_response}")
         
         # Monitor installation
         if monitor_installation:
