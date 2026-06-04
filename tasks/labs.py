@@ -168,7 +168,7 @@ def install_gim_on_raptor(
     This function executes the GIM shell installer with required parameters:
     - --dir: Installation directory (default: /opt/guardium)
     - --tapip: TAP IP address (raptor's own IP, auto-detected from machines_info if not provided)
-    - --sqlguardip: SQL Guard IP address (collector IP, auto-detected from appliances.yaml if not provided)
+    - --sqlguardip: SQL Guard IP address (Central Manager IP, auto-detected from appliances.yaml if not provided)
     
     Args:
         config: Configuration object
@@ -177,7 +177,7 @@ def install_gim_on_raptor(
         gim_installer_path: Path to GIM installer shell script
         install_dir: Installation directory (default: /opt/guardium)
         tapip: TAP IP address (optional, auto-detected from raptor machine in machines_info)
-        sqlguardip: SQL Guard IP address (optional, auto-detected from first collector in appliances.yaml)
+        sqlguardip: SQL Guard IP address (optional, auto-detected from Central Manager in appliances.yaml)
         debug: Enable debug output
     
     Returns:
@@ -190,8 +190,8 @@ def install_gim_on_raptor(
             gim_installer_path="/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
         )
     """
-    import subprocess
     import os
+    from core.utils import run_local_command
     
     logger.info("=" * 80)
     logger.info("INSTALL GIM ON RAPTOR")
@@ -216,24 +216,24 @@ def install_gim_on_raptor(
             logger.error("TAP IP not provided and not found in machines_info for raptor")
             return False
     
-    # Auto-detect sqlguardip from appliances.yaml if not provided
+    # Auto-detect sqlguardip from appliances.yaml if not provided (use CM, not collector)
     if not sqlguardip:
         appliance_loader = ApplianceConfigLoader()
-        collectors = appliance_loader.get_appliances_by_type('collector')
+        cms = appliance_loader.get_appliances_by_type('cm')
         
-        if collectors:
-            # Get first collector
-            first_collector_name = list(collectors.keys())[0]
-            first_collector = collectors[first_collector_name]
-            sqlguardip = first_collector.get('ip')
+        if cms:
+            # Get first CM
+            first_cm_name = list(cms.keys())[0]
+            first_cm = cms[first_cm_name]
+            sqlguardip = first_cm.get('ip')
             
             if sqlguardip:
-                logger.info(f"Auto-detected SQL Guard IP from first collector ({first_collector_name}): {sqlguardip}")
+                logger.info(f"Auto-detected SQL Guard IP from Central Manager ({first_cm_name}): {sqlguardip}")
             else:
-                logger.error(f"Collector '{first_collector_name}' has no IP address configured")
+                logger.error(f"Central Manager '{first_cm_name}' has no IP address configured")
                 return False
         else:
-            logger.error("SQL Guard IP not provided and no collectors found in appliances.yaml")
+            logger.error("SQL Guard IP not provided and no Central Manager found in appliances.yaml")
             return False
     
     logger.info(f"Installation parameters:")
@@ -241,26 +241,19 @@ def install_gim_on_raptor(
     logger.info(f"  - TAP IP: {tapip}")
     logger.info(f"  - SQL Guard IP: {sqlguardip}")
     
-    # Build command
-    command = [
-        gim_installer_path,
-        "--",
-        "--dir", install_dir,
-        "--tapip", tapip,
-        "--sqlguardip", sqlguardip
-    ]
+    # Build command string
+    command = f"{gim_installer_path} -- --dir {install_dir} --tapip {tapip} --sqlguardip {sqlguardip}"
     
     logger.info(f"\n➜ Executing GIM installer...")
-    logger.info(f"Command: {' '.join(command)}")
+    logger.info(f"Command: {command}")
     
     try:
-        # Run installer
-        result = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=300  # 5 minutes timeout
+        # Run installer using core utility function
+        result = run_local_command(
+            command=command,
+            shell=True,
+            timeout=300,  # 5 minutes timeout
+            check=True
         )
         
         if debug and result.stdout:
@@ -273,20 +266,12 @@ def install_gim_on_raptor(
         logger.info("=" * 80)
         return True
         
-    except subprocess.TimeoutExpired:
+    except TimeoutError:
         logger.error("✗ GIM installation timeout (exceeded 5 minutes)")
         logger.error("=" * 80)
         return False
-    except subprocess.CalledProcessError as e:
-        logger.error(f"✗ GIM installation failed with exit code {e.returncode}")
-        if e.stdout:
-            logger.error(f"Output:\n{e.stdout}")
-        if e.stderr:
-            logger.error(f"Error:\n{e.stderr}")
-        logger.error("=" * 80)
-        return False
     except Exception as e:
-        logger.error(f"✗ Unexpected error during GIM installation: {e}")
+        logger.error(f"✗ GIM installation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
