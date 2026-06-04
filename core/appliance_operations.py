@@ -3561,23 +3561,22 @@ def install_gim_module(
             logger.debug(f"Access token: {token[:20]}...")
         
         # Assign module to client
-        logger.info(f"\n➜ Assigning module '{module}' to client {client_ip}...")
+        logger.info(f"\n➜ Assigning module '{module}' (version: {module_version}) to client {client_ip}...")
         assign_response = api.gim_client_assign(
             client_ip=client_ip,
             module=module,
             module_version=module_version
         )
         
+        logger.info(f"✓ Module assigned successfully")
         if debug:
             logger.debug(f"Assign response: {assign_response}")
         
-        logger.info(f"✓ Module assigned successfully")
-        
         # Set module parameters
         if params:
-            logger.info(f"\n➜ Setting module parameters...")
+            logger.info(f"\n➜ Setting {len(params)} module parameter(s)...")
             for param_name, param_value in params.items():
-                logger.info(f"  Setting {param_name} = {param_value}")
+                logger.info(f"  • {param_name} = {param_value}")
                 param_response = api.gim_client_params(
                     client_ip=client_ip,
                     param_name=param_name,
@@ -3585,38 +3584,44 @@ def install_gim_module(
                 )
                 
                 if debug:
-                    logger.debug(f"Param response: {param_response}")
+                    logger.debug(f"    Response: {param_response}")
             
-            logger.info(f"✓ All parameters set successfully")
+            logger.info(f"✓ All {len(params)} parameter(s) set successfully")
         else:
             logger.info("\n⊘ No parameters to set")
         
         # Schedule installation
-        logger.info(f"\n➜ Scheduling installation...")
+        logger.info(f"\n➜ Scheduling installation for client {client_ip}...")
+        logger.info(f"  Installation time: now")
         schedule_response = api.gim_schedule_install(
             client_ip=client_ip,
-            date="now",
-            module=module
+            date="now"
         )
         
+        logger.info(f"✓ Installation scheduled successfully")
         if debug:
             logger.debug(f"Schedule response: {schedule_response}")
-        
-        logger.info(f"✓ Installation scheduled successfully")
         
         # Monitor installation
         if monitor_installation:
             logger.info(f"\n➜ Waiting {installation_delay} seconds before monitoring...")
             time.sleep(installation_delay)
             
-            logger.info(f"➜ Monitoring installation progress...")
+            logger.info(f"➜ Monitoring installation progress for client {client_ip}...")
             
             # Monitor until all modules are installed
             import re
             pending = ["initial"]  # Initialize to enter loop
+            check_count = 0
             while pending:
+                check_count += 1
+                logger.info(f"\n  Check #{check_count}: Querying module status...")
+                
                 modules = api.gim_list_client_modules(client_ip=client_ip)
                 msg = modules.get("Message", "")
+                
+                if debug:
+                    logger.debug(f"  Raw API response Message:\n{msg}")
                 
                 # Parse module entries
                 entries = [
@@ -3625,6 +3630,8 @@ def install_gim_module(
                     if e.strip()
                 ]
                 
+                logger.info(f"  Found {len(entries)} module entry/entries")
+                
                 result = []
                 for entry in entries:
                     entry_str: str = str(entry)
@@ -3632,7 +3639,7 @@ def install_gim_module(
                         m = re.search(p, entry_str)
                         return m.group(1) if m else None
                     
-                    result.append({
+                    module_info = {
                         "module_id": g(r"MODULE_ID:\s+(-?\d+)"),
                         "name": g(r"NAME:\s+([A-Z0-9\-]+)"),
                         "installed_version": g(r"INSTALLED_VERSION\s+([0-9][^\s]+)"),
@@ -3640,19 +3647,25 @@ def install_gim_module(
                         "state": g(r"STATE:\s+([A-Z\-]+)"),
                         "is_scheduled": g(r"IS_SCHEDULED:\s+([NY])"),
                         "schedule_time": g(r"IS_SCHEDULED:\s+[NY]\s+\(([^)]+)\)")
-                    })
+                    }
+                    result.append(module_info)
+                    
+                    if debug:
+                        logger.debug(f"  Module: {module_info['name']} | State: {module_info['state']} | Scheduled: {module_info['scheduled_version']}")
                 
                 # Check for pending installations
                 pending = [m for m in result if m["state"] != "INSTALLED"]
                 
                 if pending:
-                    logger.info(f"  ⌛ {len(pending)} module(s) still installing. Waiting 30 seconds before next check...")
-                    if debug:
-                        for m in pending:
-                            logger.debug(f"    - {m['name']}: {m['state']}")
+                    logger.info(f"  ⌛ {len(pending)} module(s) still installing:")
+                    for m in pending:
+                        logger.info(f"    - {m['name']}: {m['state']}")
+                    logger.info(f"  Waiting 30 seconds before next check...")
                     time.sleep(30)
                 else:
                     logger.info("  ✓ All modules installed successfully!")
+                    for m in result:
+                        logger.info(f"    - {m['name']}: {m['state']} (version: {m['installed_version']})")
         
         logger.info("\n" + "=" * 80)
         logger.info(f"✓ GIM MODULE INSTALLATION COMPLETED")
