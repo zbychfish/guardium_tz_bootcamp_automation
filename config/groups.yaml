@@ -185,7 +185,9 @@ groups:
         function: import_gim_modules
         module: tasks.labs
         description: "Import GIM module files to Guardium appliance"
-        appliances: [cm01]  # Execute on Central Manager
+        args:
+          appliance_name: "cm01"
+          debug: false
 
   atap_lab:
     name: "ATAP Lab"
