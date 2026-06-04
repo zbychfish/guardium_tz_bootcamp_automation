@@ -103,15 +103,15 @@ def import_gim_modules(
     # Get demo user password
     if not demo_password:
         try:
-            demo_password = config.get_custom_variable('demo_pwd')
+            demo_password = config.get_custom_variable('pwd')
             if demo_password:
-                logger.info("Using demo password from custom_variables (demo_pwd)")
+                logger.info("Using demo password from custom_variables (pwd)")
         except:
             pass
     
     if not demo_password:
         logger.error("Demo user password is required")
-        logger.error("Provide demo_password in args or set 'demo_pwd' in custom_variables")
+        logger.error("Provide demo_password in args or set 'pwd' in custom_variables")
         return False
     
     # Get OAuth client secret
