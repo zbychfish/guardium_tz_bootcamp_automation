@@ -114,14 +114,31 @@ def import_gim_modules(
         logger.error("Provide demo_password in args or set 'pwd' in custom_variables")
         return False
     
-    # Get OAuth client secret
+    # Get OAuth client secret from .client_secret file
     try:
-        client_secret = config.get_custom_variable('client_secret')
-        if not client_secret:
-            logger.error("client_secret not found in custom_variables")
+        from pathlib import Path
+        project_root = config.config_file.parent.parent
+        secret_file = project_root / ".client_secret"
+        
+        if not secret_file.exists():
+            logger.error(f"client_secret file not found: {secret_file}")
+            logger.error("Run 'create_oauth_client' stage first to generate the client secret")
             return False
+        
+        with open(secret_file, 'r') as f:
+            client_secret = f.read().strip()
+        
+        if not client_secret:
+            logger.error("client_secret file is empty")
+            return False
+        
+        logger.info(f"Using client_secret from file: {secret_file}")
+        
     except Exception as e:
-        logger.error(f"Failed to get client_secret from custom_variables: {e}")
+        logger.error(f"Failed to read client_secret from file: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
         return False
     
     # Create REST API client
