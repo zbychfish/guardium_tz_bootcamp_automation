@@ -182,8 +182,8 @@ groups:
         module: tasks.labs
         description: "Install STAP (S-TAP) agent on raptor using GIM"
         args:
-          appliance_name: "cm02"
-          module_version: "STAP-12.2.2.0_r123489_"
+          appliance_name: "coll1"
+          module_version: "STAP-12.2.2.0_r123489_1"
           debug: false
 
       # - name: current_test
