@@ -23,7 +23,7 @@ def import_gim_modules(
     appliance_name: Optional[str] = None,
     demo_user: str = "demo",
     demo_password: Optional[str] = None,
-    gim_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/agents/gim",
+    gim_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim",
     gim_target_dir: str = "/var/IBM/Guardium/gim/packages",
     debug: bool = False
 ) -> bool:
