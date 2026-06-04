@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 def import_gim_modules(
     config,
     logger,
+    verbose: bool = False,
     appliance_name: Optional[str] = None,
     demo_user: str = "demo",
     demo_password: Optional[str] = None,
