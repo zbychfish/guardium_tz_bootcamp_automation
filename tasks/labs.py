@@ -328,9 +328,9 @@ def install_gim_on_raptor(
 def install_stap_on_raptor(
     config,
     logger,
-    appliance_name: str,
-    collector_name: str,
     verbose: bool = False,
+    appliance_name: Optional[str] = None,
+    collector_name: Optional[str] = None,
     client_ip: Optional[str] = None,
     module_version: str = "STAP-12.2.2.0_r123489_",
     use_tls: str = "1",
@@ -381,6 +381,15 @@ def install_stap_on_raptor(
     logger.info("=" * 80)
     logger.info("INSTALL STAP ON RAPTOR")
     logger.info("=" * 80)
+    
+    # Validate required parameters
+    if not appliance_name:
+        logger.error("appliance_name is required (GIM server, e.g., 'cm02')")
+        return False
+    
+    if not collector_name:
+        logger.error("collector_name is required (collector for SQLGUARD_IP, e.g., 'coll2')")
+        return False
     
     # Auto-detect client_ip (raptor IP) if not provided
     if not client_ip:
