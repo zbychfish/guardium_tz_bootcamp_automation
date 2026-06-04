@@ -2693,77 +2693,52 @@ def install_and_monitor_patches(
     logger.info("=" * 80)
     
     # Step 1: Get patch numbers from patch_selection
-    # We need to map positions back to patch numbers by querying available patches
+    # Map positions to patch numbers based on alphabetically sorted *.sig files
     logger.info("\n📋 Step 1: Determining patch numbers from selection...")
     
-    # Load appliance configuration
-    from core.appliance_config_loader import ApplianceConfigLoader
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
+    # Define patches directory path
+    patches_dir = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
     
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Get CLI credentials
-    cli_user = user if user else 'cli'
-    cli_password = password if password else config.get_custom_variable('cli_pwd')
-    
-    if not cli_password:
-        logger.error("cli_pwd not found in custom_variables")
-        return False
-    
-    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else r'[\w-]+(\.demo\.guardium)?> '
-    
-    if not cli_prompt_regex:
-        logger.error("Could not determine CLI prompt regex")
-        return False
-    
-    # Connect and get available patches to map positions to numbers
     try:
-        client = ApplianceClient(
-            host=host,
-            user=cli_user,
-            password=cli_password,
-            prompt_regex=cli_prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=False
-        )
+        import os
+        import glob
         
-        if not client.connect():
-            logger.error("Failed to connect to appliance to get patch numbers")
+        # Get all *.sig files and sort them alphabetically
+        sig_files = glob.glob(os.path.join(patches_dir, "*.sig"))
+        sig_files.sort()
+        
+        if not sig_files:
+            logger.error(f"No *.sig files found in {patches_dir}")
             return False
         
-        output = client.execute_command("show system patch available")
-        client.disconnect()
+        logger.info(f"Found {len(sig_files)} patch files:")
         
-        # Parse to get patch numbers by position
+        # Map positions to patch numbers
         available_patches = {}  # {position: patch_number}
-        lines = output.split('\n')
         position = 0
-        for line in lines:
-            line_stripped = line.strip()
-            if not line_stripped or line_stripped.startswith('P#') or line_stripped.startswith('Attempting'):
-                continue
-            match = re.match(r'^(\d+)\s+', line_stripped)
+        
+        for sig_file in sig_files:
+            position += 1
+            filename = os.path.basename(sig_file)
+            
+            # Extract patch number from filename using regex p(\d+)
+            match = re.search(r'p(\d+)', filename)
             if match:
-                position += 1
                 patch_number = match.group(1)
                 available_patches[position] = patch_number
+                logger.info(f"  Position {position}: {filename} → Patch {patch_number}")
+            else:
+                logger.warning(f"  Position {position}: {filename} → Could not extract patch number")
+        
+        if not available_patches:
+            logger.error("Could not extract patch numbers from any *.sig files")
+            return False
         
         # Map patch_selection positions to patch numbers
         patch_numbers = []
         positions = [p.strip() for p in patch_selection.split(',')]
         
+        logger.info(f"\nMapping selected positions to patch numbers:")
         for pos_str in positions:
             try:
                 pos = int(pos_str)
@@ -2771,7 +2746,7 @@ def install_and_monitor_patches(
                     patch_numbers.append(available_patches[pos])
                     logger.info(f"  Position {pos} → Patch {available_patches[pos]}")
                 else:
-                    logger.warning(f"  Position {pos} → NOT FOUND")
+                    logger.warning(f"  Position {pos} → NOT FOUND (valid range: 1-{len(available_patches)})")
             except ValueError:
                 logger.warning(f"  Invalid position: {pos_str}")
         
@@ -2782,7 +2757,10 @@ def install_and_monitor_patches(
         logger.info(f"✓ Will monitor patches: {', '.join(patch_numbers)}")
         
     except Exception as e:
-        logger.warning(f"Could not determine patch numbers: {e}")
+        logger.error(f"Error reading patch files from {patches_dir}: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
         logger.info("Will monitor all patches")
         patch_numbers = None
     

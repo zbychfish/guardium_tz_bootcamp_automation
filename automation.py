@@ -182,18 +182,27 @@ class AutomationOrchestrator:
             deps_satisfied, missing_deps = self.group_manager.check_dependencies(group_name, completed_groups)
             
             if not deps_satisfied:
-                self.logger.error("=" * 80)
-                self.logger.error(f"DEPENDENCY CHECK FAILED for group '{group_name}'")
-                self.logger.error("=" * 80)
-                self.logger.error(f"The following dependency groups must be completed first:")
-                for dep in missing_deps:
-                    self.logger.error(f"  - {dep}")
-                self.logger.error("")
-                self.logger.error(f"Completed groups: {', '.join(completed_groups) if completed_groups else 'none'}")
-                self.logger.error("")
-                self.logger.error(f"Please run the missing dependency groups first, or use --skip-deps to bypass this check.")
-                self.logger.error("=" * 80)
-                return False
+                self.logger.info("=" * 80)
+                self.logger.info(f"DEPENDENCY CHECK: Group '{group_name}' requires dependencies")
+                self.logger.info("=" * 80)
+                self.logger.info(f"Missing dependency groups: {', '.join(missing_deps)}")
+                self.logger.info(f"These groups will be executed automatically before '{group_name}'")
+                self.logger.info("=" * 80)
+                
+                # Execute missing dependency groups recursively
+                for dep_group in missing_deps:
+                    self.logger.info(f"\n▶ Executing dependency group: {dep_group}")
+                    success = self.run_group(dep_group, skip_dependency_check=False)
+                    if not success:
+                        self.logger.error(f"✗ Failed to execute dependency group '{dep_group}'")
+                        self.logger.error(f"Cannot proceed with group '{group_name}'")
+                        return False
+                    self.logger.info(f"✓ Dependency group '{dep_group}' completed successfully\n")
+                
+                self.logger.info("=" * 80)
+                self.logger.info(f"All dependencies satisfied for group '{group_name}'")
+                self.logger.info(f"Proceeding with group execution...")
+                self.logger.info("=" * 80)
         
         self.logger.info("=" * 80)
         self.logger.info(f"GROUP: {group_info.get('name', group_name)}")
