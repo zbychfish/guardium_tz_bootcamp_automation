@@ -484,7 +484,12 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
         return False
     
     api = create_guardium_api(config, logger, cm_appliance)
-    api.get_token(username='demo', password=config.get('demo_password'))
+    machines = config.get('machines', {})
+    pwd = machines.get('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in machines config")
+        return False
+    api.get_token(username='demo', password=pwd)
     
     if verbose:
         logger.info(f"Deleting MySQL IE for {stap_host} on collector {api_target_host}")

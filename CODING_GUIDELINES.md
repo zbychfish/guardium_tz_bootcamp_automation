@@ -9,6 +9,7 @@
 5. **Don't mix unrelated tasks** in one file - separate concerns
 6. **Don't add function docstrings** - code should be self-explanatory
 7. **Don't write verbose code** - use loops, comprehensions, compact patterns
+8. **Don't make assumptions** - if something is unclear, ASK with ask_followup_question
 
 ## ✅ ALWAYS DO
 
