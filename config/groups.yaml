@@ -199,6 +199,11 @@ groups:
         module: tasks.labs
         description: "Configure SSL/TLS for MongoDB on raptor"
 
+      - name: enable_atap_for_mongo
+        function: enable_atap_for_mongo
+        module: tasks.labs
+        description: "Enable ATAP for MongoDB on raptor"
+
       # - name: current_test
       #   function: current_test
       #   module: tasks.current_test

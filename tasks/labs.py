@@ -551,6 +551,7 @@ def configure_ssl_for_mongo(config, logger, verbose=True, **kwargs):
                 lines.append("    mode: requireTLS\n")
                 lines.append("    certificateKeyFile: /var/lib/mongo/cert/both.pem\n")
                 lines.append("    CAFile: /var/lib/mongo/cert/ca.pem\n")
+                lines.append("    allowConnectionsWithoutCertificates: true\n")
                 tls_added = True
     conf.write_text("".join(lines))
     
@@ -559,4 +560,27 @@ def configure_ssl_for_mongo(config, logger, verbose=True, **kwargs):
         return False
     
     logger.info("✓ SSL configured for MongoDB")
+    return True
+
+
+def enable_atap_for_mongo(config, logger, verbose=True, **kwargs):
+    from core.utils import execute_commands
+    
+    guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
+    steps = [
+        ("mv /opt/guardium/etc/guard/root/postgres.conf /opt/guardium/etc/guard", "backup postgres.conf"),
+        (f"{guardctl} --db-user=mongod --db-home=/usr --db-base=/var/lib/mongo --db-type=mongodb --db-instance=mongo4 store-conf", "store configuration"),
+        (f"{guardctl} authorize-user mongod", "authorize user"),
+        ("systemctl stop mongod", "stop service"),
+        (f"{guardctl} --db-instance=mongo4 activate", "activate ATAP"),
+        ("systemctl start mongod", "start service"),
+        ("mv /opt/guardium/etc/guard/postgres.conf /opt/guardium/etc/guard/root", "restore postgres.conf")
+    ]
+    
+    for cmd, desc in steps:
+        if not execute_commands([cmd], logger, verbose):
+            logger.error(f"Failed to {desc}")
+            return False
+    
+    logger.info("✓ ATAP enabled for MongoDB")
     return True
