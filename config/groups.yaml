@@ -186,6 +186,14 @@ groups:
         module: tasks.labs
         description: "Enable ATAP (Application Transparent Access Protection) for PostgreSQL on raptor"
 
+      - name: correct_mysql_ie
+        function: correct_mysql_ie
+        module: tasks.labs
+        description: "Correct MySQL Inspection Engine definitions"
+        args:
+          appliance_name: "coll2"
+          demo_password: "{{ demo_password }}"
+
       # - name: current_test
       #   function: current_test
       #   module: tasks.current_test

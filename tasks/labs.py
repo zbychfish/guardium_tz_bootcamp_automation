@@ -457,3 +457,47 @@ def enable_atap_for_postgres_on_raptor(config, logger, verbose=True, db_user="po
     
     logger.info("✓ ATAP enabled for PostgreSQL")
     return True
+
+
+def correct_mysql_ie(config, logger, verbose=True, appliance_name="coll2",
+                     stap_host=None, demo_password=None, **kwargs):
+    from core.guardium_rest_api import create_guardium_api
+    
+    if not stap_host:
+        machines = config.get('machines', {})
+        raptor_info = machines.get('raptor', {})
+        stap_host = raptor_info.get('private_ip')
+        if not stap_host:
+            logger.error("stap_host not provided and not found in machines config")
+            return False
+    
+    api = create_guardium_api(config, logger, appliance_name)
+    api.get_token(username='demo', password=demo_password or config.get('demo_password'))
+    
+    if verbose:
+        logger.info(f"Deleting MySQL IE definitions for {stap_host}")
+    api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1")
+    
+    ie_configs = [
+        {"port_min": "3306", "port_max": "3306", "ktap_db_port": "3306", "unix_socket_marker": "mysql.sock"},
+        {"port_min": "33060", "port_max": "33060", "ktap_db_port": "33060", "unix_socket_marker": "mysql.sock"},
+        {"port_min": "3306", "port_max": "3306", "ktap_db_port": "3306", "unix_socket_marker": "mysqlx.sock"},
+        {"port_min": "33060", "port_max": "33060", "ktap_db_port": "33060", "unix_socket_marker": "mysqlx.sock"}
+    ]
+    
+    for i, ie_config in enumerate(ie_configs, 1):
+        if verbose:
+            logger.info(f"Creating MySQL IE {i}/4: port {ie_config['port_min']}, socket {ie_config['unix_socket_marker']}")
+        api.create_inspection_engine(
+            stap_host=stap_host,
+            protocol="mysql",
+            db_user="mysqld",
+            db_version="8",
+            client="0.0.0.0/0.0.0.0",
+            proc_name="/usr/sbin/mysqld",
+            db_install_dir="/var/lib/mysql",
+            **ie_config
+        )
+    
+    logger.info("✓ MySQL IE corrected")
+    return True

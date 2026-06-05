@@ -465,7 +465,43 @@ class GuardiumRestAPI:
         
         response = requests.get(url, headers=headers, params=params, verify=self.verify_ssl)
         response.raise_for_status()
-        
+        return response.json()
+    
+    def delete_inspection_engine(self, stap_host: str, type: str, sequence: Optional[str] = None,
+                                 wait_for_response: Optional[str] = None, api_target_host: Optional[str] = None) -> dict:
+        url = f'{self.base_url}/restAPI/inspection_engine'
+        headers = self.get_headers()
+        data: Dict[str, Any] = {'stapHost': stap_host, 'type': type}
+        if sequence: data['sequence'] = sequence
+        if wait_for_response: data['waitForResponse'] = wait_for_response
+        if api_target_host: data['api_target_host'] = api_target_host
+        response = requests.delete(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+    
+    def create_inspection_engine(self, stap_host: str, protocol: str, client: Optional[str] = None,
+                                db_install_dir: Optional[str] = None, db_user: Optional[str] = None,
+                                db_version: Optional[str] = None, ktap_db_port: Optional[str] = None,
+                                port_max: Optional[str] = None, port_min: Optional[str] = None,
+                                proc_name: Optional[str] = None, unix_socket_marker: Optional[str] = None,
+                                api_target_host: Optional[str] = None, **kwargs) -> dict:
+        url = f'{self.base_url}/restAPI/inspection_engine'
+        headers = self.get_headers()
+        data: Dict[str, Any] = {'stapHost': stap_host, 'protocol': protocol}
+        if client: data['client'] = client
+        if db_install_dir: data['dbInstallDir'] = db_install_dir
+        if db_user: data['dbUser'] = db_user
+        if db_version: data['dbVersion'] = db_version
+        if ktap_db_port: data['ktapDbPort'] = ktap_db_port
+        if port_max: data['portMax'] = port_max
+        if port_min: data['portMin'] = port_min
+        if proc_name: data['procName'] = proc_name
+        if unix_socket_marker: data['unixSocketMarker'] = unix_socket_marker
+        if api_target_host: data['api_target_host'] = api_target_host
+        for k, v in kwargs.items():
+            if v is not None: data[k] = v
+        response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
         return response.json()
 
 
