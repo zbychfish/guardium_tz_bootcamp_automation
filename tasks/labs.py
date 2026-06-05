@@ -540,13 +540,14 @@ def configure_ssl_for_mongo(config, logger, verbose=True, **kwargs):
     lines = []
     with conf.open() as f:
         for line in f:
-            if re.match(r"^\s*bindIp\s*:", line):
+            if re.match(r"^\s*port\s*:", line):
+                lines.append(line)
                 lines.append("  bindIp: 0.0.0.0\n")
                 lines.append("  tls:\n")
                 lines.append("    mode: requireTLS\n")
                 lines.append("    certificateKeyFile: /var/lib/mongo/cert/both.pem\n")
                 lines.append("    CAFile: /var/lib/mongo/cert/both.pem\n")
-            else:
+            elif not re.match(r"^\s*bindIp\s*:", line):
                 lines.append(line)
     conf.write_text("".join(lines))
     
