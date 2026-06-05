@@ -54,7 +54,7 @@ def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
     if verbose:
         logger.info("Creating Db2 groups and users")
     
-    exit(1)
+    exit
 
     commands = [
         "groupadd db2iadm1",
@@ -169,6 +169,43 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
     
     if verbose:
         logger.info("✓ Sample database created successfully")
+    
+    # Install DB2 license if it was saved
+    if db2_lic_b64:
+        if verbose:
+            logger.info("=" * 80)
+            logger.info("Installing DB2 license")
+            logger.info("=" * 80)
+        
+        license_commands = [
+            "su - db2inst1 -c 'db2licm -a /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic'",
+            "su - db2inst1 -c 'db2licm -r db2aese'"
+        ]
+        
+        if not execute_commands(license_commands, logger, verbose):
+            logger.error("Failed to install DB2 license")
+            return False
+        
+        if verbose:
+            logger.info("✓ DB2 license installed successfully")
+    
+    # Cleanup installation files
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Cleaning up installation files")
+        logger.info("=" * 80)
+    
+    cleanup_commands = [
+        "rm -f /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic",
+        "rm -rf /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal"
+    ]
+    
+    if not execute_commands(cleanup_commands, logger, verbose):
+        logger.warning("Failed to cleanup some installation files")
+    elif verbose:
+        logger.info("✓ Installation files cleaned up")
+    
+    if verbose:
         logger.info("=" * 80)
     
     return True
