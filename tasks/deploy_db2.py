@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
+import base64
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
@@ -22,9 +23,39 @@ def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
         logger.error("Password (pwd) not found in custom_variables")
         return False
     
+    # Decode and save DB2 license file
+    db2_lic_b64 = config.get_custom_variable('db2_lic')
+    
+    if db2_lic_b64:
+        if verbose:
+            logger.info("Decoding and saving DB2 license from custom_variables")
+        
+        try:
+            # Decode base64 license
+            db2_lic_content = base64.b64decode(db2_lic_b64)
+            if verbose:
+                logger.info("✓ DB2 license decoded successfully")
+            
+            # Save to file immediately
+            lic_file_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic"
+            
+            with open(lic_file_path, 'wb') as f:
+                f.write(db2_lic_content)
+            
+            if verbose:
+                logger.info(f"✓ DB2 license file saved to: {lic_file_path}")
+        except Exception as e:
+            logger.error(f"Failed to decode and save DB2 license: {e}")
+            return False
+    else:
+        if verbose:
+            logger.warning("DB2 license (db2_lic) not found in custom_variables")
+    
     if verbose:
         logger.info("Creating Db2 groups and users")
     
+    exit(1)
+
     commands = [
         "groupadd db2iadm1",
         "groupadd db2fadm1",
