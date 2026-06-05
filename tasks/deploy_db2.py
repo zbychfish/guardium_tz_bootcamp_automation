@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_commands, ConfigLoader, write_file
+from core import execute_commands, execute_local_command, ConfigLoader, write_file
 
 
 def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
@@ -107,18 +107,22 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
         logger.info("Running DB2 silent installation (this may take 15-30 minutes)")
         logger.info("=" * 80)
     
-    install_commands = [
-        "cd /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal",
-        f"./db2setup -r {rsp_file_path} -f sysreq"
-    ]
+    install_cmd = f"cd /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal && ./db2setup -r {rsp_file_path} -f sysreq"
     
-    install_cmd = " && ".join(install_commands)
-    
-    if not execute_commands([install_cmd], logger, verbose):
-        logger.error("DB2 silent installation failed")
-        return False
+    result = execute_local_command(install_cmd, logger, verbose)
     
     if verbose:
+        logger.info(f"DB2 installation exit code: {result['rc']}")
+    
+    if result['rc'] not in [0, 4]:
+        logger.error(f"DB2 silent installation failed with exit code {result['rc']}")
+        if result['stderr']:
+            logger.error(f"Error output: {result['stderr']}")
+        return False
+    
+    if result['rc'] == 4 and verbose:
+        logger.info("⚠ DB2 installation completed with warnings (exit code 4)")
+    elif verbose:
         logger.info("✓ DB2 installation completed successfully")
     
     if verbose:
