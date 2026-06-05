@@ -194,6 +194,11 @@ groups:
           cm_appliance: "cm02"
           collector_appliance: "coll2"
 
+      - name: configure_ssl_for_mongo
+        function: configure_ssl_for_mongo
+        module: tasks.labs
+        description: "Configure SSL/TLS for MongoDB on raptor"
+
       # - name: current_test
       #   function: current_test
       #   module: tasks.current_test
