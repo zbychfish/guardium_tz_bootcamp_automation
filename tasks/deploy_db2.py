@@ -53,9 +53,7 @@ def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
     
     if verbose:
         logger.info("Creating Db2 groups and users")
-    
-    exit
-
+  
     commands = [
         "groupadd db2iadm1",
         "groupadd db2fadm1",
