@@ -484,10 +484,9 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
         return False
     
     api = create_guardium_api(config, logger, cm_appliance)
-    machines = config.get('machines', {})
-    pwd = machines.get('pwd')
+    pwd = config.get_custom_variable('pwd')
     if not pwd:
-        logger.error("Password 'pwd' not found in machines config")
+        logger.error("Password 'pwd' not found in custom_variables")
         return False
     api.get_token(username='demo', password=pwd)
     
