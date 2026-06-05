@@ -527,7 +527,7 @@ def configure_ssl_for_mongo(config, logger, verbose=True, **kwargs):
     
     commands = [
         "mkdir -p /var/lib/mongo/cert",
-        'openssl req -x509 -newkey rsa:4096 -keyout /var/lib/mongo/cert/key.pem -out /var/lib/mongo/cert/cert.pem -sha256 -days 3650 -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=mongod"',
+        'openssl req -x509 -newkey rsa:4096 -keyout /var/lib/mongo/cert/key.pem -out /var/lib/mongo/cert/cert.pem -sha256 -days 3650 -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=mongod" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"' -addext "basicConstraints=CA:FALSE",
         "cat /var/lib/mongo/cert/key.pem /var/lib/mongo/cert/cert.pem > /var/lib/mongo/cert/both.pem",
         "chown -R mongod:mongod /var/lib/mongo/cert"
     ]
