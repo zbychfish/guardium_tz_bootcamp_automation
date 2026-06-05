@@ -518,3 +518,40 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
     
     logger.info("✓ MySQL IE corrected")
     return True
+
+
+def configure_ssl_for_mongo(config, logger, verbose=True, **kwargs):
+    import re
+    from pathlib import Path
+    from core.utils import execute_commands
+    
+    commands = [
+        "mkdir -p /var/lib/mongo/cert",
+        'openssl req -x509 -newkey rsa:4096 -keyout /var/lib/mongo/cert/key.pem -out /var/lib/mongo/cert/cert.pem -sha256 -days 3650 -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=mongod"',
+        "cat /var/lib/mongo/cert/key.pem /var/lib/mongo/cert/cert.pem > /var/lib/mongo/cert/both.pem",
+        "chown -R mongod:mongod /var/lib/mongo/cert"
+    ]
+    
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to configure SSL certificates")
+        return False
+    
+    conf = Path("/etc/mongod.conf")
+    lines = []
+    with conf.open() as f:
+        for line in f:
+            if re.match(r"^\s*bindIp\s*:", line):
+                line = "  bindIp: 0.0.0.0  # Enter 0.0.0.0,:: to bind to all IPv4 and IPv6 addresses or, alternatively, use the net.bindIpAll setting.\n"
+                lines.append("  tls:\n")
+                lines.append("    mode: requireTLS\n")
+                lines.append("    certificateKeyFile: /var/lib/mongo/cert/both.pem\n")
+            else:
+                lines.append(line)
+    conf.write_text("".join(lines))
+    
+    if not execute_commands(["systemctl restart mongod"], logger, verbose):
+        logger.error("Failed to restart mongod")
+        return False
+    
+    logger.info("✓ SSL configured for MongoDB")
+    return True
