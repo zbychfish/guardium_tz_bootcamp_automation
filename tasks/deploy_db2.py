@@ -53,7 +53,9 @@ def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
     if verbose:
         logger.info("Creating Db2 response file")
     
-    rsp_content = f"""LIC_AGREEMENT             = ACCEPT         ** ACCEPT or DECLINE
+    rsp_content = f"""PROD                      = DB2_SERVER_EDITION
+FILE                      = /opt/ibm/db2/V11.5
+LIC_AGREEMENT             = ACCEPT         ** ACCEPT or DECLINE
 *INTERACTIVE              = NONE            ** NONE, YES, MACHINE
 INSTALL_TYPE              = TYPICAL         ** TYPICAL, COMPACT, CUSTOM
 COMP                     = DB2_SAMPLE_DATABASE                 ** Sample database source
@@ -96,10 +98,43 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
         write_file(rsp_file_path, rsp_content)
         if verbose:
             logger.info(f"✓ Db2 response file created: {rsp_file_path}")
-            logger.info("=" * 80)
     except Exception as e:
         logger.error(f"Failed to create Db2 response file: {e}")
         return False
+    
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Running DB2 silent installation (this may take 15-30 minutes)")
+        logger.info("=" * 80)
+    
+    install_commands = [
+        "cd /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal",
+        f"./db2setup -r {rsp_file_path} -f sysreq"
+    ]
+    
+    install_cmd = " && ".join(install_commands)
+    
+    if not execute_commands([install_cmd], logger, verbose):
+        logger.error("DB2 silent installation failed")
+        return False
+    
+    if verbose:
+        logger.info("✓ DB2 installation completed successfully")
+    
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating sample database with db2sampl")
+        logger.info("=" * 80)
+    
+    sample_db_cmd = "su - db2inst1 -c 'db2sampl'"
+    
+    if not execute_commands([sample_db_cmd], logger, verbose):
+        logger.error("Failed to create sample database")
+        return False
+    
+    if verbose:
+        logger.info("✓ Sample database created successfully")
+        logger.info("=" * 80)
     
     return True
 
