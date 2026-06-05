@@ -22,7 +22,7 @@ groups:
   other_praparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
-    auto_execute: false
+    auto_execute: true
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
