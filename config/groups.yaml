@@ -191,7 +191,7 @@ groups:
         module: tasks.labs
         description: "Correct MySQL Inspection Engine definitions"
         args:
-          cm_appliance: "cm01"
+          cm_appliance: "cm02"
           collector_appliance: "coll2"
 
       # - name: current_test
