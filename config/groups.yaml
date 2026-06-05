@@ -39,6 +39,11 @@ groups:
         function: deploy_oracle_on_sauropod
         module: tasks.deploy_oracle
         description: "Deploy Oracle 21c on sauropod"
+      
+      - name: deploy_db2_on_raptor
+        function: deploy_db2_on_raptor_task
+        module: tasks.deploy_db2
+        description: "Install Db2 prerequisites on raptor"
 
   setup_appliances:
     name: "Setup Appliances"

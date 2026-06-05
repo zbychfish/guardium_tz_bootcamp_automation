@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
+
+from core import execute_commands, ConfigLoader, write_file
+
+
+def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Installing Db2 prerequisites on raptor")
+        logger.info("=" * 80)
+    
+    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
+    password = config.get_custom_variable('pwd')
+    
+    if not password:
+        logger.error("Password (pwd) not found in custom_variables")
+        return False
+    
+    if verbose:
+        logger.info("Creating Db2 groups and users")
+    
+    commands = [
+        "groupadd db2iadm1",
+        "groupadd db2fadm1",
+        f"useradd -g db2iadm1 -m -p $(openssl passwd -1 '{password}') db2inst1",
+        f"useradd -g db2fadm1 -m -p $(openssl passwd -1 '{password}') db2fenc1",
+        "dnf install -y libaio numactl ksh libgcc libstdc++ perl pam libibverbs patch NetworkManager-config-server pam.i686 libstdc++.i686",
+        'sysctl -w kernel.sem="250 64000 100 4096"',
+        "sysctl -w kernel.shmmni=8192",
+        "sysctl -w kernel.shmmax=68719476736",
+        "sysctl -w kernel.shmall=16777216",
+        "echo 'db2inst1 soft nofile 65536' >> /etc/security/limits.conf",
+        "echo 'db2inst1 hard nofile 65536' >> /etc/security/limits.conf",
+        "echo 'db2inst1 soft nproc 65536' >> /etc/security/limits.conf",
+        "echo 'db2inst1 hard nproc 65536' >> /etc/security/limits.conf",
+        "tar -xzf /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/v11.5.9_linuxx64_universal_fixpack.tar.gz -C /opt/guardium_tz_bootcamp_automation/upload/source_files/db2"
+    ]
+    
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Db2 prerequisites installation failed")
+        return False
+    
+    if verbose:
+        logger.info("✓ Db2 groups and users created")
+        logger.info("✓ Db2 prerequisites installed successfully")
+    
+    if verbose:
+        logger.info("Creating Db2 response file")
+    
+    rsp_content = f"""LIC_AGREEMENT             = ACCEPT         ** ACCEPT or DECLINE
+*INTERACTIVE              = NONE            ** NONE, YES, MACHINE
+INSTALL_TYPE              = TYPICAL         ** TYPICAL, COMPACT, CUSTOM
+COMP                     = DB2_SAMPLE_DATABASE                 ** Sample database source
+INSTANCE                  = DB2_INST        ** char(8)  no spaces
+DB2_INST.NAME             = db2inst1        ** char(8)  no spaces, no upper case letters
+DB2_INST.GROUP_NAME       = db2iadm1        ** char(30) no spaces
+DB2_INST.HOME_DIRECTORY   =                 ** char(64) no spaces. Valid for root installation only
+DB2_INST.PASSWORD         = {password} ** Valid for root installation only
+*DB2_INST.TYPE            = ESE             ** DSF ESE WSE STANDALONE CLIENT
+DB2_INST.AUTOSTART        = YES             ** YES or NO
+DB2_INST.START_DURING_INSTALL = YES         ** YES or NO. Default is YES.
+*DB2_INST.SVCENAME        = db2c_db2inst1   ** BLANK or char(14). Reserved for root installation only
+*DB2_INST.PORT_NUMBER     = 25000           ** 1024 - 65535, Reserved for root installation only
+*DB2_INST.DB2CF_PORT_NUMBER = 56001         ** 1024 - 65535.
+*DB2_INST.DB2CF_MGMT_PORT_NUMBER = 56000    ** 1024 - 65535.
+DB2_INST.FENCED_USERNAME  = db2sdfe1        ** char(8)  no spaces, no upper case letters
+DB2_INST.FENCED_GROUP_NAME = db2fsdm1       ** char(30)  no spaces
+DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
+
+** Database Settings
+** -----------------
+*DATABASE                 =                 ** databas1: char(8) no spaces - this is the prefix for this DB set
+*databas1.DATABASE_NAME   =                 ** favorateDB: char(8) no spaces - this is the real database
+*databas1.INSTANCE        =                 ** db2inst1: char(8)  no spaces - one value of INSTANCE keyword
+*databas1.ALIAS           =                 ** alias of databas1: char(8) no spaces and can not start with SYS, DBM or IBM
+*databas1.LOCATION        =                 ** local, remote, LOCAL or REMOTE; For client only product use remote or REMOTE
+*databas1.SYSTEM_NAME     =                 ** some remote host char(64) no spaces: for LOCATION=remote only
+*databas1.AUTHENTICATION  =                 ** CLIENT, SERVER, SERVER_ENCRYPT: optional
+*databas1.PATH            =                 ** the directory for the database: optional
+*databas1.SVCENAME        =                 ** service1: for remote LOCATION only
+*databas1.USERNAME        =                 ** db2user: char(8)  no spaces
+*databas1.PASSWORD        =                 ** db2pwd: char(8)  no spaces
+
+*INSTALL_ENCRYPTION       = YES             ** YES or NO.Valid for root installation only.
+"""
+    
+    rsp_file_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2inst1.rsp"
+    
+    try:
+        write_file(rsp_file_path, rsp_content)
+        if verbose:
+            logger.info(f"✓ Db2 response file created: {rsp_file_path}")
+            logger.info("=" * 80)
+    except Exception as e:
+        logger.error(f"Failed to create Db2 response file: {e}")
+        return False
+    
+    return True
+
+
+def deploy_db2_on_raptor_task(config, logger, verbose: bool = True) -> bool:
+    return deploy_db2_on_raptor(logger, verbose)
+
+# Made with Bob
