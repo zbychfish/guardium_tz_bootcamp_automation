@@ -330,6 +330,130 @@ def set_root_password_remote(ssh_client: SSHClient, password: str, logger) -> bo
         return False
 
 
+def set_hostname_local(hostname: str, logger) -> bool:
+    """
+    Set hostname on local machine using hostnamectl.
+    
+    Args:
+        hostname: New hostname to set
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info(f"Setting hostname to: {hostname}")
+        
+        result = subprocess.run(
+            ["hostnamectl", "set-hostname", hostname],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"Failed to set hostname: {result.stderr}")
+            return False
+        
+        logger.info(f"Successfully set hostname to {hostname}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting hostname: {str(e)}")
+        return False
+
+
+def set_hostname_remote(ssh_client: SSHClient, hostname: str, logger) -> bool:
+    """
+    Set hostname on remote machine via SSH using hostnamectl.
+    
+    Args:
+        ssh_client: SSH client instance
+        hostname: New hostname to set
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info(f"Setting hostname to: {hostname}")
+        
+        cmd = f"sudo hostnamectl set-hostname {hostname}"
+        
+        result = ssh_client.execute_command(cmd, print_output=False)
+        if result['rc'] != 0:
+            logger.error(f"Failed to set hostname: {result['stderr']}")
+            return False
+        
+        logger.info(f"Successfully set hostname to {hostname}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting hostname: {str(e)}")
+        return False
+
+
+def set_timezone_local(timezone: str, logger) -> bool:
+    """
+    Set timezone on local machine using timedatectl.
+    
+    Args:
+        timezone: Timezone to set (e.g., 'Europe/Warsaw')
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info(f"Setting timezone to: {timezone}")
+        
+        result = subprocess.run(
+            ["timedatectl", "set-timezone", timezone],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"Failed to set timezone: {result.stderr}")
+            return False
+        
+        logger.info(f"Successfully set timezone to {timezone}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting timezone: {str(e)}")
+        return False
+
+
+def set_timezone_remote(ssh_client: SSHClient, timezone: str, logger) -> bool:
+    """
+    Set timezone on remote machine via SSH using timedatectl.
+    
+    Args:
+        ssh_client: SSH client instance
+        timezone: Timezone to set (e.g., 'Europe/Warsaw')
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info(f"Setting timezone to: {timezone}")
+        
+        cmd = f"sudo timedatectl set-timezone {timezone}"
+        
+        result = ssh_client.execute_command(cmd, print_output=False)
+        if result['rc'] != 0:
+            logger.error(f"Failed to set timezone: {result['stderr']}")
+            return False
+        
+        logger.info(f"Successfully set timezone to {timezone}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error setting timezone: {str(e)}")
+        return False
+
+
 def configure_sshd_remote(ssh_client: SSHClient, logger) -> bool:
     """
     Configure SSHD on remote machine via SSH using sudo.
@@ -414,23 +538,43 @@ fi
 
 
 def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
+                        machine_name: str = "raptor",
                         configure_sshd: bool = True,
                         root_password: Optional[str] = None,
+                        timezone: Optional[str] = None,
                         verbose: bool = True) -> bool:
     """
-    Setup /etc/hosts, SSHD, and root password on local machine (raptor).
+    Setup /etc/hosts, hostname, timezone, SSHD, and root password on local machine (raptor).
     
     Args:
         all_machines: All machines in the deployment
         logger: Logger instance
+        machine_name: Name of the local machine (default: raptor)
         configure_sshd: Whether to configure SSHD (default: True)
         root_password: Root password to set (optional)
+        timezone: Timezone to set (optional)
         verbose: Enable verbose logging (default: True)
         
     Returns:
         True if successful, False otherwise
     """
-    logger.info("Setting up local machine (raptor)")
+    logger.info(f"Setting up local machine ({machine_name})")
+    
+    # Set hostname
+    hostname = f"{machine_name}.guardium.demo"
+    logger.info(f"Setting hostname to {hostname}")
+    hostname_success = set_hostname_local(hostname, logger)
+    if not hostname_success:
+        logger.error("Failed to set hostname")
+        return False
+    
+    # Set timezone if provided
+    if timezone:
+        logger.info(f"Setting timezone to {timezone}")
+        timezone_success = set_timezone_local(timezone, logger)
+        if not timezone_success:
+            logger.error("Failed to set timezone")
+            return False
     
     # Setup /etc/hosts
     logger.info("Configuring /etc/hosts")
@@ -469,9 +613,10 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
                                   ssh_port: int = 2223,
                                   configure_sshd: bool = True,
                                   root_password: Optional[str] = None,
+                                  timezone: Optional[str] = None,
                                   verbose: bool = True) -> bool:
     """
-    Setup /etc/hosts, SSHD, and root password on a remote machine via SSH.
+    Setup hostname, timezone, /etc/hosts, SSHD, and root password on a remote machine via SSH.
     
     Args:
         machine_name: Name of the machine
@@ -483,6 +628,7 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
         ssh_port: SSH port (default: 2223)
         configure_sshd: Whether to configure SSHD (default: True)
         root_password: Root password to set (optional)
+        timezone: Timezone to set (optional)
         
     Returns:
         True if successful, False otherwise
@@ -507,6 +653,22 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
     try:
         with SSHClient(host=host, username=username, port=ssh_port) as ssh:
             logger.info(f"Connected to {machine_name}")
+            
+            # Set hostname
+            hostname = f"{machine_name}.guardium.demo"
+            logger.info(f"Setting hostname to {hostname}")
+            hostname_success = set_hostname_remote(ssh, hostname, logger)
+            if not hostname_success:
+                logger.error("Failed to set hostname")
+                return False
+            
+            # Set timezone if provided
+            if timezone:
+                logger.info(f"Setting timezone to {timezone}")
+                timezone_success = set_timezone_remote(ssh, timezone, logger)
+                if not timezone_success:
+                    logger.error("Failed to set timezone")
+                    return False
             
             # Setup /etc/hosts
             logger.info("Configuring /etc/hosts")
@@ -541,7 +703,7 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
 def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
     """
     Wrapper function for group-based execution.
-    Sets up /etc/hosts, SSHD, and root password on all machines.
+    Sets up hostname, timezone, /etc/hosts, SSHD, and root password on all machines.
     
     Args:
         config: ConfigLoader instance
@@ -554,6 +716,7 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
     machines = config.get_machines()
     credentials = config.get_credentials()
     root_password = config.get_custom_variable('pwd')
+    timezone = config.get_custom_variable('timezone')
     
     # Setup local machine (raptor)
     if verbose:
@@ -562,8 +725,10 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
     success = setup_hosts_locally(
         all_machines=machines,
         logger=logger,
+        machine_name="raptor",
         configure_sshd=True,
         root_password=root_password,
+        timezone=timezone,
         verbose=verbose
     )
     
@@ -592,6 +757,7 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
             use_private_ip=True,
             configure_sshd=True,
             root_password=root_password,
+            timezone=timezone,
             verbose=verbose
         )
         
