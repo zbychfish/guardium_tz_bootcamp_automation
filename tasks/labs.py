@@ -433,3 +433,103 @@ def install_stap_on_raptor(
     )
 
 
+
+
+def enable_atap_for_postgres_on_raptor(
+    config,
+    logger,
+    verbose: bool = False,
+    db_user: str = "postgres",
+    db_home: str = "/usr",
+    db_user_dir: str = "/var/lib/pgsql",
+    db_type: str = "postgres",
+    db_instance: str = "postgres",
+    db_version: str = "16"
+) -> bool:
+    """
+    Enable ATAP (Application Transparent Access Protection) for PostgreSQL on raptor.
+    
+    This function:
+    1. Stores ATAP configuration for PostgreSQL
+    2. Authorizes the database user
+    3. Stops PostgreSQL service
+    4. Activates ATAP for the database instance
+    5. Starts PostgreSQL service
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        db_user: Database user (default: "postgres")
+        db_home: Database home directory (default: "/usr")
+        db_user_dir: Database user directory (default: "/var/lib/pgsql")
+        db_type: Database type (default: "postgres")
+        db_instance: Database instance name (default: "postgres")
+        db_version: Database version (default: "16")
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    from core.utils import execute_commands
+    
+    logger.info("=" * 80)
+    logger.info("ENABLE ATAP FOR POSTGRESQL ON RAPTOR")
+    logger.info("=" * 80)
+    
+    guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
+    
+    # Step 1: Store ATAP configuration
+    logger.info("\nStep 1: Storing ATAP configuration")
+    commands = [
+        f"{guardctl} --db-user={db_user} --db-home={db_home} --db-user-dir={db_user_dir} --db-type={db_type} --db-instance={db_instance} --db-version={db_version} store-conf"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to store ATAP configuration")
+        return False
+    logger.info("✓ ATAP configuration stored")
+    
+    # Step 2: Authorize database user
+    logger.info("\nStep 2: Authorizing database user")
+    commands = [
+        f"{guardctl} authorize-user {db_user}"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to authorize database user")
+        return False
+    logger.info("✓ Database user authorized")
+    
+    # Step 3: Stop PostgreSQL service
+    logger.info("\nStep 3: Stopping PostgreSQL service")
+    commands = [
+        "systemctl stop postgresql"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to stop PostgreSQL service")
+        return False
+    logger.info("✓ PostgreSQL service stopped")
+    
+    # Step 4: Activate ATAP
+    logger.info("\nStep 4: Activating ATAP for database instance")
+    commands = [
+        f"{guardctl} --db-instance={db_instance} activate"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to activate ATAP")
+        return False
+    logger.info("✓ ATAP activated")
+    
+    # Step 5: Start PostgreSQL service
+    logger.info("\nStep 5: Starting PostgreSQL service")
+    commands = [
+        "systemctl start postgresql"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to start PostgreSQL service")
+        return False
+    logger.info("✓ PostgreSQL service started")
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ ATAP ENABLED SUCCESSFULLY FOR POSTGRESQL")
+    logger.info("=" * 80)
+    
+    return True

@@ -181,6 +181,11 @@ groups:
           module_version: "12.2.2.0_r123489_1"
           debug: true
 
+      - name: enable_atap_for_postgres_on_raptor
+        function: enable_atap_for_postgres_on_raptor
+        module: tasks.labs
+        description: "Enable ATAP (Application Transparent Access Protection) for PostgreSQL on raptor"
+
       # - name: current_test
       #   function: current_test
       #   module: tasks.current_test
