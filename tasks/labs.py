@@ -459,9 +459,10 @@ def enable_atap_for_postgres_on_raptor(config, logger, verbose=True, db_user="po
     return True
 
 
-def correct_mysql_ie(config, logger, verbose=True, appliance_name="coll2",
+def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collector_appliance="coll2",
                      stap_host=None, demo_password=None, **kwargs):
     from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
     
     if not stap_host:
         machines = config.get('machines', {})
@@ -471,12 +472,23 @@ def correct_mysql_ie(config, logger, verbose=True, appliance_name="coll2",
             logger.error("stap_host not provided and not found in machines config")
             return False
     
-    api = create_guardium_api(config, logger, appliance_name)
+    appliance_loader = ApplianceConfigLoader()
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found")
+        return False
+    
+    api_target_host = collector_config.get('ip')
+    if not api_target_host:
+        logger.error(f"Collector '{collector_appliance}' has no IP")
+        return False
+    
+    api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=demo_password or config.get('demo_password'))
     
     if verbose:
-        logger.info(f"Deleting MySQL IE definitions for {stap_host}")
-    api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1")
+        logger.info(f"Deleting MySQL IE for {stap_host} on collector {api_target_host}")
+    api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1", api_target_host=api_target_host)
     
     ie_configs = [
         {"port_min": "3306", "port_max": "3306", "ktap_db_port": "3306", "unix_socket_marker": "mysql.sock"},
@@ -496,6 +508,7 @@ def correct_mysql_ie(config, logger, verbose=True, appliance_name="coll2",
             client="0.0.0.0/0.0.0.0",
             proc_name="/usr/sbin/mysqld",
             db_install_dir="/var/lib/mysql",
+            api_target_host=api_target_host,
             **ie_config
         )
     
