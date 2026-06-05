@@ -460,7 +460,7 @@ def enable_atap_for_postgres_on_raptor(config, logger, verbose=True, db_user="po
 
 
 def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collector_appliance="coll2",
-                     stap_host=None, demo_password=None, **kwargs):
+                     stap_host=None, **kwargs):
     from core.guardium_rest_api import create_guardium_api
     from core.appliance_config_loader import ApplianceConfigLoader
     
@@ -484,7 +484,7 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
         return False
     
     api = create_guardium_api(config, logger, cm_appliance)
-    api.get_token(username='demo', password=demo_password or config.get('demo_password'))
+    api.get_token(username='demo', password=config.get('demo_password'))
     
     if verbose:
         logger.info(f"Deleting MySQL IE for {stap_host} on collector {api_target_host}")

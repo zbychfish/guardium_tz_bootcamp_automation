@@ -193,7 +193,6 @@ groups:
         args:
           cm_appliance: "cm01"
           collector_appliance: "coll2"
-          demo_password: "{{ demo_password }}"
 
       # - name: current_test
       #   function: current_test
