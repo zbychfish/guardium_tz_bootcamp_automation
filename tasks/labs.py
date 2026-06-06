@@ -433,8 +433,6 @@ def install_stap_on_raptor(
     )
 
 
-
-
 def enable_atap_for_postgres_on_raptor(config, logger, verbose=True, db_user="postgres",
                                        db_home="/usr", db_user_dir="/var/lib/pgsql",
                                        db_type="postgres", db_instance="postgres",
@@ -583,4 +581,110 @@ def enable_atap_for_mongo(config, logger, verbose=True, **kwargs):
             return False
     
     logger.info("✓ ATAP enabled for MongoDB")
+    return True
+
+
+def configure_db2_exit_ie(config, logger, verbose=True, cm_appliance="cm02", collector_appliance="coll2",
+                          stap_host=None, **kwargs):
+    """
+    Configure DB2 Exit Inspection Engine.
+    Deletes existing DB2 IEs and creates new DB2 Exit IE.
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose logging
+        cm_appliance: Central Manager appliance name (default: cm02)
+        collector_appliance: Collector appliance name (default: coll2)
+        stap_host: STAP host IP (optional, auto-detected from raptor)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    if not stap_host:
+        machines = config.get('machines', {})
+        raptor_info = machines.get('raptor', {})
+        stap_host = raptor_info.get('private_ip')
+        if not stap_host:
+            logger.error("stap_host not provided and not found in machines config")
+            return False
+    
+    appliance_loader = ApplianceConfigLoader()
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found")
+        return False
+    
+    api_target_host = collector_config.get('ip')
+    if not api_target_host:
+        logger.error(f"Collector '{collector_appliance}' has no IP")
+        return False
+    
+    api = create_guardium_api(config, logger, cm_appliance)
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+    api.get_token(username='demo', password=pwd)
+    
+    if verbose:
+        logger.info(f"Deleting DB2 IE for {stap_host} on collector {api_target_host}")
+    api.delete_inspection_engine(stap_host=stap_host, type="Db2", wait_for_response="1", api_target_host=api_target_host)
+    
+    if verbose:
+        logger.info(f"Creating DB2 Exit IE for {stap_host} on collector {api_target_host}")
+    api.create_inspection_engine(
+        stap_host=stap_host,
+        protocol="Db2 Exit",
+        db_user="db2inst1",
+        db_version="11",
+        client="0.0.0.0/0.0.0.0",
+        proc_name="/opt/ibm/db2/V11.5/adm/db2sysc",
+        db_install_dir="/opt/ibm/db2/V11.5",
+        api_target_host=api_target_host
+    )
+    
+    logger.info("✓ DB2 Exit IE configured")
+    return True
+
+
+def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
+    """
+    Configure DB2 exit for Guardium monitoring on raptor.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    from core.utils import execute_commands
+    
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Configuring DB2 exit for Guardium monitoring")
+        logger.info("=" * 80)
+    
+    commands = [
+        "/opt/guardium/modules/ATAP/current/files/bin/guardctl authorize-user db2inst1",
+        "su - db2inst1 -c 'db2stop'",
+        "su - db2inst1 -c 'mkdir -p /opt/ibm/db2/V11.5/security64/plugin/commexit'",
+        "su - db2inst1 -c 'ln -fs /usr/lib64/libguard_db2_exit_64.so /opt/ibm/db2/V11.5/security64/plugin/commexit/libguard_db2_exit_64.so'",
+        "su - db2inst1 -c 'db2 update dbm cfg using comm_exit_list libguard_db2_exit_64'",
+        "su - db2inst1 -c 'db2start'"
+    ]
+    
+    if not execute_commands(commands, logger, verbose):
+        logger.error("DB2 exit configuration failed")
+        return False
+    
+    if verbose:
+        logger.info("✓ DB2 exit configured successfully")
+        logger.info("=" * 80)
+    
     return True

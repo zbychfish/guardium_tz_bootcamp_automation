@@ -155,8 +155,6 @@ groups:
         args:
           debug: false
       
-      
-
   atap_lab:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
@@ -215,5 +213,24 @@ groups:
       #   description: "TEST: Disable default accounts only (diagnostic)"
       #   args:
       #     appliance_name: "cm01"
+
+  exit_lab:
+    name: "Exit Lab"
+    description: "Configure DB2 exit for Guardium monitoring"
+    auto_execute: false  # Executed on demand
+    dependencies: [initial_preparation, setup_appliances, other_praparations, atap_lab]
+    stages:
+      - name: configure_db2_exit
+        function: db2_exit_configuration
+        module: tasks.labs
+        description: "Configure DB2 exit for Guardium monitoring on raptor"
+      
+      - name: configure_db2_exit_ie
+        function: configure_db2_exit_ie
+        module: tasks.labs
+        description: "Configure DB2 Exit Inspection Engine on collector"
+        args:
+          cm_appliance: "cm02"
+          collector_appliance: "coll2"
 
 # Made with Bob
