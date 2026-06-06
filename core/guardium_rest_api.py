@@ -531,8 +531,27 @@ class GuardiumRestAPI:
         self,
         policy: str,
         install_action: Optional[str] = None,
-        api_target_host: Optional[str] = None
+        api_target_host: Optional[str] = None,
+        max_retries: int = 3,
+        retry_delay: int = 60
     ) -> dict:
+        """
+        Install policy on target host with retry logic for offline hosts.
+        
+        Args:
+            policy: Policy name
+            install_action: Install action (optional)
+            api_target_host: Target host IP (optional)
+            max_retries: Maximum number of retries for ErrorCode 15 (default: 3)
+            retry_delay: Delay in seconds between retries (default: 60)
+        
+        Returns:
+            dict: API response with ErrorCode and ErrorMessage
+        
+        Raises:
+            Exception: If policy installation fails after all retries
+        """
+        import time
         
         url = f'{self.base_url}/restAPI/policy_install'
         headers = self.get_headers()
@@ -546,11 +565,30 @@ class GuardiumRestAPI:
         if api_target_host:
             data['api_target_host'] = api_target_host
         
-        response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
-        response.raise_for_status()
+        result = None
+        for attempt in range(1, max_retries + 1):
+            response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
+            response.raise_for_status()
+            result = response.json()
+            
+            error_code = result.get('ErrorCode', '0')
+            error_message = result.get('ErrorMessage', '')
+            
+            # Success
+            if error_code == '0':
+                return result
+            
+            # ErrorCode 15: Target host is not online - retry
+            if error_code == '15' and attempt < max_retries:
+                print(f"⚠ Attempt {attempt}/{max_retries}: Target host offline. Waiting {retry_delay}s before retry...")
+                time.sleep(retry_delay)
+                continue
+            
+            # Other errors or max retries reached - return error
+            return result
         
-        return response.json()
-        return response.json()
+        # Return last result (should always have a result after loop)
+        return result if result else {'ErrorCode': '999', 'ErrorMessage': 'Unknown error'}
 
 
 

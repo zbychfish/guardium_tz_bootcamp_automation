@@ -258,15 +258,26 @@ def install_policy_on_collector(
         logger.info(f"\nInstalling policy '{policy_name}' on collector {collector_ip}...")
         result = api.install_policy(
             policy=policy_name,
-            api_target_host=collector_ip
+            api_target_host=collector_ip,
+            max_retries=3,
+            retry_delay=60
         )
         
         if debug:
             logger.info(f"API Response: {result}")
         
-        logger.info(f"✓ Policy '{policy_name}' installed successfully on {collector_appliance}")
-        logger.info("=" * 80)
-        return True
+        # Check ErrorCode
+        error_code = result.get('ErrorCode', '0')
+        error_message = result.get('ErrorMessage', '')
+        
+        if error_code == '0':
+            logger.info(f"✓ Policy '{policy_name}' installed successfully on {collector_appliance}")
+            logger.info("=" * 80)
+            return True
+        else:
+            logger.error(f"✗ Failed to install policy: ErrorCode={error_code}, Message={error_message}")
+            logger.info("=" * 80)
+            return False
         
     except Exception as e:
         logger.error(f"✗ Failed to install policy: {e}")
