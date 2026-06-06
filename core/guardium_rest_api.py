@@ -533,7 +533,8 @@ class GuardiumRestAPI:
         install_action: Optional[str] = None,
         api_target_host: Optional[str] = None,
         max_retries: int = 3,
-        retry_delay: int = 60
+        retry_delay: int = 60,
+        debug: bool = False
     ) -> dict:
         """
         Install policy on target host with retry logic for offline hosts.
@@ -542,11 +543,12 @@ class GuardiumRestAPI:
             policy: Policy name
             install_action: Install action (optional)
             api_target_host: Target host IP (optional)
-            max_retries: Maximum number of retries for ErrorCode 15 (default: 3)
+            max_retries: Maximum number of retries for ErrorCode/ID 15 (default: 3)
             retry_delay: Delay in seconds between retries (default: 60)
+            debug: Enable debug logging (default: False)
         
         Returns:
-            dict: API response with ErrorCode and ErrorMessage
+            dict: API response with ErrorCode/ID and ErrorMessage/Message
         
         Raises:
             Exception: If policy installation fails after all retries
@@ -565,20 +567,37 @@ class GuardiumRestAPI:
         if api_target_host:
             data['api_target_host'] = api_target_host
         
+        if debug:
+            print(f"DEBUG - API Call: POST {url}")
+            print(f"DEBUG - Request data: {data}")
+            print(f"DEBUG - Headers: {{'Authorization': '***', 'Content-Type': '{headers.get('Content-Type', 'application/json')}'}}")
+        
         result = None
         for attempt in range(1, max_retries + 1):
+            if debug and attempt > 1:
+                print(f"DEBUG - Retry attempt {attempt}/{max_retries}")
+            
             response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
             response.raise_for_status()
             result = response.json()
             
-            error_code = result.get('ErrorCode', '0')
-            error_message = result.get('ErrorMessage', '')
+            if debug:
+                print(f"DEBUG - Response status: {response.status_code}")
+                print(f"DEBUG - Response body: {result}")
             
-            # Success
+            # Check both ErrorCode and ID (API uses different field names)
+            error_code = result.get('ErrorCode') or result.get('ID', '0')
+            error_message = result.get('ErrorMessage') or result.get('Message', '')
+            
+            if debug:
+                print(f"DEBUG - Parsed error_code: {error_code}")
+                print(f"DEBUG - Parsed error_message: {error_message}")
+            
+            # Success (ErrorCode/ID = '0')
             if error_code == '0':
                 return result
             
-            # ErrorCode 15: Target host is not online - retry
+            # ErrorCode/ID 15: Target host is not online - retry
             if error_code == '15' and attempt < max_retries:
                 print(f"⚠ Attempt {attempt}/{max_retries}: Target host offline. Waiting {retry_delay}s before retry...")
                 time.sleep(retry_delay)
