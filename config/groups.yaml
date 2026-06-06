@@ -188,6 +188,7 @@ groups:
         module: tasks.labs
         description: "Import GIM module files to Guardium appliance"
         args:
+          appliance_name: "cm02"
           debug: false
       
   atap_lab:
