@@ -171,6 +171,15 @@ def import_definitions_on_cm(
     try:
         api = create_guardium_api(config, logger, appliance_name=cm_appliance)
         
+        demo_password = config.get_custom_variable('demo_pwd')
+        if not demo_password:
+            logger.error("demo_pwd not found in custom_variables")
+            return False
+        
+        logger.info("Authenticating as demo user...")
+        api.get_token(username='demo', password=demo_password)
+        logger.info("✓ Authentication successful")
+        
         for filename in definition_files:
             file_path = os.path.join(definitions_dir, filename)
             
@@ -237,7 +246,16 @@ def install_policy_on_collector(
     try:
         api = create_guardium_api(config, logger, appliance_name=cm_appliance)
         
-        logger.info(f"Installing policy '{policy_name}' on collector {collector_ip}...")
+        demo_password = config.get_custom_variable('demo_pwd')
+        if not demo_password:
+            logger.error("demo_pwd not found in custom_variables")
+            return False
+        
+        logger.info("Authenticating as demo user...")
+        api.get_token(username='demo', password=demo_password)
+        logger.info("✓ Authentication successful")
+        
+        logger.info(f"\nInstalling policy '{policy_name}' on collector {collector_ip}...")
         result = api.install_policy(
             policy=policy_name,
             api_target_host=collector_ip
