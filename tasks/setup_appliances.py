@@ -171,9 +171,9 @@ def import_definitions_on_cm(
     try:
         api = create_guardium_api(config, logger, appliance_name=cm_appliance)
         
-        demo_password = config.get_custom_variable('demo_pwd')
+        demo_password = config.get_custom_variable('pwd')
         if not demo_password:
-            logger.error("demo_pwd not found in custom_variables")
+            logger.error("pwd not found in custom_variables")
             return False
         
         logger.info("Authenticating as demo user...")
@@ -246,9 +246,9 @@ def install_policy_on_collector(
     try:
         api = create_guardium_api(config, logger, appliance_name=cm_appliance)
         
-        demo_password = config.get_custom_variable('demo_pwd')
+        demo_password = config.get_custom_variable('pwd')
         if not demo_password:
-            logger.error("demo_pwd not found in custom_variables")
+            logger.error("pwd not found in custom_variables")
             return False
         
         logger.info("Authenticating as demo user...")
