@@ -673,8 +673,10 @@ def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
     commands = [
         "/opt/guardium/modules/ATAP/current/files/bin/guardctl authorize-user db2inst1",
         "su - db2inst1 -c 'db2stop'",
-        "su - db2inst1 -c 'mkdir -p /opt/ibm/db2/V11.5/security64/plugin/commexit'",
-        "su - db2inst1 -c 'ln -fs /usr/lib64/libguard_db2_exit_64.so /opt/ibm/db2/V11.5/security64/plugin/commexit/libguard_db2_exit_64.so'",
+        "mkdir -p /opt/ibm/db2/V11.5/security64/plugin/commexit",
+        "chown bin:bin /opt/ibm/db2/V11.5/security64/plugin/commexit",
+        "ln -fs /usr/lib64/libguard_db2_exit_64.so /opt/ibm/db2/V11.5/security64/plugin/commexit/libguard_db2_exit_64.so",
+        "chown bin:bin /opt/ibm/db2/V11.5/security64/plugin/commexit/libguard_db2_exit_64.so",
         "su - db2inst1 -c 'db2 update dbm cfg using comm_exit_list libguard_db2_exit_64'",
         "su - db2inst1 -c 'db2start'"
     ]
