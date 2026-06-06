@@ -642,8 +642,8 @@ def configure_db2_exit_ie(config, logger, verbose=True, cm_appliance="cm02", col
         db_user="db2inst1",
         db_version="11",
         client="0.0.0.0/0.0.0.0",
-        proc_name="/opt/ibm/db2/V11.5/adm/db2sysc",
-        db_install_dir="/opt/ibm/db2/V11.5",
+        proc_name="/home/db2inst1/sqllib/adm/db2sysc",
+        db_install_dir="/home/db2inst1",
         api_target_host=api_target_host
     )
     
