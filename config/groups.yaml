@@ -195,7 +195,7 @@ groups:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
     auto_execute: false  # Executed after marker, on demand
-    dependencies: [initial_preparation, setup_appliances, gim_lab]  # Requires initial_preparation to be completed
+    dependencies: [setup_appliances, gim_lab]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_postgres_on_raptor
         function: deploy_postgres_on_raptor
@@ -217,7 +217,7 @@ groups:
           appliance_name: "cm02"
           collector_name: "coll2"
           module: "BUNDLE-STAP"
-          module_version: "12.2.2.0_r123489_1"
+          module_version: "12.2.2.0_r123489_3"
           debug: true
 
       - name: enable_atap_for_postgres_on_raptor
@@ -254,7 +254,7 @@ groups:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
     auto_execute: false  # Executed on demand
-    dependencies: [initial_preparation, setup_appliances, atap_lab]
+    dependencies: [atap_lab]
     stages:
       - name: configure_db2_exit
         function: db2_exit_configuration
