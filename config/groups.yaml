@@ -173,7 +173,7 @@ groups:
         args:
           cm_appliance: "cm02"
           collector_appliance: "coll2"
-          policy_name: "Log Everything"
+          policy_name: "Default bootcamp policy"
           debug: true
 
   gim_lab:
