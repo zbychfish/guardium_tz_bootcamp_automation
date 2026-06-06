@@ -251,9 +251,15 @@ def install_policy_on_collector(
             logger.error("pwd not found in custom_variables")
             return False
         
-        logger.info("Authenticating as demo user...")
-        api.get_token(username='demo', password=demo_password)
+        username = 'demo'
+        logger.info(f"Authenticating as '{username}' user...")
+        api.get_token(username=username, password=demo_password)
         logger.info("✓ Authentication successful")
+        
+        if debug:
+            logger.info(f"API User: {username}")
+            logger.info(f"CM Appliance: {cm_appliance}")
+            logger.info(f"Target Collector: {collector_appliance} ({collector_ip})")
         
         logger.info(f"\nInstalling policy '{policy_name}' on collector {collector_ip}...")
         result = api.install_policy(
