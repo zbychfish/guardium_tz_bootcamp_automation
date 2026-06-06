@@ -19,7 +19,7 @@ groups:
         module: tasks.preparation_for_services_deployment
         description: "Update system packages and download supporting files"
 
-  other_praparations:
+  other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
     auto_execute: true
@@ -136,6 +136,15 @@ groups:
           wait_for_availability: true
           retry_interval: 15  # Seconds between retry attempts (default: 10)
           max_retries: 40  # Maximum retry attempts (default: 60, total timeout = 40 * 15 = 600s = 10min)
+      
+      - name: import_definitions_on_cm
+        function: import_definitions_on_cm
+        module: tasks.setup_appliances
+        description: "Import definitions (default policy and full SQL report) to CM via REST API"
+        args:
+          cm_appliance: "cm02"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: true
 
       - name: prepare_appliances_for_patching
         function: prepare_appliances_for_patching_all
@@ -156,12 +165,22 @@ groups:
           check_interval: 120  # Seconds between status checks (default: 60)
           max_checks: 60  # Maximum number of checks before timeout (default: 60 = 1 hour with 60s interval)
           debug: true
+      
+      - name: install_policy_on_collector
+        function: install_policy_on_collector
+        module: tasks.setup_appliances
+        description: "Install policy on collector via REST API"
+        args:
+          cm_appliance: "cm02"
+          collector_appliance: "coll2"
+          policy_name: "Log Everything"
+          debug: true
 
   gim_lab:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"
     auto_execute: false  # Executed on demand
-    dependencies: [initial_preparation, setup_appliances, other_praparations]  # Requires initial_preparation and setup_appliances
+    dependencies: [initial_preparation, setup_appliances, other_preparations]  # Requires initial_preparation and setup_appliances
     stages:
      
       - name: import_gim_modules
@@ -175,7 +194,7 @@ groups:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
     auto_execute: false  # Executed after marker, on demand
-    dependencies: [initial_preparation, setup_appliances, other_praparations, gim]  # Requires initial_preparation to be completed
+    dependencies: [initial_preparation, setup_appliances, other_preparations, gim]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_postgres_on_raptor
         function: deploy_postgres_on_raptor
@@ -234,7 +253,7 @@ groups:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
     auto_execute: false  # Executed on demand
-    dependencies: [initial_preparation, setup_appliances, other_praparations, atap_lab]
+    dependencies: [initial_preparation, setup_appliances, other_preparations, atap_lab]
     stages:
       - name: configure_db2_exit
         function: db2_exit_configuration

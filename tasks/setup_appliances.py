@@ -143,6 +143,119 @@ def set_shared_secret_all(
     
     return failed_count == 0
 
+def import_definitions_on_cm(
+    config,
+    logger,
+    cm_appliance: str = "cm02",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = True
+) -> bool:
+    
+    from core.guardium_rest_api import create_guardium_api
+    import os
+    
+    logger.info("=" * 80)
+    logger.info("IMPORT DEFINITIONS ON CM")
+    logger.info("=" * 80)
+    
+    definition_files = [
+        "exp_default_policy.sql",
+        "exp_dashboard_training.sql"
+    ]
+    
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"Definitions directory: {definitions_dir}")
+    logger.info(f"Files to import: {', '.join(definition_files)}")
+    
+    try:
+        api = create_guardium_api(config, logger, appliance_name=cm_appliance)
+        
+        for filename in definition_files:
+            file_path = os.path.join(definitions_dir, filename)
+            
+            if not os.path.exists(file_path):
+                logger.error(f"✗ File not found: {file_path}")
+                return False
+            
+            logger.info(f"\n➜ Importing: {filename}")
+            result = api.import_definitions(file_path=file_path)
+            
+            if debug:
+                logger.info(f"  API Response: {result}")
+            
+            logger.info(f"✓ {filename} imported successfully")
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ All definitions imported successfully")
+        logger.info("=" * 80)
+        return True
+        
+    except FileNotFoundError as e:
+        logger.error(f"✗ File not found: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"✗ Failed to import definitions: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+def install_policy_on_collector(
+    config,
+    logger,
+    cm_appliance: str = "cm02",
+    collector_appliance: str = "coll2",
+    policy_name: str = "Log Everything",
+    debug: bool = True
+) -> bool:
+    
+    from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("INSTALL POLICY ON COLLECTOR")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found in appliances.yaml")
+        return False
+    
+    collector_ip = collector_config.get('ip')
+    if not collector_ip:
+        logger.error(f"No IP configured for collector '{collector_appliance}'")
+        return False
+    
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"Collector: {collector_appliance} ({collector_ip})")
+    logger.info(f"Policy: {policy_name}")
+    
+    try:
+        api = create_guardium_api(config, logger, appliance_name=cm_appliance)
+        
+        logger.info(f"Installing policy '{policy_name}' on collector {collector_ip}...")
+        result = api.install_policy(
+            policy=policy_name,
+            api_target_host=collector_ip
+        )
+        
+        if debug:
+            logger.info(f"API Response: {result}")
+        
+        logger.info(f"✓ Policy '{policy_name}' installed successfully on {collector_appliance}")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to install policy: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+
 
 
 def initial_collector_settings(

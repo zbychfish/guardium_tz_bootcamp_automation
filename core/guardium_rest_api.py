@@ -503,6 +503,54 @@ class GuardiumRestAPI:
         response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
         response.raise_for_status()
         return response.json()
+    
+    def import_definitions(self, file_path: str) -> dict:
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        url = f'{self.base_url}/restAPI/import_definitions'
+        headers = self.get_headers()
+        
+        headers_without_content_type = {k: v for k, v in headers.items() if k != 'Content-Type'}
+        
+        with open(file_path, 'rb') as f:
+            files = {'file': (os.path.basename(file_path), f)}
+            response = requests.post(
+                url,
+                files=files,
+                headers=headers_without_content_type,
+                verify=self.verify_ssl
+            )
+        
+        response.raise_for_status()
+        
+        return response.json()
+    
+    def install_policy(
+        self,
+        policy: str,
+        install_action: Optional[str] = None,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        
+        url = f'{self.base_url}/restAPI/policy_install'
+        headers = self.get_headers()
+        
+        data = {
+            'policy': policy
+        }
+        
+        if install_action:
+            data['install_action'] = install_action
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        
+        response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        
+        return response.json()
+        return response.json()
 
 
 
