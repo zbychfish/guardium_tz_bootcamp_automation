@@ -257,157 +257,6 @@ def restart_appliance(
         logger.error(traceback.format_exc())
         return False
 
-def configure_network_ip(
-    config,
-    logger,
-    appliance_name: str,
-    ip_address: Optional[str] = None,
-    prefix: str = "/24",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Configure network IP address on Guardium appliance.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        ip_address: IP address to set (optional, uses IP from appliances.yaml if not provided)
-        prefix: Network prefix (default: /24)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        configure_network_ip(config, logger, 'cm02', ip_address='10.240.64.9')
-    """
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    logger.info("=" * 80)
-    logger.info(f"CONFIGURE NETWORK IP: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Use IP from appliances.yaml if not provided
-    if not ip_address:
-        ip_address = host
-        logger.info(f"Using IP address from appliances.yaml: {ip_address}")
-    
-    # Get user from config if not provided
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    # Get prompt regex from config if not provided
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"Setting IP: {ip_address}{prefix}")
-    logger.info(f"User: {user}")
-    
-    try:
-        # Connect to appliance
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Check current network configuration
-        logger.info("\n➜ Checking current network configuration...")
-        current_config = client.execute_command("show network interface all")
-        logger.info(f"Current configuration:\n{current_config}")
-        
-        # Set network IP
-        command = f"store network interface ip {ip_address}{prefix}"
-        logger.info(f"\n➜ Executing: {command}")
-        output = client.execute_command(command)
-        logger.info(f"Command output:\n{output}")
-        
-        # Verify the change
-        if "This change will take effect after the next network restart" in output or "ok" in output:
-            logger.info("✓ Network IP configuration command executed successfully")
-            
-            # Show updated configuration
-            logger.info("\n➜ Verifying new configuration...")
-            new_config = client.execute_command("show network interface all")
-            logger.info(f"New configuration:\n{new_config}")
-            
-            # Check if IP is in the output
-            if ip_address and ip_address in new_config:
-                logger.info(f"✓ IP address {ip_address} confirmed in configuration")
-            else:
-                logger.warning(f"⚠ IP address {ip_address} not found in configuration output")
-            
-            client.disconnect()
-            
-            logger.info("=" * 80)
-            logger.info("Network IP configured successfully")
-            logger.info("Note: Changes will take effect after network restart")
-            logger.info("=" * 80)
-            return True
-        else:
-            logger.error(f"✗ Unexpected output: {output}")
-            client.disconnect()
-            return False
-        
-    except Exception as e:
-        logger.error(f"Error configuring network IP: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
 def set_shared_secret(
     config,
     logger,
@@ -1176,156 +1025,6 @@ def set_timezone(
             logger.error(traceback.format_exc())
         return False
 
-def configure_ntp(
-    config,
-    logger,
-    appliance_name: str,
-    ntp_servers: Optional[List[str]] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Configure NTP servers and enable time synchronization on Guardium appliance.
-    
-    Args:
-        config: Configuration object with machines_info
-        logger: Logger instance
-        appliance_name: Name of the appliance (e.g., 'cm', 'collector1')
-        ntp_servers: List of NTP servers (default: ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org'])
-        user: SSH user (optional, uses config if not provided)
-        password: SSH password (optional, uses config if not provided)
-        prompt_regex: CLI prompt regex (optional, uses config if not provided)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        configure_ntp(config, logger, 'cm')
-        configure_ntp(config, logger, 'cm', ntp_servers=['time.google.com', 'time.cloudflare.com'])
-    """
-    try:
-        if not appliance_name:
-            logger.error("appliance_name is required")
-            return False
-        
-        logger.info("=" * 80)
-        logger.info(f"CONFIGURE NTP: {appliance_name}")
-        logger.info("=" * 80)
-        
-        # Load appliance configuration
-        appliance_loader = ApplianceConfigLoader()
-        appliance_config = appliance_loader.get_appliance(appliance_name)
-        
-        if not appliance_config:
-            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-            available = list(appliance_loader.get_all_appliances().keys())
-            logger.error(f"Available appliances: {', '.join(available)}")
-            return False
-        
-        appliance_type = appliance_config.get('type')
-        host = appliance_config.get('ip')
-        
-        if not host:
-            logger.error(f"No IP address configured for appliance '{appliance_name}'")
-            return False
-        
-        # Get user from config if not provided
-        if not user:
-            if appliance_type:
-                user = appliance_loader.get_default_user(appliance_type)
-            else:
-                user = "cli"
-        
-        # Get password from custom_variables if not provided
-        if not password:
-            password = config.get_custom_variable('cli_pwd')
-            if password:
-                logger.info("Using password from custom_variables (cli_pwd)")
-        
-        if not password:
-            logger.error("Password not provided and cli_pwd not found in custom_variables")
-            return False
-        
-        # Get prompt regex from config if not provided
-        if not prompt_regex:
-            if appliance_type:
-                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-            if not prompt_regex:
-                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-                return False
-        
-        # Determine NTP servers to use
-        if not ntp_servers:
-            # Try to get from machines_info.json
-            machines_info = config.get('machines_info', {})
-            ntp_servers = machines_info.get('ntp_servers', ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org'])
-        
-        # Ensure ntp_servers is a list
-        if not isinstance(ntp_servers, list):
-            ntp_servers = ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org']
-        
-        logger.info(f"NTP servers: {' '.join(ntp_servers)}")
-        logger.info(f"Connecting to {appliance_name} ({host})...")
-        
-        # Create appliance client with 5 minute timeout for hostname change
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            timeout=300,  # 5 minutes for hostname change operations
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error(f"Failed to connect to {appliance_name}")
-            return False
-        
-        logger.info(f"✓ Connected to {appliance_name}")
-        
-        # Configure NTP servers
-        logger.info("➜ Configuring NTP servers...")
-        ntp_command = f"store system time_server hostname {' '.join(ntp_servers)}"
-        output = client.execute_command(ntp_command)
-        
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        
-        logger.info(f"✓ NTP servers configured: {' '.join(ntp_servers)}")
-        
-        # Enable time synchronization
-        logger.info("➜ Enabling time synchronization...")
-        output = client.execute_command("store system time_server state on")
-        
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        
-        logger.info("✓ Time synchronization enabled")
-        
-        # Verify configuration
-        logger.info("➜ Verifying NTP configuration...")
-        output = client.execute_command("show system time_server")
-        
-        if output:
-            logger.info(f"  NTP configuration:\n{output}")
-        
-        client.disconnect()
-        
-        logger.info("=" * 80)
-        logger.info(f"✓ NTP configuration completed")
-        logger.info("=" * 80)
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error configuring NTP: {str(e)}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-
 def configure_system_settings_consolidated(
     config,
     logger,
@@ -1677,396 +1376,6 @@ def configure_system_settings_consolidated(
         if debug:
             import traceback
             logger.error(traceback.format_exc())
-        return False
-
-
-def configure_system_settings(
-    config,
-    logger,
-    appliance_name: str,
-    hostname: Optional[str] = None,
-    domain: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    
-    try:
-        if not appliance_name:
-            logger.error("appliance_name is required")
-            return False
-        
-        logger.info("=" * 80)
-        logger.info(f"CONFIGURE SYSTEM SETTINGS: {appliance_name}")
-        logger.info("=" * 80)
-        
-        # Load appliance configuration
-        appliance_loader = ApplianceConfigLoader()
-        appliance_config = appliance_loader.get_appliance(appliance_name)
-        
-        if not appliance_config:
-            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-            available = list(appliance_loader.get_all_appliances().keys())
-            logger.error(f"Available appliances: {', '.join(available)}")
-            return False
-        
-        appliance_type = appliance_config.get('type')
-        host = appliance_config.get('ip')
-        
-        if not host:
-            logger.error(f"No IP address configured for appliance '{appliance_name}'")
-            return False
-        
-        # Get user from config if not provided
-        if not user:
-            if appliance_type:
-                user = appliance_loader.get_default_user(appliance_type)
-            else:
-                user = "cli"
-        
-        # Get password from custom_variables if not provided
-        if not password:
-            password = config.get_custom_variable('cli_pwd')
-            if password:
-                logger.info("Using password from custom_variables (cli_pwd)")
-        
-        if not password:
-            logger.error("Password not provided and cli_pwd not found in custom_variables")
-            return False
-        
-        # Get prompt regex from config if not provided
-        if not prompt_regex:
-            if appliance_type:
-                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-            if not prompt_regex:
-                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-                return False
-        
-        # Determine hostname - remove suffix after last dash
-        if not hostname:
-            # Remove everything after last dash (e.g., coll1-suffix -> coll1, coll2-suffix2 -> coll2, cm-02-suffix -> cm-02)
-            hostname = appliance_name.rsplit('-', 1)[0] if '-' in appliance_name else appliance_name
-            logger.info(f"Using hostname from appliance_name: {appliance_name} -> {hostname}")
-        
-        # Determine domain
-        if not domain:
-            domain = "demo.guardium"
-        
-        logger.info(f"Hostname: {hostname}")
-        logger.info(f"Domain: {domain}")
-        
-        # ===== CONNECTION 1: Set hostname and domain =====
-        logger.info(f"➜ Setting hostname and domain...")
-        logger.info(f"Connecting to {appliance_name} ({host})...")
-        
-        client1 = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            timeout=180,  # 3 minutes
-            debug=debug
-        )
-        
-        if not client1.connect():
-            logger.error(f"Failed to connect to {appliance_name}")
-            return False
-        
-        logger.info(f"✓ Connected to {appliance_name}")
-        
-        # Set hostname
-        logger.info(f"➜ Setting hostname to: {hostname}")
-        try:
-            output = client1.execute_command_with_confirmation(
-                command=f"store system hostname {hostname}",
-                confirmation_pattern=r"Is it a newly cloned appliance\s*\(y/n\)\?",
-                response="y"
-            )
-            if debug and output:
-                logger.info(f"  Command output: {output}")
-            logger.info(f"✓ Hostname set to: {hostname}")
-        except TimeoutError as e:
-            logger.warning(f"Timeout during hostname change, verifying...")
-            client1.disconnect()
-            logger.info("Reconnecting to verify hostname...")
-            
-            # Reconnect to verify
-            verify_client = ApplianceClient(
-                host=host,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                timeout=60,
-                debug=debug
-            )
-            
-            if not verify_client.connect():
-                logger.error(f"✗ Cannot reconnect to verify hostname change")
-                return False
-            
-            try:
-                verify_output = verify_client.execute_command("show system hostname")
-                
-                if hostname in verify_output:
-                    logger.info(f"✓ Hostname successfully set to: {hostname} (verified after timeout)")
-                    # Keep this connection for domain
-                    client1 = verify_client
-                else:
-                    logger.error(f"✗ Hostname change failed: {e}")
-                    verify_client.disconnect()
-                    return False
-            except Exception as verify_error:
-                logger.error(f"✗ Cannot verify hostname change: {verify_error}")
-                verify_client.disconnect()
-                return False
-        
-        # Set domain (using same connection)
-        logger.info(f"➜ Setting domain to: {domain}")
-        try:
-            output = client1.execute_command(f"store system domain {domain}")
-            if debug and output:
-                logger.info(f"  Command output: {output}")
-            logger.info(f"✓ Domain set to: {domain}")
-        except TimeoutError as e:
-            logger.warning(f"Timeout during domain change, verifying...")
-            client1.disconnect()
-            logger.info("Reconnecting to verify domain...")
-            
-            # Reconnect to verify
-            # Use configured prompt_regex (it should match the new hostname.domain format)
-            if appliance_type:
-                configured_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True)
-            else:
-                configured_prompt = None
-            
-            if not configured_prompt:
-                logger.error("Cannot determine configured prompt regex")
-                return False
-            
-            verify_client = ApplianceClient(
-                host=host,
-                user=user,
-                password=password,
-                prompt_regex=configured_prompt,
-                timeout=60,
-                debug=debug
-            )
-            
-            if not verify_client.connect():
-                logger.error(f"✗ Cannot reconnect to verify domain change")
-                return False
-            
-            try:
-                verify_output = verify_client.execute_command("show system domain")
-                
-                if domain in verify_output:
-                    logger.info(f"✓ Domain successfully set to: {domain} (verified after timeout)")
-                    # Keep this connection for remaining operations
-                    client1 = verify_client
-                else:
-                    logger.error(f"✗ Domain change failed: {e}")
-                    verify_client.disconnect()
-                    return False
-            except Exception as verify_error:
-                logger.error(f"✗ Cannot verify domain change: {verify_error}")
-                verify_client.disconnect()
-                return False
-        
-        # Continue using same connection (client1) for remaining operations
-        logger.info("➜ Configuring small disk and timeouts...")
-        
-        # Enable small disk mode (requires "I agree" confirmation)
-        logger.info("➜ Enabling small disk mode...")
-        output = client1.execute_command_simple_confirmation(
-            command="store system small_disk",
-            confirmation_text="I agree",
-            response="I agree",
-            timeout=60
-        )
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ Small disk mode enabled")
-        
-        # Configure GUI session timeout
-        logger.info("➜ Configuring GUI session timeout (9999 minutes)...")
-        output = client1.execute_command("store gui session_timeout 9999")
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ GUI session timeout set to 9999 minutes")
-        
-        # Configure CLI session timeout
-        logger.info("➜ Configuring CLI session timeout (600 seconds)...")
-        output = client1.execute_command("store timeout cli_session 600")
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ CLI session timeout set to 600 seconds")
-        
-        # Restart GUI to apply changes
-        logger.info("➜ Restarting GUI...")
-        output = client1.execute_command_with_confirmation(
-            command="restart gui",
-            confirmation_pattern=r"Are you sure you want to restart GUI\s*\(y/n\)\?",
-            response="y"
-        )
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ GUI restarted")
-        
-        client1.disconnect()
-        
-        logger.info("=" * 80)
-        logger.info(f"✓ System settings configured successfully")
-        logger.info(f"  - Hostname: {hostname}")
-        logger.info(f"  - Domain: {domain}")
-        logger.info(f"  - Small disk: enabled")
-        logger.info(f"  - GUI timeout: 9999 min")
-        logger.info(f"  - CLI timeout: 600 sec")
-        logger.info("=" * 80)
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error configuring system settings: {str(e)}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-
-def set_product_gid(
-    config,
-    logger,
-    appliance_name: str,
-    gid: Optional[int] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    """
-    Set product GID on Guardium appliance.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        gid: GID value (optional, generates random 1000-100000 if not provided)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        set_product_gid(config, logger, 'cm02', gid=234674365)
-    """
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    # Generate random GID if not provided
-    if gid is None:
-        gid = random.randint(1000, 100000)
-        logger.info(f"Generated random GID: {gid}")
-    
-    logger.info("=" * 80)
-    logger.info(f"SET PRODUCT GID: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Get user from config if not provided
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    # Get prompt regex from config if not provided
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"GID: {gid}")
-    logger.info(f"User: {user}")
-    
-    try:
-        # Connect to appliance
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Set product GID
-        command = f"store product gid {gid}"
-        logger.info(f"\n➜ Executing: {command}")
-        output = client.execute_command(command)
-        logger.info(f"Command output:\n{output}")
-        
-        client.disconnect()
-        
-        # Verify success
-        # Note: execute_command filters out "ok" line, so we check for "Command ran on:" or absence of error
-        if "error" in output.lower() or "failed" in output.lower():
-            logger.error(f"✗ Command failed: {output}")
-            return False
-        elif "Command ran on:" in output or not output.strip():
-            # Success: either has timestamp or empty output (ok was filtered)
-            logger.info("=" * 80)
-            logger.info(f"✓ Product GID set successfully to {gid}")
-            logger.info("=" * 80)
-            return True
-        else:
-            logger.warning(f"⚠ Unexpected output (assuming success): {output}")
-            logger.info("=" * 80)
-            logger.info(f"✓ Product GID set successfully to {gid}")
-            logger.info("=" * 80)
-            return True
-        
-    except Exception as e:
-        logger.error(f"Error setting product GID: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
         return False
 
 def reset_cli_password(
@@ -2449,7 +1758,6 @@ def prepare_appliance_for_patching(
         logger.error("=" * 80)
         return False
 
-
 def copy_files_to_appliance(
     config,
     logger,
@@ -2686,8 +1994,6 @@ def copy_files_to_appliance(
         logger.error("=" * 80)
         return False
 
-
-
 def get_patch_installation_order(
     config,
     logger,
@@ -2697,175 +2003,61 @@ def get_patch_installation_order(
     password: Optional[str] = None,
     debug: bool = True
 ) -> Optional[str]:
-    """
-    Get patch installation order by mapping patch names from patch_order.txt to positions from 'show system patch available'.
     
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance (typically CM)
-        patch_order_file: Path to file containing patch names in installation order
-        user: SSH username (optional, uses 'cli' by default)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        debug: Enable debug output
-    
-    Returns:
-        String with comma-separated patch positions (e.g., "2,1,3") or None on error
-    """
     import os
     
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return None
-    
     logger.info("=" * 80)
-    logger.info(f"GET PATCH INSTALLATION ORDER: {appliance_name}")
+    logger.info(f"GET PATCH INSTALLATION ORDER")
     logger.info("=" * 80)
     
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return None
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return None
-    
-    # Get prompt regex for CLI user
-    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
-    if not cli_prompt_regex:
-        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
-    
-    # Get user (default to 'cli')
-    if not user:
-        user = 'cli'
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if not password:
-            logger.error("cli_pwd not found in machines_info.json custom_variables")
-            return None
-        logger.info("Using password from custom_variables (cli_pwd)")
-    
-    # Check if patch_order_file exists
     if not os.path.exists(patch_order_file):
         logger.error(f"Patch order file not found: {patch_order_file}")
         return None
     
-    # Read patch order from file
-    logger.info(f"\n➜ Reading patch order from: {patch_order_file}")
+    logger.info(f"➜ Reading patch order from: {patch_order_file}")
     try:
         with open(patch_order_file, 'r') as f:
             patch_order = [line.strip() for line in f if line.strip()]
         
-        logger.info(f"Patch order from file ({len(patch_order)} patches):")
+        logger.info(f"Desired installation order ({len(patch_order)} patches):")
         for i, patch_name in enumerate(patch_order, 1):
             logger.info(f"  {i}. {patch_name}")
     except Exception as e:
         logger.error(f"Failed to read patch order file: {e}")
         return None
     
-    # Connect to appliance as CLI user
-    logger.info(f"\n➜ Connecting to {appliance_name} ({host}) as CLI user...")
-    
-    try:
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=cli_prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return None
-        
-        logger.info("✓ Connected successfully")
-        
-        # Execute show system patch available
-        logger.info("\n➜ Executing: show system patch available")
-        output = client.execute_command("show system patch available")
-        logger.info(f"Command output:\n{output}")
-        
-        client.disconnect()
-        
-        # Parse output to extract patch list with positions
-        # Format: P#      Description                                   Version Md5sum
-        #         1033    Security fix                                  12.0    5c2b54864dc774237b1a49654af7ed3c
-        logger.info("\n➜ Parsing available patches...")
-        available_patches = {}  # {patch_number: position_in_list}
-        patch_list = []  # List of (position, patch_number) for display
-        
-        lines = output.split('\n')
-        position = 0
-        for line in lines:
-            line_stripped = line.strip()
-            # Skip header and empty lines
-            if not line_stripped or line_stripped.startswith('P#') or line_stripped.startswith('Attempting'):
-                continue
-            
-            # Look for lines starting with patch number (digits followed by whitespace)
-            match = re.match(r'^(\d+)\s+', line_stripped)
-            if match:
-                position += 1
-                patch_number = match.group(1)
-                available_patches[patch_number] = str(position)
-                patch_list.append((position, patch_number))
-                logger.info(f"  Position {position}: Patch {patch_number}")
-        
-        if not available_patches:
-            logger.warning("No patches found in 'show system patch available' output")
-            return None
-        
-        # Map patch order to positions
-        logger.info("\n➜ Mapping patch order to positions...")
-        patch_positions = []
-        
-        for patch_spec in patch_order:
-            # Extract patch number from spec like "12.0p9997" -> "9997"
-            patch_match = re.search(r'p(\d+)', patch_spec)
-            if patch_match:
-                patch_number = patch_match.group(1)
-                if patch_number in available_patches:
-                    position = available_patches[patch_number]
-                    patch_positions.append(position)
-                    logger.info(f"  {patch_spec} (patch {patch_number}) → position {position}")
-                else:
-                    logger.warning(f"  {patch_spec} (patch {patch_number}) → NOT FOUND in available patches!")
-            else:
-                logger.warning(f"  {patch_spec} → Could not extract patch number!")
-        
-        if not patch_positions:
-            logger.error("No patches from patch_order.txt found in available patches")
-            return None
-        
-        # Create comma-separated list
-        patch_selection = ','.join(patch_positions)
-        
-        logger.info("=" * 80)
-        logger.info(f"✓ Patch installation order: {patch_selection}")
-        logger.info("=" * 80)
-        
-        return patch_selection
-        
-    except Exception as e:
-        logger.error(f"Error getting patch installation order: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+    if not patch_order:
+        logger.error("No patches found in patch_order.txt")
         return None
-
+    
+    sorted_patches = sorted(patch_order)
+    
+    logger.info(f"\nAlphabetically sorted (CM order) ({len(sorted_patches)} patches):")
+    for i, patch_name in enumerate(sorted_patches, 1):
+        logger.info(f"  Position {i}: {patch_name}")
+    
+    logger.info("\n➜ Mapping desired order to CM positions...")
+    patch_positions = []
+    
+    for patch_spec in patch_order:
+        try:
+            position = sorted_patches.index(patch_spec) + 1
+            patch_positions.append(str(position))
+            logger.info(f"  {patch_spec} → position {position}")
+        except ValueError:
+            logger.warning(f"  {patch_spec} → NOT FOUND in sorted list!")
+    
+    if not patch_positions:
+        logger.error("No patches mapped from patch_order.txt")
+        return None
+    
+    patch_selection = ','.join(patch_positions)
+    
+    logger.info("=" * 80)
+    logger.info(f"✓ Patch installation order: {patch_selection}")
+    logger.info("=" * 80)
+    
+    return patch_selection
 
 def install_patch_on_appliance(
     config,
@@ -3103,7 +2295,6 @@ def install_patch_on_appliance(
         import traceback
         logger.error(traceback.format_exc())
         return False
-
 
 def monitor_patch_installation(
     config,
@@ -3345,7 +2536,6 @@ def monitor_patch_installation(
     logger.error("=" * 80)
     return False
 
-
 def install_and_monitor_patches(
     config,
     logger,
@@ -3497,8 +2687,6 @@ def install_and_monitor_patches(
     logger.info(f"✓ Patches installed and verified successfully on {appliance_name}")
     logger.info("=" * 80)
     return True
-
-
 
 def install_gim_module(
     config,
