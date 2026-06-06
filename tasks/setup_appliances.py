@@ -146,6 +146,7 @@ def set_shared_secret_all(
 def import_definitions_on_cm(
     config,
     logger,
+    verbose: bool = True,
     cm_appliance: str = "cm02",
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
     debug: bool = True
@@ -203,6 +204,7 @@ def import_definitions_on_cm(
 def install_policy_on_collector(
     config,
     logger,
+    verbose: bool = True,
     cm_appliance: str = "cm02",
     collector_appliance: str = "coll2",
     policy_name: str = "Log Everything",
