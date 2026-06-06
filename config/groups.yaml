@@ -51,6 +51,15 @@ groups:
     auto_execute: false  # Executed on demand
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
+      - name: reset_cli_password_all
+        function: reset_cli_password_all
+        module: tasks.setup_appliances
+        description: "Reset CLI password on all appliances using cloudsupport account and sudo (parallel execution)"
+        args:
+          # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from custom_variables
+          # cli_password: "password"  # Optional - defaults to cli_pwd from custom_variables
+          debug: true
+      
       - name: create_oauth_client
         function: create_oauth_client
         module: tasks.setup_appliances
@@ -69,7 +78,7 @@ groups:
       - name: configure_system_settings_all
         function: configure_system_settings_all
         module: tasks.setup_appliances
-        description: "CONSOLIDATED: Configure ALL system settings in single CLI session per appliance (hostname, domain, small_disk, timeouts, network IP, timezone, NTP, hosts resolving, shared secret, product GID). Executes in parallel (max 20), CM → Collectors → AppNodes order."
+        description: "CONSOLIDATED: Configure ALL system settings in single CLI session per appliance (hostname, domain, small_disk, timeouts, network IP, timezone, NTP, hosts resolving, product GID). Executes in parallel (max 20), CM → Collectors → AppNodes order."
         args:
           # hostname: "custom"  # Optional - override hostname for all appliances
           # domain: "demo.guardium"  # Optional - defaults to demo.guardium
@@ -78,9 +87,16 @@ groups:
           timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
           # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
           configure_hosts: true  # Optional - whether to configure /etc/hosts (default: true)
-          # shared_secret: "guardium"  # Optional - defaults to value from machines_info.json custom_variables
           # gid: 12345  # Optional - product GID, generates random 1000-100000 if not provided
           debug: false
+      
+      - name: set_shared_secret_all
+        function: set_shared_secret_all
+        module: tasks.setup_appliances
+        description: "Set shared secret on all appliances (parallel execution). Uses 'shared_secret' from custom_variables, defaults to 'guardium' if not found."
+        args:
+          # shared_secret: "guardium"  # Optional - defaults to shared_secret from custom_variables or "guardium"
+          debug: true
 
       - name: restart_all_appliances_after_initial_setup
         function: restart_appliance_all

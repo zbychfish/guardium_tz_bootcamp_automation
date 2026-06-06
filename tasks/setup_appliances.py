@@ -15,6 +15,135 @@ from core.appliance_operations import (
 )
 
 logger = get_logger(__name__)
+def reset_cli_password_all(
+    config,
+    logger,
+    verbose: bool = True,
+    cloudsupport_password: Optional[str] = None,
+    cli_password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    
+    from core.appliance_operations import reset_cli_password, execute_on_appliances_async
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("RESET CLI PASSWORD ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    logger.info(f"Found {len(appliance_names)} appliances")
+    for name, cfg in sorted_appliances:
+        logger.info(f"  - {name} ({cfg.get('type')})")
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=reset_cli_password,
+        operation_name="reset_cli_password",
+        logger=logger,
+        config=config,
+        cloudsupport_password=cloudsupport_password,
+        cli_password=cli_password,
+        debug=debug
+    )
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("RESET CLI PASSWORD SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    failed_count = len(results) - success_count
+    
+    logger.info(f"✓ Successful: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
+        for appliance_name, success in results.items():
+            if not success:
+                error_msg = errors.get(appliance_name, "Unknown error")
+                logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    logger.info("=" * 80)
+    
+    return failed_count == 0
+
+def set_shared_secret_all(
+    config,
+    logger,
+    verbose: bool = True,
+    shared_secret: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    
+    from core.appliance_operations import set_shared_secret, execute_on_appliances_async
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("SET SHARED SECRET ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    logger.info(f"Found {len(appliance_names)} appliances")
+    for name, cfg in sorted_appliances:
+        logger.info(f"  - {name} ({cfg.get('type')})")
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=set_shared_secret,
+        operation_name="set_shared_secret",
+        logger=logger,
+        config=config,
+        shared_secret=shared_secret,
+        debug=debug
+    )
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("SET SHARED SECRET SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    failed_count = len(results) - success_count
+    
+    logger.info(f"✓ Successful: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
+        for appliance_name, success in results.items():
+            if not success:
+                error_msg = errors.get(appliance_name, "Unknown error")
+                logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    logger.info("=" * 80)
+    
+    return failed_count == 0
+
+
 
 def initial_collector_settings(
     config,
@@ -643,49 +772,12 @@ def configure_system_settings_all(
     timezone: Optional[str] = None,
     ntp_servers: Optional[list] = None,
     configure_hosts: bool = True,
-    shared_secret: Optional[str] = None,
     gid: Optional[int] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    CONSOLIDATED FUNCTION: Configure all system settings on all appliances in a single CLI session per appliance.
-    
-    This function replaces the following old functions:
-    - configure_system_settings_all (hostname, domain, small_disk, timeouts)
-    - configure_network_ip_all (network IP configuration)
-    - set_timezone_all (timezone configuration)
-    - configure_ntp_all (NTP configuration)
-    - configure_hosts_resolving_all (hosts file configuration)
-    - set_shared_secret_all (shared secret configuration)
-    - set_product_gid_all (product GID configuration)
-    
-    All operations are executed in a single CLI session per appliance to avoid multiple logins.
-    Execution order: system settings → network IP → timezone → NTP → hosts resolving → shared secret → product GID
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        hostname: Hostname to set (optional, derived from appliance_name if not provided)
-        domain: Domain to set (optional, defaults to demo.guardium)
-        ip_address: IP address to set (optional, uses IP from appliances.yaml if not provided)
-        prefix: Network prefix (default: /24)
-        timezone: Timezone to set (optional, defaults to Europe/Warsaw or from machines_info.json)
-        ntp_servers: List of NTP servers (optional, defaults to pool.ntp.org)
-        configure_hosts: Whether to configure /etc/hosts (default: True)
-        shared_secret: Shared secret value (optional, uses value from machines_info.json if not provided)
-        gid: Product GID value (optional, generates random 1000-100000 if not provided)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        True if all appliances configured successfully, False otherwise
-    """
     from core.appliance_operations import configure_system_settings_consolidated
     from core.appliance_config_loader import ApplianceConfigLoader
     
@@ -752,7 +844,6 @@ def configure_system_settings_all(
         timezone=timezone,
         ntp_servers=ntp_servers,
         configure_hosts=configure_hosts,
-        shared_secret=shared_secret,
         gid=gid,
         user=user,
         password=password,

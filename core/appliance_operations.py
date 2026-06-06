@@ -462,14 +462,15 @@ def set_shared_secret(
         logger.error(f"No IP address configured for appliance '{appliance_name}'")
         return False
     
-    # Use shared_secret from custom_variables (machines_info.json) if not provided
-    if not shared_secret:
-        shared_secret = config.get_custom_variable('shared_secret')
-        if shared_secret:
-            logger.info("Using shared_secret from custom_variables (machines_info.json)")
-        else:
-            logger.error("shared_secret not provided and not found in custom_variables")
-            return False
+    target_shared_secret = shared_secret
+    if not target_shared_secret:
+        target_shared_secret = config.get_custom_variable('shared_secret')
+        if target_shared_secret:
+            logger.info("Using shared_secret from custom_variables")
+    
+    if not target_shared_secret:
+        target_shared_secret = "guardium"
+        logger.info("Using default shared_secret: guardium")
     
     # Get user from config if not provided
     if not user:
@@ -517,7 +518,7 @@ def set_shared_secret(
             return False
         
         # Set shared secret
-        command = f"store system shared secret {shared_secret}"
+        command = f"store system shared secret {target_shared_secret}"
         logger.info(f"\n➜ Executing: store system shared secret ***")
         output = client.execute_command(command)
         logger.info(f"Command output:\n{output}")
@@ -1336,47 +1337,12 @@ def configure_system_settings_consolidated(
     timezone: Optional[str] = None,
     ntp_servers: Optional[List[str]] = None,
     configure_hosts: bool = True,
-    shared_secret: Optional[str] = None,
     gid: Optional[int] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Consolidated function that configures all system settings in a single CLI session.
-    Executes operations in order:
-    1. System settings (hostname, domain, small_disk, timeouts)
-    2. Network IP configuration
-    3. Timezone configuration
-    4. NTP configuration
-    5. Hosts resolving configuration
-    6. Shared secret configuration
-    7. Product GID configuration
-    
-    All parameters are optional. If not provided, sensible defaults are used.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        hostname: Hostname to set (optional, derived from appliance_name if not provided)
-        domain: Domain to set (optional, defaults to demo.guardium)
-        ip_address: IP address to set (optional, uses IP from appliances.yaml if not provided)
-        prefix: Network prefix (default: /24)
-        timezone: Timezone to set (optional, defaults to Europe/Warsaw or from machines_info.json)
-        ntp_servers: List of NTP servers (optional, defaults to pool.ntp.org)
-        configure_hosts: Whether to configure /etc/hosts (default: True)
-        shared_secret: Shared secret value (optional, uses value from machines_info.json if not provided)
-        gid: Product GID value (optional, generates random 1000-100000 if not provided)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if all operations successful, False otherwise
-    """
     
     try:
         if not appliance_name:
@@ -1673,33 +1639,7 @@ def configure_system_settings_consolidated(
             logger.info(f"\n⊘ Skipping OPERATION {operation_num}: hosts configuration (configure_hosts=False)")
             operation_num += 1
         
-        # ===== OPERATION 6: Set shared secret (ALWAYS) =====
-        logger.info(f"\n{'='*60}")
-        logger.info(f"OPERATION {operation_num}: Set shared secret")
-        logger.info(f"{'='*60}")
-        
-        # Use shared_secret from custom_variables if not provided
-        target_shared_secret = shared_secret
-        if not target_shared_secret:
-            target_shared_secret = config.get_custom_variable('shared_secret')
-            if target_shared_secret:
-                logger.info("Using shared_secret from custom_variables")
-        
-        if not target_shared_secret:
-            logger.error("✗ Shared secret is required but not provided!")
-            logger.error("  Provide it via parameter or set 'shared_secret' in custom_variables")
-            client.disconnect()
-            return False
-        
-        command = f"store system shared secret {target_shared_secret}"
-        logger.info(f"➜ Setting shared secret...")
-        output = client.execute_command(command)
-        if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ Shared secret set")
-        operation_num += 1
-        
-        # ===== OPERATION 7: Set product GID (ALWAYS) =====
+        # ===== OPERATION 6: Set product GID (ALWAYS) =====
         logger.info(f"\n{'='*60}")
         logger.info(f"OPERATION {operation_num}: Set product GID")
         logger.info(f"{'='*60}")
@@ -1728,8 +1668,7 @@ def configure_system_settings_consolidated(
         logger.info(f"  3. Timezone: {target_timezone}")
         logger.info(f"  4. NTP: {' '.join(ntp_servers)}")
         logger.info(f"  5. Hosts: {'configured' if configure_hosts else 'skipped'}")
-        logger.info(f"  6. Shared secret: {'set' if (shared_secret is not None or config.get_custom_variable('shared_secret')) else 'skipped'}")
-        logger.info(f"  7. Product GID: {'set' if (gid is not None or gid == 0) else 'skipped'}")
+        logger.info(f"  6. Product GID: {target_gid}")
         logger.info("=" * 80)
         return True
         
@@ -2128,6 +2067,100 @@ def set_product_gid(
         logger.error(f"Error setting product GID: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        return False
+
+def reset_cli_password(
+    config,
+    logger,
+    appliance_name: str,
+    cloudsupport_password: Optional[str] = None,
+    cli_password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"RESET CLI PASSWORD: {appliance_name}")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not cloudsupport_password:
+        cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
+        if not cloudsupport_password:
+            logger.error("cloudsupport_pwd not found in custom_variables")
+            return False
+        logger.info("Using cloudsupport password from custom_variables")
+    
+    if not cli_password:
+        cli_password = config.get_custom_variable('cli_pwd')
+        if not cli_password:
+            logger.error("cli_pwd not found in custom_variables")
+            return False
+        logger.info("Using CLI password from custom_variables")
+    
+    try:
+        import paramiko
+        
+        logger.info(f"Connecting to {host} as cloudsupport user...")
+        
+        ssh_client = paramiko.SSHClient()
+        ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        ssh_client.connect(
+            hostname=host,
+            username='cloudsupport',
+            password=cloudsupport_password,
+            look_for_keys=False,
+            allow_agent=False,
+            timeout=30
+        )
+        
+        logger.info(f"Connected to {host}")
+        
+        command = f"echo 'cli:{cli_password}' | sudo chpasswd"
+        logger.info(f"Executing: echo 'cli:***' | sudo chpasswd")
+        
+        stdin, stdout, stderr = ssh_client.exec_command(command, timeout=30)
+        exit_code = stdout.channel.recv_exit_status()
+        
+        stdout_text = stdout.read().decode('utf-8').strip()
+        stderr_text = stderr.read().decode('utf-8').strip()
+        
+        if debug and stdout_text:
+            logger.info(f"STDOUT: {stdout_text}")
+        if stderr_text:
+            logger.warning(f"STDERR: {stderr_text}")
+        
+        ssh_client.close()
+        
+        if exit_code == 0:
+            logger.info(f"✓ CLI password reset successfully on {appliance_name}")
+            return True
+        else:
+            logger.error(f"✗ Failed to reset CLI password on {appliance_name} (exit code: {exit_code})")
+            return False
+            
+    except Exception as e:
+        logger.error(f"✗ Exception while resetting CLI password on {appliance_name}: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
         return False
 
 def prepare_appliance_for_patching(
