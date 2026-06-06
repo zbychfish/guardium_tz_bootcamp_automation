@@ -582,29 +582,41 @@ def execute_mysql_sql(
         with os.fdopen(fd, 'w') as f:
             f.write(sql_commands)
         
-        # Build mysql command
-        mysql_cmd = f"mysql -u{username}"
-        
-        if password:
-            # Escape single quotes in password and wrap in single quotes
-            escaped_password = password.replace("'", "'\\''")
-            mysql_cmd += f" -p'{escaped_password}'"
-        
-        if host != "localhost":
-            mysql_cmd += f" -h{host}"
-        
-        if database:
-            mysql_cmd += f" {database}"
-        
-        if additional_options:
-            mysql_cmd += f" {additional_options}"
-        
-        mysql_cmd += f" < {sql_file}"
-        
-        # Execute SQL
-        result = execute_local_command(mysql_cmd, log, verbose)
-        
-        return result
+        # Build mysql command using config file for password (safer than command line)
+        config_fd, config_file = tempfile.mkstemp(suffix='.cnf', text=True)
+        try:
+            # Write MySQL config file with password
+            with os.fdopen(config_fd, 'w') as f:
+                f.write("[client]\n")
+                f.write(f"user={username}\n")
+                if password:
+                    f.write(f"password={password}\n")
+                if host != "localhost":
+                    f.write(f"host={host}\n")
+            
+            # Set restrictive permissions on config file
+            os.chmod(config_file, 0o600)
+            
+            # Build mysql command using config file
+            mysql_cmd = f"mysql --defaults-extra-file={config_file}"
+            
+            if database:
+                mysql_cmd += f" {database}"
+            
+            if additional_options:
+                mysql_cmd += f" {additional_options}"
+            
+            mysql_cmd += f" < {sql_file}"
+            
+            # Execute SQL
+            result = execute_local_command(mysql_cmd, log, verbose)
+            
+            return result
+            
+        finally:
+            # Clean up config file
+            if os.path.exists(config_file):
+                os.remove(config_file)
         
     finally:
         # Clean up temporary file
