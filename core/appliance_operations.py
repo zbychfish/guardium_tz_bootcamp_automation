@@ -108,8 +108,17 @@ def restart_appliance(
     debug: bool = True,
     wait_for_availability: bool = True,
     retry_interval: int = 10,
-    max_retries: int = 60
+    max_retries: int = 60,
+    mysql_busy_retries: int = 5,
+    mysql_busy_wait: int = 60
 ) -> bool:
+    """
+    Restart a Guardium appliance with MySQL busy check and retry logic.
+    
+    Args:
+        mysql_busy_retries: Number of times to retry if MySQL is busy (default: 5)
+        mysql_busy_wait: Seconds to wait between MySQL busy retries (default: 60)
+    """
     
     if not appliance_name:
         logger.error("appliance_name is required")
@@ -117,6 +126,193 @@ def restart_appliance(
     
     logger.info("=" * 80)
     logger.info(f"RESTART APPLIANCE: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Load appliance configuration
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    # Get user from config if not provided
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    # Retry loop for MySQL busy condition
+    for mysql_attempt in range(1, mysql_busy_retries + 1):
+        try:
+            # Connect to appliance
+            client = ApplianceClient(
+                host=host,
+                user=user,
+                password=password,
+                prompt_regex=prompt_regex,
+                initial_pattern=None,
+                timeout=60,
+                strip_ansi=True,
+                debug=debug
+            )
+            
+            if not client.connect():
+                logger.error("Failed to connect to appliance")
+                return False
+            
+            # Execute restart with MySQL busy check
+            if mysql_attempt > 1:
+                logger.info(f"\n➜ Retry {mysql_attempt}/{mysql_busy_retries}: restart system")
+            else:
+                logger.info("\n➜ Executing: restart system")
+            logger.info("Checking if MySQL is busy...")
+            result = client.execute_restart_with_check()
+            
+            client.disconnect()
+            
+            # Check result
+            if "System is restarting" in result:
+                logger.info("✓ System restart initiated")
+                
+                if wait_for_availability:
+                    total_timeout = max_retries * retry_interval
+                    
+                    logger.info(f"\n⌛ Waiting for appliance to come back online...")
+                    logger.info(f"   Retry interval: {retry_interval}s")
+                    logger.info(f"   Max retries: {max_retries}")
+                    logger.info(f"   Total timeout: ~{total_timeout}s (~{total_timeout//60}m)")
+                    
+                    start_time = time.time()
+                    retry_count = 0
+                    
+                    while retry_count < max_retries:
+                        retry_count += 1
+                        
+                        try:
+                            # Try to connect
+                            test_client = ApplianceClient(
+                                host=host,
+                                user=user,
+                                password=password,
+                                prompt_regex=prompt_regex,
+                                initial_pattern=None,
+                                timeout=30,
+                                strip_ansi=True,
+                                debug=False
+                            )
+                            
+                            if test_client.connect():
+                                test_client.disconnect()
+                                elapsed = int(time.time() - start_time)
+                                logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
+                                logger.info("=" * 80)
+                                logger.info("Appliance restarted successfully")
+                                logger.info("=" * 80)
+                                return True
+                        except Exception:
+                            pass
+                        
+                        if retry_count < max_retries:
+                            logger.debug(f"   Attempt {retry_count}/{max_retries} failed, waiting {retry_interval}s...")
+                            time.sleep(retry_interval)
+                    
+                    elapsed = int(time.time() - start_time)
+                    logger.error(f"✗ Timeout waiting for appliance (waited {elapsed}s, {retry_count} attempts)")
+                    return False
+                else:
+                    logger.info("=" * 80)
+                    logger.info("Restart initiated (not waiting for availability)")
+                    logger.info("=" * 80)
+                    return True
+                    
+            elif "MySQL is busy" in result:
+                if mysql_attempt < mysql_busy_retries:
+                    logger.warning(f"✗ Restart rejected - MySQL is busy updating the database (attempt {mysql_attempt}/{mysql_busy_retries})")
+                    logger.warning(f"Waiting {mysql_busy_wait}s before retry...")
+                    time.sleep(mysql_busy_wait)
+                    continue  # Retry
+                else:
+                    logger.error(f"✗ Restart rejected - MySQL is busy after {mysql_busy_retries} attempts")
+                    logger.error("Please wait for MySQL to finish updating and try again later")
+                    return False
+            else:
+                logger.error(f"✗ Unexpected result: {result}")
+                return False
+            
+        except Exception as e:
+            logger.error(f"Error restarting appliance: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+    
+    # Should not reach here, but just in case
+    logger.error("✗ Restart failed after all retry attempts")
+    return False
+
+def configure_store_settings(
+    config,
+    logger,
+    appliance_name: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Configure store settings on Guardium appliance:
+    - store run_cleanup_orphans_daily off
+    - store purge_age_period 0 (with confirmation)
+    
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        appliance_name: Name of the appliance
+        user: SSH username (optional, uses default from appliance type)
+        password: SSH password (optional, uses cli_pwd from custom_variables)
+        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"CONFIGURE STORE SETTINGS: {appliance_name}")
     logger.info("=" * 80)
     
     # Load appliance configuration
@@ -181,81 +377,78 @@ def restart_appliance(
             logger.error("Failed to connect to appliance")
             return False
         
-        # Execute restart with MySQL busy check
-        logger.info("\n➜ Executing: restart system")
-        logger.info("Checking if MySQL is busy...")
-        result = client.execute_restart_with_check()
+        # Execute first command: store run_cleanup_orphans_daily off
+        logger.info("\n➜ Executing: store run_cleanup_orphans_daily off")
+        result1 = client.execute_command("store run_cleanup_orphans_daily off")
+        
+        if "The parameter has been changed" in result1:
+            logger.info("✓ run_cleanup_orphans_daily set to off")
+        else:
+            logger.warning(f"Unexpected response: {result1}")
+        
+        # Execute second command: store purge_age_period 0 (with confirmation)
+        logger.info("\n➜ Executing: store purge_age_period 0")
+        logger.info("This command requires confirmation (y/n)")
+        
+        # Send command
+        if not client.channel:
+            logger.error("Channel not available")
+            return False
+            
+        client.channel.send(b"store purge_age_period 0\n")
+        time.sleep(1)
+        
+        # Wait for confirmation prompt
+        output = ""
+        start_time = time.time()
+        while time.time() - start_time < 10:
+            if client.channel.recv_ready():
+                chunk = client.channel.recv(4096).decode('utf-8', errors='ignore')
+                output += chunk
+                
+                # Check if we got the confirmation prompt
+                if "Are you sure you want to continue? (y/n)" in output:
+                    logger.info("Received confirmation prompt, sending 'y'")
+                    client.channel.send(b"y\n")
+                    time.sleep(2)
+                    
+                    # Read remaining output
+                    final_output = ""
+                    final_start = time.time()
+                    while time.time() - final_start < 5:
+                        if client.channel.recv_ready():
+                            final_chunk = client.channel.recv(4096).decode('utf-8', errors='ignore')
+                            final_output += final_chunk
+                        else:
+                            time.sleep(0.1)
+                    
+                    output += final_output
+                    break
+            else:
+                time.sleep(0.1)
+        
+        if client.strip_ansi_flag:
+            from .appliance_client import strip_ansi
+            output = strip_ansi(output)
+        
+        if "The purge_age period has been changed" in output:
+            logger.info("✓ purge_age_period set to 0")
+        else:
+            logger.warning(f"Unexpected response: {output}")
         
         client.disconnect()
         
-        # Check result
-        if "System is restarting" in result:
-            logger.info("✓ System restart initiated")
-            
-            if wait_for_availability:
-                total_timeout = max_retries * retry_interval
-                
-                logger.info(f"\n⌛ Waiting for appliance to come back online...")
-                logger.info(f"   Retry interval: {retry_interval}s")
-                logger.info(f"   Max retries: {max_retries}")
-                logger.info(f"   Total timeout: ~{total_timeout}s (~{total_timeout//60}m)")
-                
-                start_time = time.time()
-                retry_count = 0
-                
-                while retry_count < max_retries:
-                    retry_count += 1
-                    
-                    try:
-                        # Try to connect
-                        test_client = ApplianceClient(
-                            host=host,
-                            user=user,
-                            password=password,
-                            prompt_regex=prompt_regex,
-                            initial_pattern=None,
-                            timeout=30,
-                            strip_ansi=True,
-                            debug=False
-                        )
-                        
-                        if test_client.connect():
-                            test_client.disconnect()
-                            elapsed = int(time.time() - start_time)
-                            logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
-                            logger.info("=" * 80)
-                            logger.info("Appliance restarted successfully")
-                            logger.info("=" * 80)
-                            return True
-                    except Exception:
-                        pass
-                    
-                    if retry_count < max_retries:
-                        logger.debug(f"   Attempt {retry_count}/{max_retries} failed, waiting {retry_interval}s...")
-                        time.sleep(retry_interval)
-                
-                elapsed = int(time.time() - start_time)
-                logger.error(f"✗ Timeout waiting for appliance (waited {elapsed}s, {retry_count} attempts)")
-                return False
-            else:
-                logger.info("=" * 80)
-                logger.info("Restart initiated (not waiting for availability)")
-                logger.info("=" * 80)
-                return True
-                
-        elif "MySQL is busy" in result:
-            logger.warning("✗ Restart rejected - MySQL is busy updating the database")
-            logger.warning("Please wait a few minutes and try again")
-            return False
-        else:
-            logger.error(f"✗ Unexpected result: {result}")
-            return False
+        logger.info("=" * 80)
+        logger.info("Store settings configured successfully")
+        logger.info("=" * 80)
+        return True
         
     except Exception as e:
-        logger.error(f"Error restarting appliance: {e}")
+        logger.error(f"Error configuring store settings: {e}")
         import traceback
         logger.error(traceback.format_exc())
         return False
+
 
 def set_shared_secret(
     config,

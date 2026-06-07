@@ -11,7 +11,16 @@ from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_operations import (
     restart_appliance as core_restart_appliance,
-    configure_hosts_resolving as core_configure_hosts
+    configure_hosts_resolving as core_configure_hosts,
+    configure_store_settings,
+    execute_on_appliances_async,
+    reset_cli_password,
+    set_shared_secret,
+    configure_system_settings_consolidated,
+    register_appliance,
+    prepare_appliance_for_patching,
+    get_patch_installation_order,
+    install_and_monitor_patches
 )
 
 logger = get_logger(__name__)
@@ -142,6 +151,72 @@ def set_shared_secret_all(
     logger.info("=" * 80)
     
     return failed_count == 0
+def configure_store_settings_all(
+    config,
+    logger,
+    verbose: bool = True,
+    debug: bool = True
+) -> bool:
+    """
+    Configure store settings on all appliances:
+    - store run_cleanup_orphans_daily off
+    - store purge_age_period 0 (with confirmation)
+    """
+    
+    from core.appliance_operations import configure_store_settings, execute_on_appliances_async
+    from core.appliance_config_loader import ApplianceConfigLoader
+    
+    logger.info("=" * 80)
+    logger.info("CONFIGURE STORE SETTINGS ON ALL APPLIANCES")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader()
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    if not all_appliances:
+        logger.error("No appliances found in appliances.yaml")
+        return False
+    
+    type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
+    sorted_appliances = sorted(
+        all_appliances.items(),
+        key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
+    )
+    
+    appliance_names = [name for name, _ in sorted_appliances]
+    
+    logger.info(f"Found {len(appliance_names)} appliances")
+    for name, cfg in sorted_appliances:
+        logger.info(f"  - {name} ({cfg.get('type')})")
+    
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=configure_store_settings,
+        operation_name="configure_store_settings",
+        logger=logger,
+        config=config,
+        debug=debug
+    )
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("CONFIGURE STORE SETTINGS SUMMARY")
+    logger.info("=" * 80)
+    
+    success_count = sum(1 for success in results.values() if success)
+    failed_count = len(results) - success_count
+    
+    logger.info(f"✓ Successful: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
+        for appliance_name, success in results.items():
+            if not success:
+                error_msg = errors.get(appliance_name, "Unknown error")
+                logger.error(f"  - {appliance_name}: {error_msg}")
+    
+    logger.info("=" * 80)
+    
+    return failed_count == 0
+
 
 def import_definitions_on_cm(
     config,

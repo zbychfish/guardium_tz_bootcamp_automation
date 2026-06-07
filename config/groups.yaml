@@ -97,6 +97,13 @@ groups:
         args:
           # shared_secret: "guardium"  # Optional - defaults to shared_secret from custom_variables or "guardium"
           debug: true
+      
+      - name: configure_store_settings_all
+        function: configure_store_settings_all
+        module: tasks.setup_appliances
+        description: "Configure store settings on all appliances: run_cleanup_orphans_daily off, purge_age_period 0 (parallel execution)"
+        args:
+          debug: true
 
       - name: restart_all_appliances_after_initial_setup
         function: restart_appliance_all
