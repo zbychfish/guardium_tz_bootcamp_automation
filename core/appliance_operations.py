@@ -365,8 +365,8 @@ def configure_store_settings(
 ) -> bool:
     """
     Configure store settings on Guardium appliance:
-    - store run_cleanup_orphans_daily off
-    - store purge_age_period 0 (with confirmation)
+    - store run_cleanup_orphans_daily off (all appliances)
+    - store purge_age_period 0 (only on CM appliances, with confirmation)
     
     Args:
         config: Configuration object
@@ -429,8 +429,17 @@ def configure_store_settings(
         else:
             logger.warning(f"Unexpected response: {result1}")
         
-        # Execute second command: store purge_age_period 0 (with confirmation)
+        # Execute second command: store purge_age_period 0 (only on CM appliances)
+        if appliance_type != 'cm':
+            logger.info(f"\n⊘ Skipping 'store purge_age_period 0' - only applicable to CM appliances (current type: {appliance_type})")
+            client.disconnect()
+            logger.info("=" * 80)
+            logger.info("Store settings configured successfully")
+            logger.info("=" * 80)
+            return True
+        
         logger.info("\n➜ Executing: store purge_age_period 0")
+        logger.info("This command requires ONLY on Central Manager (CM) appliances")
         logger.info("This command requires confirmation (y/n)")
         
         # Send command
