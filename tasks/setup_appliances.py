@@ -227,7 +227,21 @@ def import_definitions_on_cm(
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
     debug: bool = True
 ) -> bool:
+    """
+    Import definitions on Central Manager.
+    API calls automatically retry on connection errors (3 attempts, 60s delay).
     
+    Args:
+        config: Configuration object
+        logger: Logger instance
+        verbose: Enable verbose output
+        cm_appliance: CM appliance name (default: cm02)
+        definitions_dir: Directory containing definition files
+        debug: Enable debug output
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
     from core.guardium_rest_api import create_guardium_api
     import os
     

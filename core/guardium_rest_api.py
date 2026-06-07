@@ -7,9 +7,53 @@ Adapted for guardium_tz_bootcamp_automation project
 
 import os
 import requests
-from typing import Optional, Dict, Any
+import time
+from typing import Optional, Dict, Any, Callable
+from functools import wraps
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def api_retry(max_retries: int = 3, retry_delay: int = 60):
+    """
+    Decorator for retrying API calls with exponential backoff.
+    
+    Args:
+        max_retries: Maximum number of retry attempts (default: 3)
+        retry_delay: Base delay in seconds between retries (default: 60)
+    
+    Returns:
+        Decorated function with retry logic
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            logger = getattr(self, 'logger', None)
+            
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(self, *args, **kwargs)
+                except (requests.exceptions.ConnectionError,
+                        requests.exceptions.Timeout,
+                        requests.exceptions.RequestException) as e:
+                    
+                    if attempt >= max_retries:
+                        if logger:
+                            logger.error(f"✗ API call failed after {max_retries} attempts: {func.__name__}")
+                        raise
+                    
+                    if logger:
+                        logger.warning(f"⚠ API call failed (attempt {attempt}/{max_retries}): {func.__name__}")
+                        logger.warning(f"  Error: {str(e)}")
+                        logger.info(f"⏳ Waiting {retry_delay} seconds before retry...")
+                    
+                    time.sleep(retry_delay)
+            
+            # Should not reach here due to raise in last attempt
+            raise RuntimeError(f"Unexpected: retry loop completed without return or raise in {func.__name__}")
+        
+        return wrapper
+    return decorator
 
 
 class GuardiumRestAPI:
@@ -20,7 +64,8 @@ class GuardiumRestAPI:
         base_url: str,
         client_id: str = "BOOTCAMP",
         client_secret: Optional[str] = None,
-        verify_ssl: bool = False
+        verify_ssl: bool = False,
+        logger=None
     ):
         """
         Initializes the REST API client.
@@ -30,10 +75,12 @@ class GuardiumRestAPI:
             client_id: OAuth client ID (default 'BOOTCAMP')
             client_secret: OAuth client secret (required)
             verify_ssl: Whether to verify SSL certificate (default False)
+            logger: Optional logger instance for retry logging
         """
         self.base_url = base_url.rstrip('/')
         self.client_id = client_id
         self.verify_ssl = verify_ssl
+        self.logger = logger
         
         if not client_secret:
             raise ValueError("client_secret is required")
@@ -41,9 +88,11 @@ class GuardiumRestAPI:
         self.client_secret = client_secret
         self.access_token: Optional[str] = None
     
+    @api_retry(max_retries=3, retry_delay=60)
     def get_token(self, username: str, password: str) -> str:
         """
         Retrieves access token from Guardium OAuth.
+        Automatically retries on connection errors (3 attempts, 60s delay).
         
         Args:
             username: Guardium username
@@ -687,7 +736,8 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
         base_url=base_url,
         client_id="BOOTCAMP",
         client_secret=client_secret,
-        verify_ssl=False
+        verify_ssl=False,
+        logger=logger
     )
     
     return api

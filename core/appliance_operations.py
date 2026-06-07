@@ -98,6 +98,79 @@ def execute_on_appliances_async(
     
     return results, errors
 
+def _get_appliance_connection_params(
+    config,
+    logger,
+    appliance_name: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Helper function to get appliance connection parameters.
+    Reduces code duplication across appliance operation functions.
+    
+    Returns:
+        Dict with keys: appliance_config, host, user, password, prompt_regex, appliance_type
+        or None if validation fails
+    """
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return None
+    
+    appliance_loader = ApplianceConfigLoader()
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return None
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return None
+    
+    # Get user from config if not provided
+    if not user:
+        user = appliance_loader.get_default_user(appliance_type) if appliance_type else "cli"
+    
+    # Validate user is not None
+    if not user:
+        logger.error(f"No user configured for appliance '{appliance_name}' (type: {appliance_type})")
+        return None
+    
+    # Get password from custom_variables if not provided
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return None
+    
+    # Get prompt regex from config if not provided
+    if not prompt_regex and appliance_type:
+        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+    
+    if not prompt_regex:
+        logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+        return None
+    
+    return {
+        'appliance_config': appliance_config,
+        'host': host,
+        'user': user,
+        'password': password,
+        'prompt_regex': prompt_regex,
+        'appliance_type': appliance_type
+    }
+
+
 def restart_appliance(
     config,
     logger,
@@ -307,55 +380,25 @@ def configure_store_settings(
     Returns:
         bool: True if successful, False otherwise
     """
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
     logger.info("=" * 80)
     logger.info(f"CONFIGURE STORE SETTINGS: {appliance_name}")
     logger.info("=" * 80)
     
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+    # Get connection parameters using helper function
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
     
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
+    host = params['host']
+    user = params['user']
+    password = params['password']
+    prompt_regex = params['prompt_regex']
+    appliance_type = params['appliance_type']
     
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+    # Validate required parameters (should not be None after _get_appliance_connection_params)
+    if not user or not password or not prompt_regex:
+        logger.error(f"Missing required connection parameters for appliance '{appliance_name}'")
         return False
-    
-    # Get user from config if not provided
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    # Get prompt regex from config if not provided
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
     
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
@@ -478,65 +521,34 @@ def set_shared_secret(
     Example:
         set_shared_secret(config, logger, 'cm02', shared_secret='guardium')
     """
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
     logger.info("=" * 80)
     logger.info(f"SET SHARED SECRET: {appliance_name}")
     logger.info("=" * 80)
     
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+    # Get connection parameters using helper function
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
     
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
+    host = params['host']
+    user = params['user']
+    password = params['password']
+    prompt_regex = params['prompt_regex']
+    appliance_type = params['appliance_type']
     
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+    # Validate required parameters (should not be None after _get_appliance_connection_params)
+    if not user or not password or not prompt_regex:
+        logger.error(f"Missing required connection parameters for appliance '{appliance_name}'")
         return False
     
-    target_shared_secret = shared_secret
-    if not target_shared_secret:
-        target_shared_secret = config.get_custom_variable('shared_secret')
-        if target_shared_secret:
-            logger.info("Using shared_secret from custom_variables")
-    
-    if not target_shared_secret:
-        target_shared_secret = "guardium"
+    # Get shared secret value
+    target_shared_secret = shared_secret or config.get_custom_variable('shared_secret') or "guardium"
+    if shared_secret:
+        logger.info("Using provided shared_secret")
+    elif config.get_custom_variable('shared_secret'):
+        logger.info("Using shared_secret from custom_variables")
+    else:
         logger.info("Using default shared_secret: guardium")
-    
-    # Get user from config if not provided
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    # Get prompt regex from config if not provided
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
     
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
@@ -1579,13 +1591,14 @@ def reset_cli_password(
     debug: bool = True
 ) -> bool:
     
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
     logger.info("=" * 80)
     logger.info(f"RESET CLI PASSWORD: {appliance_name}")
     logger.info("=" * 80)
+    
+    # Validate appliance exists and get host
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
     
     appliance_loader = ApplianceConfigLoader()
     appliance_config = appliance_loader.get_appliance(appliance_name)
@@ -1601,6 +1614,7 @@ def reset_cli_password(
         logger.error(f"No IP address configured for appliance '{appliance_name}'")
         return False
     
+    # Get passwords from custom_variables if not provided
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_password:
