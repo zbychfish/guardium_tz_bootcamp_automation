@@ -15,7 +15,7 @@ appliances:
     port: 22
    
   appnode1-suffix:
-    ip: "10.240.64.43"
+    ip: "10.240.64.44"
     type: "appnode"
     description: "Application Node"
 
