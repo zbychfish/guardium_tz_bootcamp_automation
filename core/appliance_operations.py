@@ -449,7 +449,6 @@ def configure_store_settings(
         logger.error(traceback.format_exc())
         return False
 
-
 def set_shared_secret(
     config,
     logger,

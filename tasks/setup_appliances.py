@@ -151,6 +151,7 @@ def set_shared_secret_all(
     logger.info("=" * 80)
     
     return failed_count == 0
+
 def configure_store_settings_all(
     config,
     logger,
