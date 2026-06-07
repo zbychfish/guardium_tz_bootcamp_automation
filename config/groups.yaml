@@ -179,7 +179,7 @@ groups:
         description: "Install policy on collector via REST API"
         args:
           cm_appliance: "cm"
-          collector_appliance: "coll2"
+          collector_appliance: "coll1"
           policy_name: "Default bootcamp policy"
           debug: true
 
@@ -195,7 +195,7 @@ groups:
         module: tasks.labs
         description: "Import GIM module files to Guardium appliance"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm"
           debug: false
       
   atap_lab:
