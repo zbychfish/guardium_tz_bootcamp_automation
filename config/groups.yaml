@@ -58,7 +58,7 @@ groups:
         args:
           # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from custom_variables
           # cli_password: "password"  # Optional - defaults to cli_pwd from custom_variables
-          debug: true
+          debug: false
       
       - name: create_oauth_client
         function: create_oauth_client
@@ -96,14 +96,14 @@ groups:
         description: "Set shared secret on all appliances (parallel execution). Uses 'shared_secret' from custom_variables, defaults to 'guardium' if not found."
         args:
           # shared_secret: "guardium"  # Optional - defaults to shared_secret from custom_variables or "guardium"
-          debug: true
+          debug: false
       
       - name: configure_store_settings_all
         function: configure_store_settings_all
         module: tasks.setup_appliances
         description: "Configure store settings on all appliances: run_cleanup_orphans_daily off, purge_age_period 0 (parallel execution)"
         args:
-          debug: true
+          debug: false
 
       - name: restart_all_appliances_after_initial_setup
         function: restart_appliance_all
@@ -132,7 +132,7 @@ groups:
           cm_port: 8443
           timeout: 600  # 10 minutes per appliance
           registration_check_delay: 120  # Seconds to wait before checking status after timeout or "Fail:" (default: 120)
-          debug: true
+          debug: false
 
       - name: restart_all_appliances_after_managed_by_cm
         function: restart_appliance_all
@@ -151,7 +151,7 @@ groups:
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
-          debug: true
+          debug: false
 
       - name: prepare_appliances_for_patching
         function: prepare_appliances_for_patching_all
@@ -160,7 +160,7 @@ groups:
         args:
           patches_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
           # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from machines_info.json
-          debug: true
+          debug: false
 
       - name: install_and_monitor_patches_all
         function: install_and_monitor_patches_all
@@ -171,7 +171,7 @@ groups:
           reinstall_answer: "y"  # Answer to reinstall question (default: "y")
           check_interval: 120  # Seconds between status checks (default: 60)
           max_checks: 60  # Maximum number of checks before timeout (default: 60 = 1 hour with 60s interval)
-          debug: true
+          debug: false
       
       - name: install_policy_on_collector
         function: install_policy_on_collector
@@ -181,7 +181,7 @@ groups:
           cm_appliance: "cm"
           collector_appliance: "coll1"
           policy_name: "Default bootcamp policy"
-          debug: true
+          debug: false
 
   gim_lab:
     name: "GIM Lab"
@@ -225,7 +225,7 @@ groups:
           collector_name: "coll1"
           module: "BUNDLE-STAP"
           module_version: "12.2.2.0_r123489_3"
-          debug: true
+          debug: false
 
       - name: enable_atap_for_postgres_on_raptor
         function: enable_atap_for_postgres_on_raptor
