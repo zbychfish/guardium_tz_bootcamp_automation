@@ -65,7 +65,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create OAuth client and save client_secret to .client_secret file"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm"
           client_id: "BOOTCAMP"
            
       - name: create_demo_user
@@ -73,7 +73,7 @@ groups:
         module: tasks.setup_appliances
         description: "Create demo user in Guardium via REST API"
         args:
-          appliance_name: "cm02"  # Name from config/appliances.yaml
+          appliance_name: "cm"  # Name from config/appliances.yaml
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
@@ -113,7 +113,7 @@ groups:
         module: tasks.setup_appliances
         description: "Set unit type to manager via CLI"
         args:
-          appliance_name: "cm02"
+          appliance_name: "cm"
           debug: false
       
       - name: register_appliances_on_cm
@@ -142,7 +142,7 @@ groups:
         module: tasks.setup_appliances
         description: "Import definitions (default policy and full SQL report) to CM via REST API"
         args:
-          cm_appliance: "cm02"
+          cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: true
 
@@ -171,7 +171,7 @@ groups:
         module: tasks.setup_appliances
         description: "Install policy on collector via REST API"
         args:
-          cm_appliance: "cm02"
+          cm_appliance: "cm"
           collector_appliance: "coll2"
           policy_name: "Default bootcamp policy"
           debug: true
@@ -214,8 +214,8 @@ groups:
         module: tasks.labs
         description: "Install STAP (S-TAP) agent on raptor using GIM"
         args:
-          appliance_name: "cm02"
-          collector_name: "coll2"
+          appliance_name: "cm"
+          collector_name: "coll1"
           module: "BUNDLE-STAP"
           module_version: "12.2.2.0_r123489_3"
           debug: true
@@ -230,8 +230,8 @@ groups:
         module: tasks.labs
         description: "Correct MySQL Inspection Engine definitions"
         args:
-          cm_appliance: "cm02"
-          collector_appliance: "coll2"
+          cm_appliance: "cm"
+          collector_appliance: "coll1"
 
       - name: configure_ssl_for_mongo
         function: configure_ssl_for_mongo
@@ -266,7 +266,7 @@ groups:
         module: tasks.labs
         description: "Configure DB2 Exit Inspection Engine on collector"
         args:
-          cm_appliance: "cm02"
-          collector_appliance: "coll2"
+          cm_appliance: "cm"
+          collector_appliance: "coll1"
 
 # Made with Bob
