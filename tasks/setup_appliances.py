@@ -746,9 +746,9 @@ def create_demo_user(
             logger.info("\n➜ Assigning roles to demo user...")
             result = api.set_user_roles(
                 username='demo',
-                roles='admin,cli,user,vulnerability-assess'
+                roles='admin,cli,user,vulnerability-assess,fam'
             )
-            logger.info("✓ Roles assigned: admin, cli, user, vulnerability-assess")
+            logger.info("✓ Roles assigned: admin, cli, user, vulnerability-assess, fam")
             
         else:
             logger.info("\nℹ Demo user already exists")
