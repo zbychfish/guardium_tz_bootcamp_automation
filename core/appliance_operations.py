@@ -170,7 +170,6 @@ def _get_appliance_connection_params(
         'appliance_type': appliance_type
     }
 
-
 def restart_appliance(
     config,
     logger,
@@ -354,7 +353,7 @@ def restart_appliance(
     logger.error("✗ Restart failed after all retry attempts")
     return False
 
-def configure_store_settings(
+def configure_aggr_settings(
     config,
     logger,
     appliance_name: str,
@@ -364,7 +363,7 @@ def configure_store_settings(
     debug: bool = True
 ) -> bool:
     """
-    Configure store settings on Guardium appliance:
+    Configure aggregation settings on Guardium appliance:
     - store run_cleanup_orphans_daily off (all appliances)
     - store purge_age_period 0 (only on CM appliances, with confirmation)
     
@@ -381,7 +380,7 @@ def configure_store_settings(
         bool: True if successful, False otherwise
     """
     logger.info("=" * 80)
-    logger.info(f"CONFIGURE STORE SETTINGS: {appliance_name}")
+    logger.info(f"CONFIGURE AGGREGATION SETTINGS: {appliance_name}")
     logger.info("=" * 80)
     
     # Get connection parameters using helper function

@@ -12,7 +12,7 @@ from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_operations import (
     restart_appliance as core_restart_appliance,
     configure_hosts_resolving as core_configure_hosts,
-    configure_store_settings,
+    configure_aggr_settings,
     execute_on_appliances_async,
     reset_cli_password,
     set_shared_secret,
@@ -152,23 +152,23 @@ def set_shared_secret_all(
     
     return failed_count == 0
 
-def configure_store_settings_all(
+def configure_aggr_settings_all(
     config,
     logger,
     verbose: bool = True,
     debug: bool = True
 ) -> bool:
     """
-    Configure store settings on all appliances:
+    Configure aggregation settings on all appliances:
     - store run_cleanup_orphans_daily off
-    - store purge_age_period 0 (with confirmation)
+    - store purge_age_period 0 (with confirmation, only on CM)
     """
     
-    from core.appliance_operations import configure_store_settings, execute_on_appliances_async
+    from core.appliance_operations import configure_aggr_settings, execute_on_appliances_async
     from core.appliance_config_loader import ApplianceConfigLoader
     
     logger.info("=" * 80)
-    logger.info("CONFIGURE STORE SETTINGS ON ALL APPLIANCES")
+    logger.info("CONFIGURE AGGREGATION SETTINGS ON ALL APPLIANCES")
     logger.info("=" * 80)
     
     appliance_loader = ApplianceConfigLoader()
@@ -192,8 +192,8 @@ def configure_store_settings_all(
     
     results, errors = execute_on_appliances_async(
         appliances=appliance_names,
-        operation_func=configure_store_settings,
-        operation_name="configure_store_settings",
+        operation_func=configure_aggr_settings,
+        operation_name="configure_aggr_settings",
         logger=logger,
         config=config,
         debug=debug
@@ -386,9 +386,6 @@ def install_policy_on_collector(
             import traceback
             logger.error(traceback.format_exc())
         return False
-
-
-
 
 def initial_collector_settings(
     config,
@@ -1004,7 +1001,6 @@ def restart_appliance_all(
     
     # Return True only if all succeeded
     return failed_count == 0
-
 
 def configure_system_settings_all(
     config,

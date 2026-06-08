@@ -90,7 +90,7 @@ def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
     if verbose:
         logger.info("Step 4: Installing required packages")
     commands = [
-        "dnf install unzip lsof -y"
+        "dnf install unzip lsof nmap-ncat -y"
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Package installation failed")
