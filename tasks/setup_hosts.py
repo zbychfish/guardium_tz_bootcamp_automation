@@ -714,7 +714,14 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
         True if successful, False otherwise
     """
     machines = config.get_machines()
-    credentials = config.get_credentials()
+    
+    # Get credentials from custom_variables (new JSON format)
+    credentials = {
+        'username': config.get_custom_variable('username', 'root'),
+        'password': config.get_custom_variable('password'),
+        'ssh_key': config.get_custom_variable('ssh_private_key')
+    }
+    
     root_password = config.get_custom_variable('pwd')
     timezone = config.get_custom_variable('timezone')
     
