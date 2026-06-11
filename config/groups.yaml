@@ -22,18 +22,23 @@ groups:
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
-    auto_execute: true
+    auto_execute: false
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
         function: deploy_mysql_on_raptor_task
         module: tasks.deploy_mysql
-        description: "Deploy MySQL on raptor"
+        description: "Deploy MySQL 9.7 on raptor"
       
       - name: deploy_mongo_on_raptor
         function: deploy_mongo_on_raptor_task
         module: tasks.deploy_mongo
-        description: "Deploy MongoDB on raptor"
+        description: "Deploy MongoDB 8.3 on raptor"
+
+      - name: deploy_postgres_on_raptor
+        function: deploy_postgres_on_raptor
+        module: tasks.deploy_postgres
+        description: "Install postgres 16 on raptor"
       
       - name: deploy_oracle_on_sauropod
         function: deploy_oracle_on_sauropod
@@ -43,7 +48,8 @@ groups:
       - name: deploy_db2_on_raptor
         function: deploy_db2_on_raptor_task
         module: tasks.deploy_db2
-        description: "Install Db2 prerequisites on raptor"
+        description: "Install Db2 11.5 on raptor"
+
 
   setup_appliances:
     name: "Setup Appliances"
@@ -204,10 +210,7 @@ groups:
     auto_execute: false  # Executed after marker, on demand
     dependencies: [setup_appliances, gim_lab]  # Requires initial_preparation to be completed
     stages:
-      - name: deploy_postgres_on_raptor
-        function: deploy_postgres_on_raptor
-        module: tasks.deploy_postgres
-
+      
       - name: install_gim_on_raptor
         function: install_gim_on_raptor
         module: tasks.labs
