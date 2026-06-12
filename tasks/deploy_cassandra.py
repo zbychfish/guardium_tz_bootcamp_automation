@@ -211,19 +211,4 @@ gpgkey=https://downloads.apache.org/cassandra/KEYS
         ssh.disconnect()
 
 
-def deploy_cassandra_on_sauropod_task(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    """
-    Wrapper function for group-based execution.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    return deploy_cassandra_on_sauropod(config, logger, verbose)
-
-
 # Made with Bob
