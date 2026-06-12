@@ -704,6 +704,7 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
     """
     Wrapper function for group-based execution.
     Sets up hostname, timezone, /etc/hosts, SSHD, and root password on all machines.
+    Automatically excludes appliances (cm, appnodeX, collX).
     
     Args:
         config: ConfigLoader instance
@@ -713,7 +714,15 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    machines = config.get_machines()
+    # Get ALL machines for /etc/hosts generation (including appliances)
+    all_machines = config.get_machines()
+    
+    # Get only regular machines for configuration (exclude appliances)
+    regular_machines = config.get_regular_machines()
+    
+    logger.info(f"Total machines: {len(all_machines)}")
+    logger.info(f"Regular machines to configure: {len(regular_machines)}")
+    logger.info(f"Appliances (excluded from configuration): {len(all_machines) - len(regular_machines)}")
     
     # Get credentials from custom_variables (new JSON format)
     credentials = {
@@ -725,12 +734,12 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
     root_password = config.get_custom_variable('pwd')
     timezone = config.get_custom_variable('timezone')
     
-    # Setup local machine (raptor)
+    # Setup local machine (raptor) - use ALL machines for /etc/hosts
     if verbose:
         logger.info("Setting up local machine (raptor)")
     
     success = setup_hosts_locally(
-        all_machines=machines,
+        all_machines=all_machines,  # Include appliances in /etc/hosts
         logger=logger,
         machine_name="raptor",
         configure_sshd=True,
@@ -743,10 +752,15 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
         logger.error("Failed to setup local machine")
         return False
     
-    # Setup remote machines
+    # Setup remote machines - only regular machines
     remote_machines = config.get('tasks', {}).get('remote_machines', [])
     
     for machine_name in remote_machines:
+        # Skip if it's an appliance
+        if config.is_appliance(machine_name):
+            logger.info(f"Skipping appliance: {machine_name} (appliances are not configured by setup_hosts)")
+            continue
+        
         machine_info = config.get_machine(machine_name)
         if not machine_info:
             logger.warning(f"Machine {machine_name} not found in configuration")
@@ -758,7 +772,7 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
         success = setup_hosts_on_remote_machine(
             machine_name=machine_name,
             machine_info=machine_info,
-            all_machines=machines,
+            all_machines=all_machines,  # Include appliances in /etc/hosts
             credentials=credentials,
             logger=logger,
             use_private_ip=True,

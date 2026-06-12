@@ -36,9 +36,14 @@ paths:
 tasks:
   # List of remote machines to configure /etc/hosts on
   # These names must match base machine names from machines_info.json
+  # Appliances (cm, appnodeX, collX) are automatically excluded
   remote_machines:
     - sauropod
     - ceratops
+    - raptor
+    - cm
+    - coll1
+    - appnode1
 
 # Custom settings
 # Add your own configuration sections here

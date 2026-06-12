@@ -205,6 +205,43 @@ class ConfigLoader:
         """
         return self.config.get('machines', {})
     
+    def is_appliance(self, machine_name: str) -> bool:
+        """
+        Check if machine is a Guardium appliance (cm, appnodeX, collX).
+        
+        Args:
+            machine_name: Base machine name (e.g., 'cm', 'appnode1', 'coll1')
+            
+        Returns:
+            True if machine is an appliance, False otherwise
+        """
+        # Check if name matches appliance patterns
+        appliance_patterns = [
+            'cm',           # Central Manager
+            'appnode',      # Application Nodes (appnode1, appnode2, etc.)
+            'coll',         # Collectors (coll1, coll2, etc.)
+        ]
+        
+        for pattern in appliance_patterns:
+            if machine_name.startswith(pattern):
+                return True
+        
+        return False
+    
+    def get_regular_machines(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get only regular machines (exclude appliances).
+        
+        Returns:
+            Dictionary of regular machines (raptor, sauropod, ceratops, etc.)
+        """
+        machines = self.get_machines()
+        return {
+            name: info
+            for name, info in machines.items()
+            if not self.is_appliance(name)
+        }
+    
     def get_machine(self, machine_name: str) -> Optional[Dict[str, Any]]:
         """
         Get configuration for a specific machine by base name.
