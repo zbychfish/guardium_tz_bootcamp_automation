@@ -6,7 +6,7 @@ groups:
   initial_preparation:
     name: "Initial Preparation"
     description: "Basic system setup and database deployments before marker creation"
-    auto_execute: true  # Executed automatically before marker
+    auto_execute: false  # Executed automatically before marker
     dependencies: []  # No dependencies - this is the first group
     stages:
       - name: setup_hosts
