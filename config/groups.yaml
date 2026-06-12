@@ -49,6 +49,11 @@ groups:
         function: deploy_db2_on_raptor_task
         module: tasks.deploy_db2
         description: "Install Db2 11.5 on raptor"
+      
+      - name: deploy_cassandra_on_sauropod
+        function: deploy_cassandra_on_sauropod_task
+        module: tasks.deploy_cassandra
+        description: "Deploy Apache Cassandra 4.1 on sauropod"
 
 
   setup_appliances:

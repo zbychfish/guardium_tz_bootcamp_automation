@@ -706,18 +706,7 @@ EOF
             
             # Step 20: Install SQLcl
             if verbose:
-                logger.info("Step 20: Installing SQLcl")
-            
-            # Install Java 11 if not present
-            java_install_cmd = "dnf install -y java-11-openjdk"
-            result = ssh.execute_command(
-                java_install_cmd,
-                timeout=300,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.warning("Failed to install Java 11, SQLcl installation may fail")
+                logger.info("Step 20: Installing SQLcl (Java 11 should already be installed)")
             
             # Download and install SQLcl
             sqlcl_install_commands = [

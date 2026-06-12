@@ -11,10 +11,11 @@ from pathlib import Path
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_commands, download_and_extract
+from core import execute_commands, download_and_extract, ConfigLoader
+from core.ssh_client import SSHClient
 
 
-def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
+def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: bool = True) -> bool:
     """
     Prepare system for service deployments by:
     1. Updating system packages (excluding kernel)
@@ -88,13 +89,70 @@ def preparation_for_services_deployment(logger, verbose: bool = True) -> bool:
     
     # Step 4: RH packages installation for different tasks
     if verbose:
-        logger.info("Step 4: Installing required packages")
+        logger.info("Step 4: Installing required packages on raptor")
     commands = [
         "dnf install unzip lsof nmap-ncat -y"
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Package installation failed")
         return False
+    
+    if verbose:
+        logger.info("✓ Required packages installed on raptor")
+    
+    # Step 5: Install Java on sauropod (required for Oracle SQLcl)
+    if verbose:
+        logger.info("Step 5: Installing Java 11 on sauropod")
+    
+    # Get sauropod machine IP (use private IP for internal communication)
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.warning("Could not find sauropod machine in configuration, skipping Java installation")
+    else:
+        # Get SSH configuration
+        ssh_config = config.get('ssh', {})
+        ssh_port = ssh_config.get('port', 2223)
+        ssh_username = ssh_config.get('username', 'root')
+        ssh_password = config.get_custom_variable('password')
+        
+        if verbose:
+            logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
+        
+        # Connect to sauropod via SSH
+        ssh = SSHClient(
+            host=sauropod_ip,
+            port=ssh_port,
+            username=ssh_username,
+            password=ssh_password
+        )
+        
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod via SSH")
+            return False
+        
+        try:
+            # Install Java 11 on sauropod
+            java_install_cmd = "dnf install -y java-11-openjdk"
+            result = ssh.execute_command(
+                java_install_cmd,
+                timeout=300,
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                logger.error("Failed to install Java 11 on sauropod")
+                return False
+            
+            if verbose:
+                logger.info("✓ Java 11 installed successfully on sauropod")
+        
+        finally:
+            ssh.disconnect()
+    
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("System preparation completed successfully")
+        logger.info("=" * 80)
     
     return True
 
@@ -106,11 +164,11 @@ def preparation_for_services_deployment_task(config, logger, verbose: bool = Tru
     Wrapper function for group-based execution.
     
     Args:
-        config: ConfigLoader instance (not used, for compatibility)
+        config: ConfigLoader instance
         logger: Logger instance
         verbose: Enable verbose logging
         
     Returns:
         True if successful, False otherwise
     """
-    return preparation_for_services_deployment(logger, verbose)
+    return preparation_for_services_deployment(config, logger, verbose)
