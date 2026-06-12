@@ -5,8 +5,6 @@ Appliance Configuration Loader
 Loads and manages Guardium appliance configurations from machines_info.json
 """
 
-import yaml
-from pathlib import Path
 from typing import Dict, Any, Optional
 from core.logger import get_logger
 
@@ -16,32 +14,19 @@ logger = get_logger(__name__)
 class ApplianceConfigLoader:
     """Loads and manages appliance configurations from machines_info.json via ConfigLoader"""
     
-    def __init__(self, config_file: str = "config/appliances.yaml", config_loader=None):
+    def __init__(self, config_loader=None):
         """
         Initialize appliance config loader
         
         Args:
-            config_file: Path to appliances YAML configuration file (for type definitions)
             config_loader: ConfigLoader instance (for getting appliances from machines_info.json)
         """
-        self.config_file = Path(config_file)
         self.config_loader = config_loader
         self.appliances: Dict[str, Dict[str, Any]] = {}
-        self.appliance_types: Dict[str, Dict[str, Any]] = {}
         self._load_config()
     
     def _load_config(self):
-        """Load appliances configuration from machines_info.json and type definitions from YAML"""
-        # Load appliance type definitions from YAML (prompts, default users, etc.)
-        if self.config_file.exists():
-            try:
-                with open(self.config_file, 'r') as f:
-                    config = yaml.safe_load(f)
-                self.appliance_types = config.get('appliance_types', {})
-                logger.debug(f"Loaded appliance type definitions from {self.config_file}")
-            except Exception as e:
-                logger.warning(f"Failed to load appliance types from {self.config_file}: {e}")
-        
+        """Load appliances configuration from machines_info.json"""
         # Load appliances from machines_info.json via ConfigLoader
         if self.config_loader:
             machines_appliances = self.config_loader.get_appliances()
@@ -127,18 +112,6 @@ class ApplianceConfigLoader:
             if config.get('type') == appliance_type
         }
     
-    def get_type_config(self, appliance_type: str) -> Optional[Dict[str, Any]]:
-        """
-        Get type configuration (default prompts, user, etc.)
-        
-        Args:
-            appliance_type: Type of appliance
-        
-        Returns:
-            Type configuration dict or None if not found
-        """
-        return self.appliance_types.get(appliance_type)
-    
     def get_default_prompt(self, appliance_type: str, configured: bool = True) -> Optional[str]:
         """
         Get default prompt regex for appliance type
@@ -148,19 +121,9 @@ class ApplianceConfigLoader:
             configured: True for configured prompt, False for unconfigured (collectors only)
         
         Returns:
-            Prompt regex string or None
+            Prompt regex string (hardcoded default)
         """
-        type_config = self.get_type_config(appliance_type)
-        if not type_config:
-            return None
-        
-        if appliance_type == 'collector' and not configured:
-            return type_config.get('default_prompt_unconfigured')
-        
-        if appliance_type == 'collector' and configured:
-            return type_config.get('default_prompt_configured')
-        
-        return type_config.get('default_prompt')
+        return r"[\w-]+(\\.demo\\.guardium)?>"
     
     def get_default_user(self, appliance_type: str) -> str:
         """
@@ -170,11 +133,8 @@ class ApplianceConfigLoader:
             appliance_type: Type of appliance
         
         Returns:
-            Default username (defaults to 'cli')
+            Default username (always 'cli')
         """
-        type_config = self.get_type_config(appliance_type)
-        if type_config:
-            return type_config.get('default_user', 'cli')
         return 'cli'
     
     def list_appliances(self) -> None:
