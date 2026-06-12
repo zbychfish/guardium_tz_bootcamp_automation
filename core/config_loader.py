@@ -242,6 +242,20 @@ class ConfigLoader:
             if not self.is_appliance(name)
         }
     
+    def get_appliances(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get only appliances (cm, appnodeX, collX).
+        
+        Returns:
+            Dictionary of appliances (cm, appnode1, coll1, etc.)
+        """
+        machines = self.get_machines()
+        return {
+            name: info
+            for name, info in machines.items()
+            if self.is_appliance(name)
+        }
+    
     def get_machine(self, machine_name: str) -> Optional[Dict[str, Any]]:
         """
         Get configuration for a specific machine by base name.

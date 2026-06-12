@@ -40,10 +40,7 @@ tasks:
   remote_machines:
     - sauropod
     - ceratops
-    - raptor
-    - cm
-    - coll1
-    - appnode1
+  
 
 # Custom settings
 # Add your own configuration sections here
