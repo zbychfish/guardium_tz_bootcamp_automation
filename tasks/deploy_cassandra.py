@@ -50,7 +50,12 @@ def deploy_cassandra_on_sauropod(config: ConfigLoader, logger, verbose: bool = T
     ssh_config = config.get('ssh', {})
     ssh_port = ssh_config.get('port', 2223)
     ssh_username = ssh_config.get('username', 'root')
-    ssh_password = config.get_custom_variable('password')
+    
+    # Get root password from custom_variables
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
     
     if verbose:
         logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
@@ -60,7 +65,8 @@ def deploy_cassandra_on_sauropod(config: ConfigLoader, logger, verbose: bool = T
         host=sauropod_ip,
         port=ssh_port,
         username=ssh_username,
-        password=ssh_password
+        password=root_password,
+        timeout=60
     )
     
     if not ssh.connect():
