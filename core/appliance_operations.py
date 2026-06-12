@@ -122,7 +122,7 @@ def _get_appliance_connection_params(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return None
@@ -205,7 +205,7 @@ def restart_appliance(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -630,7 +630,7 @@ def register_appliance(
         config: Configuration object
         logger: Logger instance
         appliance_name: Name of the appliance to register
-        cm_ip: Central Manager IP address (optional, auto-detected from appliances.yaml)
+        cm_ip: Central Manager IP address (optional, auto-detected from machines_info.json)
         cm_port: Central Manager port (default: 8443)
         user: SSH username (optional, uses default from appliance type)
         password: SSH password (optional, uses cli_pwd from custom_variables)
@@ -658,7 +658,7 @@ def register_appliance(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -677,7 +677,7 @@ def register_appliance(
                         if cfg.get('type', '').lower() == 'cm'}
         
         if not cm_appliances:
-            logger.error("No Central Manager found in appliances.yaml")
+            logger.error("No Central Manager found in machines_info.json")
             return False
         
         if len(cm_appliances) > 1:
@@ -891,7 +891,7 @@ def configure_hosts_resolving(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -934,7 +934,7 @@ def configure_hosts_resolving(
     # Get machines from config (loaded from machines_info.json)
     machines = config.get('machines', {})
     
-    # Get all appliances from appliances.yaml
+    # Get all appliances from machines_info.json
     all_appliances = appliance_loader.get_all_appliances()
     
     # Combine both sources
@@ -1115,7 +1115,7 @@ def set_timezone(
         appliance_config = appliance_loader.get_appliance(appliance_name)
         
         if not appliance_config:
-            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+            logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
             available = list(appliance_loader.get_all_appliances().keys())
             logger.error(f"Available appliances: {', '.join(available)}")
             return False
@@ -1269,7 +1269,7 @@ def configure_system_settings_consolidated(
         appliance_config = appliance_loader.get_appliance(appliance_name)
         
         if not appliance_config:
-            logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+            logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
             available = list(appliance_loader.get_all_appliances().keys())
             logger.error(f"Available appliances: {', '.join(available)}")
             return False
@@ -1315,10 +1315,10 @@ def configure_system_settings_consolidated(
         if not domain:
             domain = "demo.guardium"
         
-        # Use IP from appliances.yaml if not provided
+        # Use IP from machines_info.json if not provided
         if not ip_address:
             ip_address = host
-            logger.info(f"Using IP address from appliances.yaml: {ip_address}")
+            logger.info(f"Using IP address from machines_info.json: {ip_address}")
         
         # Determine timezone to use
         target_timezone = timezone
@@ -1612,7 +1612,7 @@ def reset_cli_password(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -1730,7 +1730,7 @@ def prepare_appliance_for_patching(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -2025,7 +2025,7 @@ def copy_files_to_appliance(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         return False
     
     host = appliance_config.get('ip')
@@ -2325,7 +2325,7 @@ def install_patch_on_appliance(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -2555,7 +2555,7 @@ def monitor_patch_installation(
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False

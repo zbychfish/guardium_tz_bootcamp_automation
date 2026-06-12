@@ -59,11 +59,11 @@ def import_gim_modules(
         return False
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         return False
     
     appliance_type = appliance_config.get('type')
@@ -168,7 +168,7 @@ def install_gim_on_raptor(
     This function executes the GIM shell installer with required parameters:
     - --dir: Installation directory (default: /opt/guardium)
     - --tapip: TAP IP address (raptor's own IP, auto-detected from machines_info if not provided)
-    - --sqlguardip: SQL Guard IP address (Central Manager IP, auto-detected from appliances.yaml if not provided)
+    - --sqlguardip: SQL Guard IP address (Central Manager IP, auto-detected from machines_info.json if not provided)
     
     Args:
         config: Configuration object
@@ -177,7 +177,7 @@ def install_gim_on_raptor(
         gim_installer_path: Path to GIM installer shell script
         install_dir: Installation directory (default: /opt/guardium)
         tapip: TAP IP address (optional, auto-detected from raptor machine in machines_info)
-        sqlguardip: SQL Guard IP address (optional, auto-detected from Central Manager in appliances.yaml)
+        sqlguardip: SQL Guard IP address (optional, auto-detected from Central Manager in machines_info.json)
         debug: Enable debug output
     
     Returns:
@@ -259,9 +259,9 @@ def install_gim_on_raptor(
             logger.error("TAP IP not provided and not found in machines config for raptor")
             return False
     
-    # Auto-detect sqlguardip from appliances.yaml if not provided (use CM, not collector)
+    # Auto-detect sqlguardip from machines_info.json if not provided (use CM, not collector)
     if not sqlguardip:
-        appliance_loader = ApplianceConfigLoader()
+        appliance_loader = ApplianceConfigLoader(config_loader=config)
         cms = appliance_loader.get_appliances_by_type('cm')
         
         if cms:
@@ -276,7 +276,7 @@ def install_gim_on_raptor(
                 logger.error(f"Central Manager '{first_cm_name}' has no IP address configured")
                 return False
         else:
-            logger.error("SQL Guard IP not provided and no Central Manager found in appliances.yaml")
+            logger.error("SQL Guard IP not provided and no Central Manager found in machines_info.json")
             return False
     
     logger.info(f"Installation parameters:")
@@ -368,11 +368,11 @@ def install_stap_on_raptor(
             return False
     
     # Get sqlguard_ip from collector_name
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     collector_config = appliance_loader.get_appliance(collector_name)
     
     if not collector_config:
-        logger.error(f"Collector '{collector_name}' not found in appliances.yaml")
+        logger.error(f"Collector '{collector_name}' not found in machines_info.json")
         return False
     
     sqlguard_ip = collector_config.get('ip')
@@ -470,7 +470,7 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
             logger.error("stap_host not provided and not found in machines config")
             return False
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     collector_config = appliance_loader.get_appliance(collector_appliance)
     if not collector_config:
         logger.error(f"Collector '{collector_appliance}' not found")
@@ -612,7 +612,7 @@ def configure_db2_exit_ie(config, logger, verbose=True, cm_appliance="cm02", col
             logger.error("stap_host not provided and not found in machines config")
             return False
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     collector_config = appliance_loader.get_appliance(collector_appliance)
     if not collector_config:
         logger.error(f"Collector '{collector_appliance}' not found")

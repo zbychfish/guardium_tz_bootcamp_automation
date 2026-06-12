@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Appliance Configuration Loader
-Loads and manages Guardium appliance configurations
+Loads and manages Guardium appliance configurations from machines_info.json
 """
 
 import yaml
@@ -14,38 +14,75 @@ logger = get_logger(__name__)
 
 
 class ApplianceConfigLoader:
-    """Loads and manages appliance configurations from YAML file"""
+    """Loads and manages appliance configurations from machines_info.json via ConfigLoader"""
     
-    def __init__(self, config_file: str = "config/appliances.yaml"):
+    def __init__(self, config_file: str = "config/appliances.yaml", config_loader=None):
         """
         Initialize appliance config loader
         
         Args:
-            config_file: Path to appliances YAML configuration file
+            config_file: Path to appliances YAML configuration file (for type definitions)
+            config_loader: ConfigLoader instance (for getting appliances from machines_info.json)
         """
         self.config_file = Path(config_file)
+        self.config_loader = config_loader
         self.appliances: Dict[str, Dict[str, Any]] = {}
         self.appliance_types: Dict[str, Dict[str, Any]] = {}
         self._load_config()
     
     def _load_config(self):
-        """Load appliances configuration from YAML file"""
-        if not self.config_file.exists():
-            logger.warning(f"Appliances config file not found: {self.config_file}")
-            return
+        """Load appliances configuration from machines_info.json and type definitions from YAML"""
+        # Load appliance type definitions from YAML (prompts, default users, etc.)
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r') as f:
+                    config = yaml.safe_load(f)
+                self.appliance_types = config.get('appliance_types', {})
+                logger.debug(f"Loaded appliance type definitions from {self.config_file}")
+            except Exception as e:
+                logger.warning(f"Failed to load appliance types from {self.config_file}: {e}")
         
-        try:
-            with open(self.config_file, 'r') as f:
-                config = yaml.safe_load(f)
+        # Load appliances from machines_info.json via ConfigLoader
+        if self.config_loader:
+            machines_appliances = self.config_loader.get_appliances()
             
-            self.appliances = config.get('appliances', {})
-            self.appliance_types = config.get('appliance_types', {})
+            # Convert to appliance format with type detection
+            for name, info in machines_appliances.items():
+                appliance_type = self._detect_appliance_type(name)
+                self.appliances[name] = {
+                    'ip': info.get('private_ip', info.get('host', '')),
+                    'type': appliance_type,
+                    'description': f"Auto-loaded from machines_info.json",
+                    'public_ip': info.get('host', ''),
+                    'private_ip': info.get('private_ip', ''),
+                    'fqdn': info.get('fqdn', ''),
+                    'full_name': info.get('full_name', name)
+                }
             
-            logger.info(f"Loaded {len(self.appliances)} appliance(s) from {self.config_file}")
-            
-        except Exception as e:
-            logger.error(f"Failed to load appliances config: {e}")
-            raise
+            logger.info(f"Loaded {len(self.appliances)} appliance(s) from machines_info.json")
+        else:
+            logger.warning("No ConfigLoader provided, appliances list will be empty")
+    
+    def _detect_appliance_type(self, name: str) -> str:
+        """
+        Detect appliance type from name
+        
+        Args:
+            name: Appliance base name (e.g., 'cm', 'coll1', 'appnode1')
+        
+        Returns:
+            Appliance type string
+        """
+        if name.startswith('cm'):
+            return 'cm'
+        elif name.startswith('coll'):
+            return 'collector'
+        elif name.startswith('appnode'):
+            return 'appnode'
+        elif name.startswith('aggr'):
+            return 'aggregator'
+        else:
+            return 'unknown'
     
     def get_appliance(self, name: str) -> Optional[Dict[str, Any]]:
         """

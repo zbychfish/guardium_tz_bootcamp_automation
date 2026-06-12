@@ -40,11 +40,12 @@ def reset_cli_password_all(
     logger.info("RESET CLI PASSWORD ON ALL APPLIANCES")
     logger.info("=" * 80)
     
-    appliance_loader = ApplianceConfigLoader()
+    # Load appliances from machines_info.json via ConfigLoader
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -104,11 +105,11 @@ def set_shared_secret_all(
     logger.info("SET SHARED SECRET ON ALL APPLIANCES")
     logger.info("=" * 80)
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -171,11 +172,11 @@ def configure_aggr_settings_all(
     logger.info("CONFIGURE AGGREGATION SETTINGS ON ALL APPLIANCES")
     logger.info("=" * 80)
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -317,11 +318,11 @@ def install_policy_on_collector(
     logger.info("INSTALL POLICY ON COLLECTOR")
     logger.info("=" * 80)
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     collector_config = appliance_loader.get_appliance(collector_appliance)
     
     if not collector_config:
-        logger.error(f"Collector '{collector_appliance}' not found in appliances.yaml")
+        logger.error(f"Collector '{collector_appliance}' not found in machines_info.json")
         return False
     
     collector_ip = collector_config.get('ip')
@@ -405,11 +406,11 @@ def initial_collector_settings(
     logger.info(f"Configuring initial settings for collector: {collector_name}")
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     collector_config = appliance_loader.get_appliance(collector_name)
     
     if not collector_config:
-        logger.error(f"Collector '{collector_name}' not found in appliances.yaml")
+        logger.error(f"Collector '{collector_name}' not found in machines_info.json")
         available = list(appliance_loader.get_appliances_by_type('collector').keys())
         logger.error(f"Available collectors: {', '.join(available)}")
         return False
@@ -555,12 +556,11 @@ def create_oauth_client(
     logger.info(f"CREATE OAUTH CLIENT: {client_id}")
     logger.info("=" * 80)
     
-    appliances_file = config.config_file.parent / "appliances.yaml"
-    appliance_loader = ApplianceConfigLoader(appliances_file)
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in config/appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         return False
     
     # Get password from custom_variables if not provided
@@ -797,11 +797,11 @@ def set_unit_type_manager(
     logger.info(f"SET UNIT TYPE MANAGER: {appliance_name}")
     logger.info("=" * 80)
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in appliances.yaml")
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
         available = list(appliance_loader.get_all_appliances().keys())
         logger.error(f"Available appliances: {', '.join(available)}")
         return False
@@ -926,11 +926,11 @@ def restart_appliance_all(
     logger.info("=" * 80)
     
     # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     # Group appliances by type
@@ -1027,11 +1027,11 @@ def configure_system_settings_all(
     logger.info("=" * 80)
     
     # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     # Group appliances by type
@@ -1143,7 +1143,7 @@ def register_appliances_all(
         config: Configuration object
         logger: Logger instance
         verbose: Enable verbose output
-        cm_ip: Central Manager IP (optional, auto-detected from appliances.yaml)
+        cm_ip: Central Manager IP (optional, auto-detected from machines_info.json)
         cm_port: Central Manager port (default: 8443)
         user: SSH username (optional, uses default from appliance type)
         password: SSH password (optional, uses cli_pwd from custom_variables)
@@ -1163,11 +1163,11 @@ def register_appliances_all(
     logger.info("=" * 80)
     
     # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     # Filter out CM - only register Collectors and AppNodes
@@ -1278,11 +1278,11 @@ def prepare_appliances_for_patching_all(
     logger.info("=" * 80)
     
     # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     # Sort by type: CM → Collectors → AppNodes
@@ -1377,11 +1377,11 @@ def install_and_monitor_patches_all(
     logger.info("=" * 80)
     
     # Load all appliances
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
     
     if not all_appliances:
-        logger.error("No appliances found in appliances.yaml")
+        logger.error("No appliances found in machines_info.json")
         return False
     
     # Get patch selection if not provided
@@ -1393,7 +1393,7 @@ def install_and_monitor_patches_all(
                         if cfg.get('type', '').lower() == 'cm'}
         
         if not cm_appliances:
-            logger.error("No Central Manager found in appliances.yaml")
+            logger.error("No Central Manager found in machines_info.json")
             return False
         
         cm_name = list(cm_appliances.keys())[0]

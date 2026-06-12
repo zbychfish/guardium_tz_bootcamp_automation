@@ -668,7 +668,7 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     Args:
         config: ConfigLoader instance
         logger: Logger instance
-        appliance_name: Name of appliance from config/appliances.yaml (default: cm01)
+        appliance_name: Name of appliance from machines_info.json (default: cm)
     
     Returns:
         GuardiumRestAPI instance
@@ -684,15 +684,12 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     from pathlib import Path
     from .appliance_config_loader import ApplianceConfigLoader
     
-    # Get path to appliances.yaml file
-    appliances_file = config.config_file.parent / "appliances.yaml"
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(appliances_file)
+    # Load appliance configuration from machines_info.json
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
-        raise ValueError(f"Appliance '{appliance_name}' not found in config/appliances.yaml")
+        raise ValueError(f"Appliance '{appliance_name}' not found in machines_info.json")
     
     appliance_ip = appliance_config.get('ip')
     if not appliance_ip:
