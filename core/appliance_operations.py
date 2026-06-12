@@ -118,7 +118,7 @@ def _get_appliance_connection_params(
         logger.error("appliance_name is required")
         return None
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -201,7 +201,7 @@ def restart_appliance(
     logger.info("=" * 80)
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -654,7 +654,7 @@ def register_appliance(
     logger.info("=" * 80)
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -887,7 +887,7 @@ def configure_hosts_resolving(
     logger.info("=" * 80)
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -1111,7 +1111,7 @@ def set_timezone(
         logger.info("=" * 80)
         
         # Load appliance configuration
-        appliance_loader = ApplianceConfigLoader()
+        appliance_loader = ApplianceConfigLoader(config_loader=config)
         appliance_config = appliance_loader.get_appliance(appliance_name)
         
         if not appliance_config:
@@ -1265,7 +1265,7 @@ def configure_system_settings_consolidated(
         logger.info("=" * 80)
         
         # Load appliance configuration
-        appliance_loader = ApplianceConfigLoader()
+        appliance_loader = ApplianceConfigLoader(config_loader=config)
         appliance_config = appliance_loader.get_appliance(appliance_name)
         
         if not appliance_config:
@@ -1608,7 +1608,7 @@ def reset_cli_password(
         logger.error("appliance_name is required")
         return False
     
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -1726,7 +1726,7 @@ def prepare_appliance_for_patching(
     logger.info("=" * 80)
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -2021,7 +2021,7 @@ def copy_files_to_appliance(
     
     # Load appliance configuration
     from core.appliance_config_loader import ApplianceConfigLoader
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -2321,7 +2321,7 @@ def install_patch_on_appliance(
     logger.info("=" * 80)
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
@@ -2551,7 +2551,7 @@ def monitor_patch_installation(
     logger.info("=" * 80)
     
     # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader()
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
     
     if not appliance_config:
