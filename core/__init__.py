@@ -9,6 +9,7 @@ Core functionality for the machine automation framework
 from .state_manager import StateManager      # Track and persist task execution state
 from .config_loader import ConfigLoader      # Load and manage configuration from YAML and JSON
 from .ssh_client import SSHClient            # Execute commands on remote machines via SSH
+from .windows_client import WindowsClient    # Execute commands on Windows machines via WinRM
 from .group_manager import GroupManager      # Manage logical groups of stages
 
 # Logging
@@ -44,6 +45,7 @@ __all__ = [
     'setup_logger',
     'get_logger',
     'SSHClient',
+    'WindowsClient',
     'get_env',
     'require_env',
     'strip_ansi',

@@ -3,6 +3,9 @@
 # SSH and Remote Operations
 paramiko>=3.0.0
 
+# Windows Remote Management
+pywinrm>=0.4.3
+
 # Configuration Management
 PyYAML>=6.0
 
