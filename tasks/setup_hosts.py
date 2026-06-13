@@ -752,13 +752,19 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
         logger.error("Failed to setup local machine")
         return False
     
-    # Setup remote machines - only regular machines
+    # Setup remote machines - only regular machines, exclude Windows
     remote_machines = config.get('tasks', {}).get('remote_machines', [])
+    windows_machines = config.get('tasks', {}).get('windows_machines', [])
     
     for machine_name in remote_machines:
         # Skip if it's an appliance
         if config.is_appliance(machine_name):
             logger.info(f"Skipping appliance: {machine_name} (appliances are not configured by setup_hosts)")
+            continue
+        
+        # Skip if it's a Windows machine
+        if machine_name in windows_machines:
+            logger.info(f"Skipping Windows machine: {machine_name} (only added to /etc/hosts)")
             continue
         
         machine_info = config.get_machine(machine_name)

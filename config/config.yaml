@@ -40,18 +40,6 @@ tasks:
   remote_machines:
     - sauropod
     - ceratops
-  
-
-# Custom settings
-# Add your own configuration sections here
-custom:
-  # Example custom settings
-  database:
-    type: "postgresql"
-    port: 5432
-  
-  application:
-    version: "1.0.0"
-    port: 8080
-
-# Made with Bob
+  windows_machines:
+    - ceratops
+      
