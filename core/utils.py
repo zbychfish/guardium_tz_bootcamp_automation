@@ -590,7 +590,9 @@ def execute_mysql_sql(
                 f.write("[client]\n")
                 f.write(f"user={username}\n")
                 if password:
-                    f.write(f"password={password}\n")
+                    # Escape special characters for MySQL config file
+                    escaped_password = password.replace('\\', '\\\\').replace('"', '\\"')
+                    f.write(f'password="{escaped_password}"\n')
                 if host != "localhost":
                     f.write(f"host={host}\n")
             
