@@ -89,13 +89,13 @@ x509_extensions = v3_req
 prompt = no
 
 [req_distinguished_name]
-CN = raptor.demo.com
+CN = raptor.demo.guardium
 
 [v3_req]
 subjectAltName = @alt_names
 
 [alt_names]
-DNS.1 = raptor.demo.com
+DNS.1 = raptor.demo.guardium
 DNS.2 = localhost
 IP.1 = 127.0.0.1
 """

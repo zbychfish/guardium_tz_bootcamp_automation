@@ -158,34 +158,7 @@ def install_gim_on_raptor(
     sqlguardip: Optional[str] = None,
     debug: bool = False
 ) -> bool:
-    """
-    Install GIM (Guardium Installation Manager) on raptor machine.
-    
-    This function executes the GIM shell installer with required parameters:
-    - --dir: Installation directory (default: /opt/guardium)
-    - --tapip: TAP IP address (raptor's own IP, auto-detected from machines_info if not provided)
-    - --sqlguardip: SQL Guard IP address (Central Manager IP, auto-detected from machines_info.json if not provided)
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        gim_installer_path: Path to GIM installer shell script
-        install_dir: Installation directory (default: /opt/guardium)
-        tapip: TAP IP address (optional, auto-detected from raptor machine in machines_info)
-        sqlguardip: SQL Guard IP address (optional, auto-detected from Central Manager in machines_info.json)
-        debug: Enable debug output
-    
-    Returns:
-        True if installation successful, False otherwise
-    
-    Example:
-        install_gim_on_raptor(
-            config=config,
-            logger=logger,
-            gim_installer_path="/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
-        )
-    """
+   
     import os
     from core.utils import run_local_command
     
