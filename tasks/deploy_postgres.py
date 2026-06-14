@@ -159,15 +159,19 @@ IP.1 = 127.0.0.1
             return False
         
         lines = []
-        network_added = False
         in_replication_section = False
         
         with hba_path.open() as f:
             for line in f:
                 stripped = line.strip()
                 
-                # Detect replication section
-                if "replication" in stripped.lower() and ("# allow" in line.lower() or stripped.startswith("#")):
+                # Skip empty lines and comments
+                if not stripped or stripped.startswith("#"):
+                    lines.append(line)
+                    continue
+                
+                # Detect replication section start
+                if "replication" in stripped.lower():
                     in_replication_section = True
                     lines.append(line)
                     continue
@@ -178,17 +182,18 @@ IP.1 = 127.0.0.1
                     continue
                 
                 # Before replication section - modify lines
+                parts = stripped.split()
                 
-                # Change local peer to ident (only for "all" database, not replication)
-                if stripped.startswith("local") and "all" in line and "peer" in line:
-                    lines.append("local   all             all                                     ident\n")
+                # Change local peer to ident (only for "all" database)
+                if len(parts) >= 4 and parts[0] == "local" and parts[1] == "all" and parts[2] == "all" and parts[3] == "peer":
+                    line = line.replace("peer", "ident")
+                    lines.append(line)
                 
-                # Replace host 127.0.0.1 ident with scram-sha-256 and add network line (only once)
-                elif stripped.startswith("host") and "all" in line and "127.0.0.1/32" in line and "ident" in line:
-                    lines.append("host    all             all             127.0.0.1/32            scram-sha-256\n")
-                    if not network_added:
-                        lines.append(f"host    all             all             {network}            scram-sha-256\n")
-                        network_added = True
+                # Replace host 127.0.0.1 ident with scram-sha-256 and add network line
+                elif len(parts) >= 5 and parts[0] == "host" and parts[1] == "all" and parts[2] == "all" and "127.0.0.1/32" in parts[3]:
+                    line = line.replace("ident", "scram-sha-256")
+                    lines.append(line)
+                    lines.append(f"host    all             all             {network}            scram-sha-256\n")
                 
                 # Keep other lines as-is
                 else:
