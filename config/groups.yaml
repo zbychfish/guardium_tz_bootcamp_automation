@@ -55,7 +55,6 @@ groups:
         module: tasks.deploy_cassandra
         description: "Deploy Apache Cassandra 4.1 on sauropod"
 
-
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"

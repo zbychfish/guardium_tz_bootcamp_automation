@@ -12,6 +12,7 @@ from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.guardium_rest_api import GuardiumRestAPI
 from core.appliance_operations import copy_files_to_appliance
+from core.utils import execute_local_command
 
 logger = get_logger(__name__)
 
@@ -27,29 +28,7 @@ def import_gim_modules(
     gim_target_dir: str = "/var/dump",
     debug: bool = False
 ) -> bool:
-    """
-    Import GIM (Guardium Installation Manager) modules to Guardium appliance.
-    
-    This function:
-    1. Copies GIM files from raptor to appliance
-    2. Loads appliance configuration
-    3. Creates GuardiumRestAPI client
-    4. Authenticates using demo user credentials
-    5. Imports all *.gim files using REST API
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance (required)
-        demo_user: Demo user username (default: "demo")
-        demo_password: Demo user password (optional, uses custom_variables if not provided)
-        gim_directory: Directory containing GIM files on raptor (default: /opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/agents/gim)
-        gim_target_dir: Target directory on appliance (default: /var/IBM/Guardium/gim/packages)
-        debug: Enable debug output
-    
-    Returns:
-        True if import successful, False otherwise
-    """
+ 
     logger.info("=" * 80)
     logger.info("IMPORT GIM MODULES")
     logger.info("=" * 80)
@@ -75,9 +54,26 @@ def import_gim_modules(
     
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     
-    # Step 1: Copy GIM files to appliance
+    # Step 1: Set executable permissions on shell files
     logger.info(f"\n{'=' * 80}")
-    logger.info("STEP 1: Copy GIM files to appliance")
+    logger.info("STEP 1: Set executable permissions on shell files")
+    logger.info(f"{'=' * 80}")
+    
+    shell_dir = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/"
+    logger.info(f"Setting +x on files in: {shell_dir}")
+    
+    result = execute_local_command(f"chmod +x {shell_dir}*", logger=logger, verbose=verbose)
+    
+    if result['rc'] == 0:
+        logger.info(f"✓ Executable permissions set on shell files")
+    else:
+        logger.warning(f"⚠ Failed to set executable permissions (rc={result['rc']})")
+        if result['stderr']:
+            logger.warning(f"Error: {result['stderr']}")
+    
+    # Step 2: Copy GIM files to appliance
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 2: Copy GIM files to appliance")
     logger.info(f"{'=' * 80}")
     
     copy_success = copy_files_to_appliance(
@@ -95,9 +91,9 @@ def import_gim_modules(
         logger.error("✗ Failed to copy GIM files to appliance")
         return False
     
-    # Step 2: Import GIM modules using REST API
+    # Step 3: Import GIM modules using REST API
     logger.info(f"\n{'=' * 80}")
-    logger.info("STEP 2: Import GIM modules using REST API")
+    logger.info("STEP 3: Import GIM modules using REST API")
     logger.info(f"{'=' * 80}")
     
     # Get demo user password
