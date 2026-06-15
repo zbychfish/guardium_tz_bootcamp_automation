@@ -715,9 +715,11 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
     
     hosts_content = generate_hosts_content(all_machines)
     username = credentials.get('username', 'root')
+    password = credentials.get('password')
+    key_file = credentials.get('ssh_key')
     
     try:
-        with SSHClient(host=host, username=username, port=ssh_port) as ssh:
+        with SSHClient(host=host, username=username, password=password, key_file=key_file, port=ssh_port) as ssh:
             logger.info(f"Connected to {machine_name}")
             
             # Set hostname
