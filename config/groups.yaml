@@ -58,7 +58,7 @@ groups:
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
-    auto_execute: true  # Executed on demand
+    auto_execute: false  # Executed on demand
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: reset_cli_password_all
