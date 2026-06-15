@@ -470,6 +470,17 @@ def configure_firewall_local(logger) -> bool:
     try:
         logger.info("Configuring firewall to open database ports")
         
+        # Check if firewalld is installed and running
+        check_result = subprocess.run(
+            ["systemctl", "is-active", "firewalld"],
+            capture_output=True,
+            text=True
+        )
+        
+        if check_result.returncode != 0:
+            logger.info("firewalld is not active, skipping firewall configuration")
+            return True
+        
         ports = [5432, 25010, 27017, 3306, 33060, 9042, 9142]
         
         for port in ports:
@@ -495,6 +506,9 @@ def configure_firewall_local(logger) -> bool:
         logger.info("Successfully configured firewall")
         return True
         
+    except FileNotFoundError:
+        logger.info("firewall-cmd not found, skipping firewall configuration")
+        return True
     except Exception as e:
         logger.error(f"Error configuring firewall: {str(e)}")
         return False
