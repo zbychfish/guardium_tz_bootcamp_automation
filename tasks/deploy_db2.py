@@ -209,7 +209,4 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
     return True
 
 
-def deploy_db2_on_raptor_task(config, logger, verbose: bool = True) -> bool:
-    return deploy_db2_on_raptor(logger, verbose)
-
 # Made with Bob

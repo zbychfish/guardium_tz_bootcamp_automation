@@ -257,17 +257,3 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
     return True
 
 # Made with Bob
-
-def deploy_mysql_on_raptor_task(config, logger, verbose: bool = True) -> bool:
-    """
-    Wrapper function for group-based execution.
-    
-    Args:
-        config: ConfigLoader instance (not used, for compatibility)
-        logger: Logger instance
-        verbose: Enable verbose logging
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    return deploy_mysql_on_raptor(logger, verbose)

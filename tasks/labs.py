@@ -487,49 +487,6 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
     return True
 
 
-def configure_ssl_for_mongo(config, logger, verbose=True, **kwargs):
-    import re
-    from pathlib import Path
-    from core.utils import execute_commands
-    
-    commands = [
-        "mkdir -p /var/lib/mongo/cert",
-        'openssl req -x509 -newkey rsa:4096 -keyout /var/lib/mongo/cert/ca.key -out /var/lib/mongo/cert/ca.pem -sha256 -days 3650 -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=MongoCA" -addext "basicConstraints=critical,CA:TRUE"',
-        'openssl req -newkey rsa:4096 -keyout /var/lib/mongo/cert/server.key -out /var/lib/mongo/cert/server.csr -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=localhost"',
-        'bash -c \'openssl x509 -req -in /var/lib/mongo/cert/server.csr -CA /var/lib/mongo/cert/ca.pem -CAkey /var/lib/mongo/cert/ca.key -CAcreateserial -out /var/lib/mongo/cert/server.crt -days 3650 -sha256 -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1\\nbasicConstraints=CA:FALSE\\nkeyUsage=digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth")\'',
-        "cat /var/lib/mongo/cert/server.key /var/lib/mongo/cert/server.crt > /var/lib/mongo/cert/both.pem",
-        "chown -R mongod:mongod /var/lib/mongo/cert",
-        "chmod 600 /var/lib/mongo/cert/*"
-    ]
-    
-    if not execute_commands(commands, logger, verbose):
-        logger.error("Failed to configure SSL certificates")
-        return False
-    
-    conf = Path("/etc/mongod.conf")
-    lines = []
-    tls_added = False
-    with conf.open() as f:
-        for line in f:
-            lines.append(line)
-            if re.match(r"^\s*port\s*:", line) and not tls_added:
-                lines.append("  bindIp: 0.0.0.0\n")
-                lines.append("  tls:\n")
-                lines.append("    mode: requireTLS\n")
-                lines.append("    certificateKeyFile: /var/lib/mongo/cert/both.pem\n")
-                lines.append("    CAFile: /var/lib/mongo/cert/ca.pem\n")
-                lines.append("    allowConnectionsWithoutCertificates: true\n")
-                tls_added = True
-    conf.write_text("".join(lines))
-    
-    if not execute_commands(["systemctl restart mongod"], logger, verbose):
-        logger.error("Failed to restart mongod")
-        return False
-    
-    logger.info("✓ SSL configured for MongoDB")
-    return True
-
-
 def enable_atap_for_mongo(config, logger, verbose=True, **kwargs):
     from core.utils import execute_commands
     

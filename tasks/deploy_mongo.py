@@ -312,14 +312,95 @@ def import_mongodb_sample_data(logger, verbose: bool = True) -> bool:
     return True
 
 
-def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
+def configure_ssl_for_mongo(logger, verbose: bool = True) -> bool:
+    """
+    Configure SSL/TLS for MongoDB.
+    Creates certificates and updates mongod.conf to enable TLS.
+    
+    Args:
+        logger: Logger instance
+        verbose: Enable verbose logging (default: True)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    import re
+    from pathlib import Path
+    
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Configuring SSL/TLS for MongoDB")
+        logger.info("=" * 80)
+    
+    # Create certificates
+    commands = [
+        "mkdir -p /var/lib/mongo/cert",
+        'openssl req -x509 -newkey rsa:4096 -keyout /var/lib/mongo/cert/ca.key -out /var/lib/mongo/cert/ca.pem -sha256 -days 3650 -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=MongoCA" -addext "basicConstraints=critical,CA:TRUE"',
+        'openssl req -newkey rsa:4096 -keyout /var/lib/mongo/cert/server.key -out /var/lib/mongo/cert/server.csr -nodes -subj "/C=PL/ST=Lubuskie/L=Nowa Sol/O=Training/OU=Demo/CN=localhost"',
+        'bash -c \'openssl x509 -req -in /var/lib/mongo/cert/server.csr -CA /var/lib/mongo/cert/ca.pem -CAkey /var/lib/mongo/cert/ca.key -CAcreateserial -out /var/lib/mongo/cert/server.crt -days 3650 -sha256 -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1\\nbasicConstraints=CA:FALSE\\nkeyUsage=digitalSignature,keyEncipherment\\nextendedKeyUsage=serverAuth")\'',
+        "cat /var/lib/mongo/cert/server.key /var/lib/mongo/cert/server.crt > /var/lib/mongo/cert/both.pem",
+        "chown -R mongod:mongod /var/lib/mongo/cert",
+        "chmod 600 /var/lib/mongo/cert/*"
+    ]
+    
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to create SSL certificates")
+        return False
+    
+    if verbose:
+        logger.info("✓ SSL certificates created")
+    
+    # Modify mongod.conf to add TLS configuration
+    if verbose:
+        logger.info("Updating MongoDB configuration for TLS...")
+    
+    conf = Path("/etc/mongod.conf")
+    lines = []
+    tls_added = False
+    
+    with conf.open() as f:
+        for line in f:
+            # Change bindIp from 127.0.0.1 to 0.0.0.0
+            if re.match(r"^\s*bindIp\s*:", line):
+                line = re.sub(r"127\.0\.0\.1", "0.0.0.0", line)
+            
+            lines.append(line)
+            
+            # Add TLS configuration after port line
+            if re.match(r"^\s*port\s*:", line) and not tls_added:
+                lines.append("  tls:\n")
+                lines.append("    mode: allowTLS\n")
+                lines.append("    certificateKeyFile: /var/lib/mongo/cert/both.pem\n")
+                lines.append("    CAFile: /var/lib/mongo/cert/ca.pem\n")
+                lines.append("    allowConnectionsWithoutCertificates: true\n")
+                tls_added = True
+    
+    conf.write_text("".join(lines))
+    
+    if verbose:
+        logger.info("✓ MongoDB configuration updated")
+    
+    # Restart MongoDB to apply TLS settings
+    if verbose:
+        logger.info("Restarting MongoDB to apply TLS settings...")
+    
+    if not execute_commands(["systemctl restart mongod"], logger, verbose):
+        logger.error("Failed to restart MongoDB")
+        return False
+    
+    if verbose:
+        logger.info("✓ SSL/TLS configured for MongoDB")
+        logger.info("=" * 80)
+    
+    return True
+
+
+def deploy_mongo_on_raptor(config, logger, verbose: bool = True) -> bool:
     """
     Deploy MongoDB on local machine (raptor).
     
-    This function executes a series of commands to install and configure MongoDB.
-    Commands should be added/modified as needed.
-    
     Args:
+        config: ConfigLoader instance
         logger: Logger instance
         verbose: Enable verbose logging (default: True)
         
@@ -331,7 +412,6 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
         logger.info("Starting MongoDB deployment on raptor")
         logger.info("=" * 80)
     
-    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
     
     # Create MongoDB repository file
@@ -389,6 +469,11 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
     if not import_mongodb_sample_data(logger, verbose):
         logger.error("Failed to import MongoDB sample data")
         return False
+    
+    # Configure SSL/TLS
+    if not configure_ssl_for_mongo(logger, verbose):
+        logger.error("Failed to configure SSL/TLS for MongoDB")
+        return False
 
     if verbose:
         logger.info("=" * 80)
@@ -399,17 +484,3 @@ def deploy_mongo_on_raptor(logger, verbose: bool = True) -> bool:
 
 
 # Made with Bob
-
-def deploy_mongo_on_raptor_task(config, logger, verbose: bool = True) -> bool:
-    """
-    Wrapper function for group-based execution.
-    
-    Args:
-        config: ConfigLoader instance (not used, for compatibility)
-        logger: Logger instance
-        verbose: Enable verbose logging
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    return deploy_mongo_on_raptor(logger, verbose)
