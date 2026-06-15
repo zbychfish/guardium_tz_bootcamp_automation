@@ -454,6 +454,52 @@ def set_timezone_remote(ssh_client: SSHClient, timezone: str, logger) -> bool:
         return False
 
 
+def configure_firewall_local(logger) -> bool:
+    """
+    Configure firewall on local machine to open required database ports.
+    Opens ports: 5432 (PostgreSQL), 25010 (DB2), 27017 (MongoDB),
+                 3306 (MySQL), 33060 (MySQL X Protocol), 9042 (Cassandra CQL),
+                 9142 (Cassandra SSL)
+    
+    Args:
+        logger: Logger instance
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        logger.info("Configuring firewall to open database ports")
+        
+        ports = [5432, 25010, 27017, 3306, 33060, 9042, 9142]
+        
+        for port in ports:
+            logger.info(f"Opening port {port}")
+            result = subprocess.run(
+                ["firewall-cmd", "--permanent", "--add-port", f"{port}/tcp"],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.warning(f"Failed to add port {port}: {result.stderr}")
+        
+        logger.info("Reloading firewall configuration")
+        result = subprocess.run(
+            ["firewall-cmd", "--reload"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            logger.error(f"Failed to reload firewall: {result.stderr}")
+            return False
+        
+        logger.info("Successfully configured firewall")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error configuring firewall: {str(e)}")
+        return False
+
+
 def configure_sshd_remote(ssh_client: SSHClient, logger) -> bool:
     """
     Configure SSHD on remote machine via SSH using sudo.
@@ -601,6 +647,12 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
         if not pwd_success:
             logger.error("Failed to set root password")
             return False
+    
+    # Configure firewall to open database ports
+    logger.info("Configuring firewall for database ports")
+    firewall_success = configure_firewall_local(logger)
+    if not firewall_success:
+        logger.warning("Failed to configure firewall (non-critical)")
     
     logger.info("Local machine setup completed successfully")
     return True
