@@ -203,6 +203,24 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
     if verbose:
         logger.info("✓ DB2 instance memory configured successfully")
     
+    # Configure remote access to database
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Configuring remote access to DB2 database")
+        logger.info("=" * 80)
+    
+    remote_access_commands = [
+        'su - db2inst1 -c \'db2 "catalog tcpip node mynode remote 127.0.0.1 server 25010"\'',
+        'su - db2inst1 -c \'db2 "catalog database sample as mysample at node mynode"\''
+    ]
+    
+    if not execute_commands(remote_access_commands, logger, verbose):
+        logger.error("Failed to configure remote access to DB2 database")
+        return False
+    
+    if verbose:
+        logger.info("✓ Remote access to DB2 database configured successfully")
+    
     # Cleanup installation files
     if verbose:
         logger.info("=" * 80)
