@@ -184,14 +184,12 @@ password={password}
         return False
 
 
-def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
+def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
     """
     Deploy MySQL on local machine (raptor).
     
-    This function executes a series of commands to install and configure MySQL.
-    Assumes supporting files have already been downloaded by download_mysql_supporting_files().
-    
     Args:
+        config: ConfigLoader instance
         logger: Logger instance
         verbose: Enable verbose logging (default: True)
         
@@ -203,7 +201,6 @@ def deploy_mysql_on_raptor(logger, verbose: bool = True) -> bool:
         logger.info("Starting MySQL deployment on raptor")
         logger.info("=" * 80)
     
-    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
 
     # Install MySQL server

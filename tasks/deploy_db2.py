@@ -10,13 +10,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 from core import execute_commands, execute_local_command, ConfigLoader, write_file
 
 
-def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
+def deploy_db2_on_raptor(config, logger, verbose: bool = True) -> bool:
     if verbose:
         logger.info("=" * 80)
         logger.info("Installing Db2 prerequisites on raptor")
         logger.info("=" * 80)
     
-    config = ConfigLoader("config/config.yaml", "/root/machines_info.json")
     password = config.get_custom_variable('pwd')
     
     if not password:
@@ -62,8 +61,8 @@ def deploy_db2_on_raptor(logger, verbose: bool = True) -> bool:
         "dnf install -y libaio numactl ksh libgcc libstdc++ perl pam libibverbs patch NetworkManager-config-server pam.i686 libstdc++.i686",
         'sysctl -w kernel.sem="250 64000 100 4096"',
         "sysctl -w kernel.shmmni=8192",
-        "sysctl -w kernel.shmmax=68719476736",
-        "sysctl -w kernel.shmall=16777216",
+        "sysctl -w kernel.shmmax=1073741824",
+        "sysctl -w kernel.shmall=262144",
         "echo 'db2inst1 soft nofile 65536' >> /etc/security/limits.conf",
         "echo 'db2inst1 hard nofile 65536' >> /etc/security/limits.conf",
         "echo 'db2inst1 soft nproc 65536' >> /etc/security/limits.conf",
@@ -186,6 +185,23 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
         
         if verbose:
             logger.info("✓ DB2 license installed successfully")
+    
+    # Configure DB2 instance memory
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Configuring DB2 instance memory")
+        logger.info("=" * 80)
+    
+    memory_commands = [
+        "su - db2inst1 -c 'db2 update dbm cfg using INSTANCE_MEMORY 50'"
+    ]
+    
+    if not execute_commands(memory_commands, logger, verbose):
+        logger.error("Failed to configure DB2 instance memory")
+        return False
+    
+    if verbose:
+        logger.info("✓ DB2 instance memory configured successfully")
     
     # Cleanup installation files
     if verbose:
