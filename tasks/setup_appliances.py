@@ -308,11 +308,14 @@ def install_policy_on_collector(
     cm_appliance: str = "cm02",
     collector_appliance: str = "coll2",
     policy_name: str = "Log Everything",
+    max_outer_retries: int = 5,
+    outer_retry_delay: int = 120,
     debug: bool = True
 ) -> bool:
     
     from core.guardium_rest_api import create_guardium_api
     from core.appliance_config_loader import ApplianceConfigLoader
+    import time
     
     logger.info("=" * 80)
     logger.info("INSTALL POLICY ON COLLECTOR")
@@ -352,34 +355,49 @@ def install_policy_on_collector(
             logger.info(f"CM Appliance: {cm_appliance}")
             logger.info(f"Target Collector: {collector_appliance} ({collector_ip})")
         
-        logger.info(f"\nInstalling policy '{policy_name}' on collector {collector_ip}...")
-        result = api.install_policy(
-            policy=policy_name,
-            api_target_host=collector_ip,
-            max_retries=3,
-            retry_delay=60,
-            debug=debug
-        )
+        error_code = '999'
+        error_message = 'Unknown error'
         
-        if debug:
-            logger.info(f"API Response: {result}")
+        for outer_attempt in range(1, max_outer_retries + 1):
+            logger.info(f"\nAttempt {outer_attempt}/{max_outer_retries}: Installing policy '{policy_name}' on collector {collector_ip}...")
+            
+            result = api.install_policy(
+                policy=policy_name,
+                api_target_host=collector_ip,
+                max_retries=3,
+                retry_delay=60,
+                debug=debug
+            )
+            
+            if debug:
+                logger.info(f"API Response: {result}")
+            
+            error_code = result.get('ErrorCode') or result.get('ID', '0')
+            error_message = result.get('ErrorMessage') or result.get('Message', '')
+            
+            if debug:
+                logger.info(f"Parsed error_code: {error_code}")
+                logger.info(f"Parsed error_message: {error_message}")
+            
+            if error_code == '0':
+                logger.info(f"✓ Policy '{policy_name}' installed successfully on {collector_appliance}")
+                logger.info("=" * 80)
+                return True
+            
+            if error_code == '15' and outer_attempt < max_outer_retries:
+                logger.warning(f"⚠ Target host still offline after inner retries. Outer retry {outer_attempt}/{max_outer_retries}")
+                logger.info(f"Waiting {outer_retry_delay}s before next attempt...")
+                time.sleep(outer_retry_delay)
+                continue
+            
+            if outer_attempt == max_outer_retries:
+                logger.error(f"✗ Failed to install policy after {max_outer_retries} attempts: Code={error_code}, Message={error_message}")
+                logger.info("=" * 80)
+                return False
         
-        # Check both ErrorCode and ID (API uses different field names)
-        error_code = result.get('ErrorCode') or result.get('ID', '0')
-        error_message = result.get('ErrorMessage') or result.get('Message', '')
-        
-        if debug:
-            logger.info(f"Parsed error_code: {error_code}")
-            logger.info(f"Parsed error_message: {error_message}")
-        
-        if error_code == '0':
-            logger.info(f"✓ Policy '{policy_name}' installed successfully on {collector_appliance}")
-            logger.info("=" * 80)
-            return True
-        else:
-            logger.error(f"✗ Failed to install policy: Code={error_code}, Message={error_message}")
-            logger.info("=" * 80)
-            return False
+        logger.error(f"✗ Failed to install policy: Code={error_code}, Message={error_message}")
+        logger.info("=" * 80)
+        return False
         
     except Exception as e:
         logger.error(f"✗ Failed to install policy: {e}")
