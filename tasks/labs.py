@@ -614,3 +614,70 @@ def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
         logger.info("=" * 80)
     
     return True
+
+
+
+def import_atap_definitions(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm02",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = True
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+    import os
+    
+    logger.info("=" * 80)
+    logger.info("IMPORT ATAP LAB DEFINITIONS")
+    logger.info("=" * 80)
+    
+    definition_files = [
+        "exp_datasource_verification_atap_lab.sql"
+    ]
+    
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"Definitions directory: {definitions_dir}")
+    logger.info(f"Files to import: {', '.join(definition_files)}")
+    
+    try:
+        api = create_guardium_api(config, logger, appliance_name=cm_appliance)
+        
+        demo_password = config.get_custom_variable('pwd')
+        if not demo_password:
+            logger.error("pwd not found in custom_variables")
+            return False
+        
+        logger.info("Authenticating as demo user...")
+        api.get_token(username='demo', password=demo_password)
+        logger.info("✓ Authentication successful")
+        
+        for filename in definition_files:
+            file_path = os.path.join(definitions_dir, filename)
+            
+            if not os.path.exists(file_path):
+                logger.error(f"✗ File not found: {file_path}")
+                return False
+            
+            logger.info(f"\n➜ Importing: {filename}")
+            result = api.import_definitions(file_path=file_path)
+            
+            if debug:
+                logger.info(f"  API Response: {result}")
+            
+            logger.info(f"✓ {filename} imported successfully")
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ ATAP definitions imported successfully")
+        logger.info("=" * 80)
+        return True
+        
+    except FileNotFoundError as e:
+        logger.error(f"✗ File not found: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"✗ Failed to import definitions: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False

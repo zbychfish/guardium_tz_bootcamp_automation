@@ -252,6 +252,15 @@ groups:
         module: tasks.labs
         description: "Enable ATAP for MongoDB on raptor"
 
+      - name: import_atap_definitions
+        function: import_atap_definitions
+        module: tasks.labs
+        description: "Import ATAP lab definitions to CM via REST API"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
+
       # - name: current_test
       #   function: current_test
       #   module: tasks.current_test
