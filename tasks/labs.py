@@ -616,7 +616,6 @@ def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
     return True
 
 
-
 def import_atap_definitions(
     config,
     logger,
@@ -681,3 +680,127 @@ def import_atap_definitions(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
+
+def install_filebeat_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    rpms_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/rpms",
+    filebeat_pattern: str = "filebeat-*.rpm",
+    debug: bool = False
+) -> bool:
+    from core.ssh_client import SSHClient
+    import glob
+    import os
+    
+    logger.info("=" * 80)
+    logger.info("INSTALL FILEBEAT ON SAUROPOD")
+    logger.info("=" * 80)
+    
+    machines = config.get('machines', {})
+    sauropod_info = machines.get('sauropod', {})
+    sauropod_ip = sauropod_info.get('private_ip')
+    sauropod_password = sauropod_info.get('password')
+    
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+    
+    if not sauropod_password:
+        logger.error("Sauropod password not found in machines config")
+        return False
+    
+    logger.info(f"Sauropod IP: {sauropod_ip}")
+    
+    filebeat_rpm_pattern = os.path.join(rpms_dir, filebeat_pattern)
+    filebeat_rpms = glob.glob(filebeat_rpm_pattern)
+    
+    if not filebeat_rpms:
+        logger.error(f"No filebeat RPM found matching pattern: {filebeat_rpm_pattern}")
+        return False
+    
+    filebeat_rpm = filebeat_rpms[0]
+    filebeat_filename = os.path.basename(filebeat_rpm)
+    
+    logger.info(f"Found filebeat RPM: {filebeat_filename}")
+    
+    ssh = SSHClient(
+        host=sauropod_ip,
+        username="root",
+        password=sauropod_password,
+        timeout=60
+    )
+    
+    try:
+        logger.info("\n➜ Connecting to sauropod...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        
+        logger.info("✓ Connected to sauropod")
+        
+        logger.info("\n➜ Creating directory /root/gn-trainings...")
+        result = ssh.execute_command("mkdir -p /root/gn-trainings", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create directory: {result['stderr']}")
+            return False
+        logger.info("✓ Directory created")
+        
+        logger.info(f"\n➜ Uploading {filebeat_filename} to sauropod...")
+        remote_rpm_path = f"/root/gn-trainings/{filebeat_filename}"
+        if not ssh.upload_file(filebeat_rpm, remote_rpm_path):
+            logger.error("Failed to upload filebeat RPM")
+            return False
+        logger.info("✓ RPM uploaded")
+        
+        logger.info("\n➜ Installing filebeat RPM...")
+        install_cmd = f"dnf -y install {remote_rpm_path}"
+        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to install filebeat: {result['stderr']}")
+            return False
+        logger.info("✓ Filebeat installed")
+        
+        logger.info("\n➜ Configuring filebeat for Cassandra audit logs...")
+        
+        config_commands = [
+            r"sed -i '/^- type: filestream/,/^[^[:space:]]/c\- type: filestream\n  id: \"cassandra\"\n  enabled: true\n  paths:\n    - /var/log/cassandra/audit/audit.log\n  exclude_lines: [\"AuditLogManager\"]\n  tags: [\"cassandra\"]\n  multiline.type: pattern\n  multiline.pattern: \"^INFO\"\n  multiline.negate: true\n  multiline.match: after' /etc/filebeat/filebeat.yml",
+            r"sed -i '/^output.elasticsearch:/,/^[^[:space:]]/ { s/^/# / }' /etc/filebeat/filebeat.yml",
+            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.com:5047\"]| }' /etc/filebeat/filebeat.yml"
+        ]
+        
+        for cmd in config_commands:
+            result = ssh.execute_command(cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.warning(f"Configuration command failed (rc={result['rc']}): {cmd[:50]}...")
+                if debug:
+                    logger.debug(f"stderr: {result['stderr']}")
+        
+        logger.info("✓ Filebeat configured")
+        
+        logger.info("\n➜ Starting and enabling filebeat service...")
+        result = ssh.execute_command("systemctl start filebeat", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to start filebeat: {result['stderr']}")
+            return False
+        
+        result = ssh.execute_command("systemctl enable filebeat", print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"Failed to enable filebeat: {result['stderr']}")
+        
+        logger.info("✓ Filebeat started and enabled")
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ Filebeat installation completed successfully")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to install filebeat: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()

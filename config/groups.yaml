@@ -287,4 +287,19 @@ groups:
           cm_appliance: "cm"
           collector_appliance: "coll1"
 
+  uc1_lab:
+    name: "UC 1.0 lab"
+    description: "Universal Connector 1.0 lab setup"
+    auto_execute: false  # Executed on demand
+    dependencies: [exit_lab]
+    stages:
+      - name: install_filebeat_on_sauropod
+        function: install_filebeat_on_sauropod
+        module: tasks.labs
+        description: "Install and configure Filebeat on sauropod for Cassandra audit logs"
+        args:
+          rpms_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/rpms"
+          filebeat_pattern: "filebeat-*.rpm"
+          debug: false
+
 # Made with Bob
