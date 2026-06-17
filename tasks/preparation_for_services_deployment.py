@@ -146,8 +146,34 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
             )
             
             if result['rc'] != 0:
-                logger.error("Failed to install Java 11 on sauropod")
-                return False
+                # Check if error is related to EUS repository (404 error)
+                if 'rhel-8-for-x86_64-appstream-eus-rpms' in result['stderr'] or '404' in result['stderr']:
+                    logger.warning("EUS repository error detected, applying workaround...")
+                    logger.info("Disabling EUS repositories and enabling standard repos")
+                    
+                    # Disable EUS repositories
+                    disable_cmd = 'subscription-manager repos --disable="*eus*"'
+                    result = ssh.execute_command(disable_cmd, timeout=60, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.warning(f"Failed to disable EUS repos (rc={result['rc']}), continuing anyway")
+                    
+                    # Enable standard repositories
+                    enable_cmd = 'subscription-manager repos --enable=rhel-8-for-x86_64-baseos-rpms --enable=rhel-8-for-x86_64-appstream-rpms'
+                    result = ssh.execute_command(enable_cmd, timeout=60, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.error("Failed to enable standard repositories")
+                        return False
+                    
+                    logger.info("✓ Repository configuration updated, retrying Java installation")
+                    
+                    # Retry Java installation
+                    result = ssh.execute_command(java_install_cmd, timeout=300, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.error("Failed to install Java 11 on sauropod after workaround")
+                        return False
+                else:
+                    logger.error("Failed to install Java 11 on sauropod")
+                    return False
             
             if verbose:
                 logger.info("✓ Java 11 installed successfully on sauropod")
