@@ -1116,6 +1116,7 @@ def setup_etap_certificates_mysql(
         logger.info("✓ Connected to collector")
         
         logger.info(f"Generating CSR for alias '{etap_alias}'...")
+        logger.info(f"CSR parameters: locality='{etap_locality}', state='{etap_state}', email='{etap_email}'")
         csr, token, line_above = appliance.generate_external_stap_csr(
             alias=etap_alias,
             common_name=etap_common_name,
