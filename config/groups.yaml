@@ -315,16 +315,22 @@ groups:
         args:
           debug: false
       
-      - name: setup_etap_certificates
-        function: setup_etap_certificates
+      - name: setup_etap_certificates_mysql
+        function: setup_etap_certificates_mysql
         module: tasks.labs
-        description: "Create CA, generate CSR, sign certificate, and import ETAP certificates to collector"
+        description: "Create CA, generate CSR, sign certificate, and import ETAP certificates for MySQL to collector"
         args:
           collector_appliance: "coll1"
           ca_dir: "/opt/ETAP/ca"
           etap_alias: "mysql-etap"
           etap_common_name: "mysql-etap"
           etap_san1: "coll1.demo.com"
+          etap_organizational_unit: "Demo"
+          etap_organization: "Guardium"
+          etap_country: "PL"
+          etap_encryption_algorithm: "2"
+          etap_keysize: "2"
+          ca_common_name: "ETAP CA"
           ca_alias: "etapca"
           debug: false
 
