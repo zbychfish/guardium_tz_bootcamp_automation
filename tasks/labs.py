@@ -867,9 +867,10 @@ def deploy_etap_mysql(
     add_command = f"printf '\\n# Temporary port for ETAP\\nPort 22\\n' >> {sshd_config}"
     restart_command = "systemctl restart sshd"
     clone_command = "mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi"
+    prepare_known_hosts_command = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keyscan -H localhost 127.0.0.1 ::1 >> ~/.ssh/known_hosts 2>/dev/null || true && chmod 600 ~/.ssh/known_hosts"
     deploy_command = (
         "cd /opt/ETAP/Guardium_External_S-TAP && "
-        "printf 'yes\n' | ./container_mgmt.sh "
+        "./container_mgmt.sh "
         "--state-file mysql_etap_state "
         f"--db-host {raptor_ip} "
         "--proxy-num-workers 1 "
@@ -905,6 +906,12 @@ def deploy_etap_mysql(
     clone_result = execute_local_command(clone_command, logger=logger, verbose=verbose)
     if clone_result['rc'] != 0:
         logger.error(f"✗ Failed to clone Guardium External S-TAP repository: {clone_result['stderr']}")
+        return False
+
+    logger.info("Preparing known_hosts for localhost")
+    prepare_known_hosts_result = execute_local_command(prepare_known_hosts_command, logger=logger, verbose=verbose)
+    if prepare_known_hosts_result['rc'] != 0:
+        logger.error(f"✗ Failed to prepare known_hosts: {prepare_known_hosts_result['stderr']}")
         return False
 
     logger.info("Running ETAP MySQL deployment")
