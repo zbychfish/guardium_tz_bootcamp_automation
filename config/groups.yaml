@@ -336,6 +336,6 @@ groups:
           etap_san2: ""
           ca_common_name: "ETAP CA"
           ca_alias: "etapca"
-          debug: false
+          debug: true
 
 # Made with Bob
