@@ -336,6 +336,13 @@ groups:
           etap_san2: ""
           ca_common_name: "ETAP CA"
           ca_alias: "etapca"
+
+      - name: deploy_etap_mysql
+        function: deploy_etap_mysql
+        module: tasks.labs
+        description: "Temporarily add SSH port 22 on raptor, restart sshd, clone Guardium External S-TAP repository, and run ETAP MySQL deployment"
+        args:
+          debug: false
           debug: true
 
 # Made with Bob

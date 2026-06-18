@@ -807,6 +807,111 @@ def install_filebeat_on_sauropod(
 
 
 
+def deploy_etap_mysql(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False
+) -> bool:
+    logger.info("=" * 80)
+    logger.info("DEPLOY ETAP MYSQL")
+    logger.info("=" * 80)
+
+    raptor_info = config.get_machine("raptor")
+    if not raptor_info:
+        logger.error("Machine 'raptor' not found in configuration")
+        return False
+
+    raptor_ip = raptor_info.get("private_ip") or raptor_info.get("host")
+    if not raptor_ip:
+        logger.error("Raptor IP not found in configuration")
+        return False
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance("coll1")
+    if not collector_config:
+        logger.error("Collector 'coll1' not found in configuration")
+        return False
+
+    collector_ip = collector_config.get("ip")
+    if not collector_ip:
+        logger.error("Collector 'coll1' IP not found in configuration")
+        return False
+
+    etap_version = config.get_custom_variable("guardium_etap_version")
+    if not etap_version:
+        logger.error("guardium_etap_version not found in custom_variables")
+        return False
+
+    token_file = "/opt/ETAP/ca/mysql_etap_token.txt"
+    etap_token = config.get_custom_variable("mysql_etap_token")
+    if not etap_token and os.path.exists(token_file):
+        with open(token_file, "r", encoding="utf-8") as f:
+            etap_token = f.read().strip()
+        if etap_token:
+            logger.info(f"Loaded mysql_etap_token from {token_file}")
+
+    if not etap_token:
+        logger.error("mysql_etap_token not found in custom_variables or token file")
+        return False
+
+    sshd_config = "/etc/ssh/sshd_config"
+    check_command = f"python3 -c \"import pathlib, re; text = pathlib.Path('{sshd_config}').read_text(); raise SystemExit(0 if re.search(r'^\\s*Port\\s+22\\s*$', text, re.MULTILINE) else 1)\""
+    add_command = f"printf '\\n# Temporary port for ETAP\\nPort 22\\n' >> {sshd_config}"
+    restart_command = "systemctl restart sshd"
+    clone_command = "mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi"
+    deploy_command = (
+        "cd /opt/ETAP/Guardium_External_S-TAP && "
+        f"STATE_FILE=mysql_etap_state "
+        f"DB_HOST={raptor_ip} "
+        f"COLLECTOR={collector_ip} "
+        f"IMAGE='icr.io/guardium/guardium_external_s-tap:v{etap_version}' "
+        f"TOKEN='{etap_token}' "
+        "DB_PORT=3306 "
+        "DB_TYPE=mysql "
+        "PROXY_WORKERS=1 "
+        "PROXY_PROTOCOL=0 "
+        "PORT_RANGE='63333-63333' "
+        "TENANT=MYSQLETAP "
+        "LBMODE=0 "
+        "./container_mgmt.sh --state-file $STATE_FILE --db-host $DB_HOST --proxy-num-workers $PROXY_WORKERS "
+        "--proxy-protocol $PROXY_PROTOCOL --db-port $DB_PORT --proxy-secret $TOKEN --db-type $DB_TYPE "
+        "--sqlguard-ip $COLLECTOR --participate-in-load-balancing $LBMODE --tenant-id $TENANT "
+        "--svc-image $IMAGE --svc-port-range $PORT_RANGE --ni --c"
+    )
+
+    check_result = execute_local_command(check_command, logger=logger, verbose=verbose)
+    if check_result['rc'] != 0:
+        logger.info("Adding temporary SSH port 22 to sshd_config")
+        add_result = execute_local_command(add_command, logger=logger, verbose=verbose)
+        if add_result['rc'] != 0:
+            logger.error(f"✗ Failed to add port 22 to sshd_config: {add_result['stderr']}")
+            return False
+    else:
+        logger.info("Port 22 already present in sshd_config")
+
+    logger.info("Restarting SSHD service")
+    restart_result = execute_local_command(restart_command, logger=logger, verbose=verbose)
+    if restart_result['rc'] != 0:
+        logger.error(f"✗ Failed to restart SSHD: {restart_result['stderr']}")
+        return False
+
+    logger.info("Cloning Guardium External S-TAP repository")
+    clone_result = execute_local_command(clone_command, logger=logger, verbose=verbose)
+    if clone_result['rc'] != 0:
+        logger.error(f"✗ Failed to clone Guardium External S-TAP repository: {clone_result['stderr']}")
+        return False
+
+    logger.info("Running ETAP MySQL deployment")
+    deploy_result = execute_local_command(deploy_command, logger=logger, verbose=verbose)
+    if deploy_result['rc'] != 0:
+        logger.error(f"✗ Failed to deploy ETAP MySQL: {deploy_result['stderr']}")
+        return False
+
+    logger.info("✓ ETAP MySQL deployed on raptor")
+    return True
+
+
 def setup_raptor_to_deploy_etap(
     config,
     logger,
@@ -859,7 +964,7 @@ def setup_raptor_to_deploy_etap(
         logger.error("ETAP setup requires podman-docker and skopeo packages")
         return False
     
-    # Step 2: Determine the latest ETAP version
+    # Step 3: Determine the latest ETAP version
     logger.info("\n➜ Determining the latest ETAP version from ICR...")
     
     try:
@@ -1088,6 +1193,8 @@ def setup_etap_certificates_mysql(
         logger.error(f"✗ Failed to generate CA certificate: {e}")
         return False
     
+    token_file = os.path.join(ca_dir, "mysql_etap_token.txt")
+
     # Step 4: Connect to collector and generate CSR
     logger.info(f"\n{'=' * 80}")
     logger.info("STEP 4: Generate CSR for ETAP on collector")
@@ -1138,7 +1245,10 @@ def setup_etap_certificates_mysql(
         
         etap_csr_id = line_above
         etap_token = token
-        
+        config.set_custom_variable('mysql_etap_token', etap_token)
+        with open(token_file, "w", encoding="utf-8") as f:
+            f.write(etap_token)
+
         logger.info(f"✓ CSR generated and saved to {csr_path}")
         logger.info(f"  CSR ID: {etap_csr_id}")
         logger.info(f"  Deployment token: {etap_token}")
