@@ -958,7 +958,7 @@ def setup_raptor_to_deploy_etap(
 
 
 
-def setup_etap_certificates(
+def setup_etap_certificates_mysql(
     config,
     logger,
     verbose: bool = False,
@@ -967,29 +967,19 @@ def setup_etap_certificates(
     etap_alias: str = "mysql-etap",
     etap_common_name: str = "mysql-etap",
     etap_san1: str = "coll1.demo.com",
+    etap_organizational_unit: str = "Demo",
+    etap_organization: str = "Guardium",
+    etap_locality: str = "Nowa Sol",
+    etap_state: str = "Lubuskie",
+    etap_country: str = "PL",
+    etap_email: str = "guardadmin@gmail.com",
+    etap_encryption_algorithm: str = "2",
+    etap_keysize: str = "2",
+    etap_san2: str = "",
+    ca_common_name: str = "ETAP CA",
     ca_alias: str = "etapca",
     debug: bool = False
 ) -> bool:
-    """
-    Setup ETAP certificates: Create CA, generate CSR, sign certificate, and import to collector.
-    Combines logic from t_deploy_ca_on_raptor, t_create_mysql_csr_for_etap, 
-    t_import_etap_ca_cert, and t_import_etap_cert.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (default: False)
-        collector_appliance: Collector appliance name (default: coll1)
-        ca_dir: Directory for CA files (default: /opt/ETAP/ca)
-        etap_alias: ETAP certificate alias (default: mysql-etap)
-        etap_common_name: ETAP certificate common name (default: mysql-etap)
-        etap_san1: ETAP certificate SAN (default: coll1.demo.com)
-        ca_alias: CA certificate alias (default: etapca)
-        debug: Enable debug mode (default: False)
-        
-    Returns:
-        True if successful, False otherwise
-    """
     import os
     from core.utils import run_local_command
     from core.appliance_config_loader import ApplianceConfigLoader
@@ -1070,8 +1060,22 @@ def setup_etap_certificates(
     ca_cert_path = os.path.join(ca_dir, "ca.pem")
     try:
         logger.info(f"Generating CA certificate: {ca_cert_path}")
+        
+        ca_subj_parts = [f"C={etap_country}"]
+        if etap_state:
+            ca_subj_parts.append(f"ST={etap_state}")
+        if etap_locality:
+            ca_subj_parts.append(f"L={etap_locality}")
+        ca_subj_parts.append(f"O={etap_organization}")
+        ca_subj_parts.append(f"OU={etap_organizational_unit}")
+        ca_subj_parts.append(f"CN={ca_common_name}")
+        if etap_email:
+            ca_subj_parts.append(f"emailAddress={etap_email}")
+        
+        ca_subj = "/" + "/".join(ca_subj_parts)
+        
         result = run_local_command(
-            command=f'openssl req -x509 -sha256 -new -key {ca_key_path} -days 3650 -out {ca_cert_path} -subj "/C=PL/O=Demo/OU=Training/CN=Demo Root CA"',
+            command=f'openssl req -x509 -sha256 -new -key {ca_key_path} -days 3650 -out {ca_cert_path} -subj "{ca_subj}"',
             shell=True,
             timeout=60,
             check=True
@@ -1115,7 +1119,16 @@ def setup_etap_certificates(
         csr, token, line_above = appliance.generate_external_stap_csr(
             alias=etap_alias,
             common_name=etap_common_name,
-            san1=etap_san1
+            san1=etap_san1,
+            organizational_unit=etap_organizational_unit,
+            organization=etap_organization,
+            country=etap_country,
+            encryption_algorithm=etap_encryption_algorithm,
+            keysize=etap_keysize,
+            locality=etap_locality,
+            state=etap_state,
+            email=etap_email,
+            san2=etap_san2
         )
         
         # Save CSR to file
