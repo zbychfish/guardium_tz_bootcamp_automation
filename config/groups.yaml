@@ -302,4 +302,17 @@ groups:
           filebeat_pattern: "filebeat-*.rpm"
           debug: false
 
+  etap_lab:
+    name: "ETAP Lab"
+    description: "Setup raptor for External TAP (ETAP) deployment"
+    auto_execute: false  # Executed on demand
+    dependencies: [uc1_lab]
+    stages:
+      - name: setup_raptor_to_deploy_etap
+        function: setup_raptor_to_deploy_etap
+        module: tasks.labs
+        description: "Install required packages and determine latest ETAP version for deployment"
+        args:
+          debug: false
+
 # Made with Bob

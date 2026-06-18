@@ -804,3 +804,154 @@ def install_filebeat_on_sauropod(
         return False
     finally:
         ssh.disconnect()
+
+
+
+def setup_raptor_to_deploy_etap(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False
+) -> bool:
+    """
+    Setup raptor machine to deploy ETAP (External TAP).
+    Installs required packages and determines the latest ETAP version.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (default: False)
+        debug: Enable debug mode (default: False)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    import json
+    import re
+    from packaging.version import Version
+    from core.utils import run_local_command
+    
+    logger.info("=" * 80)
+    logger.info("SETUP RAPTOR TO DEPLOY ETAP")
+    logger.info("=" * 80)
+    
+    # Step 1: Install required packages
+    logger.info("\n➜ Installing package requirements (podman-docker, skopeo)...")
+    
+    try:
+        dnf_command = "dnf -y install podman-docker skopeo"
+        logger.info(f"Executing: {dnf_command}")
+        
+        result = run_local_command(
+            command=dnf_command,
+            shell=True,
+            timeout=300,  # 5 minutes timeout for package installation
+            check=True
+        )
+        
+        logger.info("✓ Packages installed successfully")
+        
+        if debug and result.stdout:
+            logger.debug(f"dnf output: {result.stdout}")
+            
+    except Exception as e:
+        logger.error(f"✗ Failed to install packages: {e}")
+        logger.error("ETAP setup requires podman-docker and skopeo packages")
+        return False
+    
+    # Step 2: Determine the latest ETAP version
+    logger.info("\n➜ Determining the latest ETAP version from ICR...")
+    
+    try:
+        skopeo_command = "skopeo list-tags docker://icr.io/guardium/guardium_external_s-tap"
+        logger.info(f"Executing: {skopeo_command}")
+        
+        result = run_local_command(
+            command=skopeo_command,
+            shell=True,
+            timeout=120,  # 2 minutes timeout
+            check=True
+        )
+        
+        if not result.stdout:
+            logger.error("✗ No output from skopeo command")
+            return False
+        
+        # Parse JSON output
+        etap_versions = json.loads(result.stdout)
+        
+        if debug:
+            logger.debug(f"Available tags: {etap_versions.get('Tags', [])}")
+        
+        # Extract version numbers and find latest per minor version
+        latest = {}
+        tags = etap_versions.get("Tags", [])
+        
+        logger.info(f"Found {len(tags)} tags, analyzing versions...")
+        
+        for tag in tags:
+            # Match version pattern: v12.2.2.0 or similar
+            match = re.match(r"^v(\d+\.\d+\.\d+)", tag)
+            if not match:
+                continue
+            
+            version_str = match.group(1)
+            major, minor, patch = version_str.split(".")
+            key = f"{major}.{minor}"
+            
+            try:
+                v = Version(version_str)
+                if key not in latest or v > latest[key]:
+                    latest[key] = v
+                    if debug:
+                        logger.debug(f"Updated latest for {key}: {v}")
+            except Exception as e:
+                if debug:
+                    logger.debug(f"Failed to parse version {version_str}: {e}")
+                continue
+        
+        if not latest:
+            logger.error("✗ No valid ETAP versions found")
+            return False
+        
+        # Get Guardium minor version from config
+        guardium_minor_version = config.get_custom_variable('guardium_minor_version')
+        
+        if not guardium_minor_version:
+            # Try to auto-detect from available versions (use latest)
+            guardium_minor_version = max(latest.keys())
+            logger.info(f"No guardium_minor_version in config, using latest: {guardium_minor_version}")
+        
+        if guardium_minor_version not in latest:
+            logger.error(f"✗ No ETAP version found for Guardium {guardium_minor_version}")
+            logger.error(f"Available minor versions: {', '.join(latest.keys())}")
+            return False
+        
+        etap_version = str(latest[guardium_minor_version])
+        
+        logger.info(f"✓ Latest ETAP version for Guardium {guardium_minor_version}: {etap_version}")
+        
+        # Save to custom_variables in config
+        # Note: This updates the in-memory config, not the JSON file
+        config.set_custom_variable('guardium_etap_version', etap_version)
+        
+        logger.info(f"✓ ETAP version saved to config: {etap_version}")
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ Raptor setup for ETAP deployment completed successfully")
+        logger.info(f"ETAP Version: {etap_version}")
+        logger.info("=" * 80)
+        
+        return True
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"✗ Failed to parse skopeo output: {e}")
+        if debug:
+            logger.debug(f"Output was: {result.stdout}")
+        return False
+    except Exception as e:
+        logger.error(f"✗ Failed to determine ETAP version: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
