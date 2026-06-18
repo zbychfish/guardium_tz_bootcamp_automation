@@ -329,5 +329,21 @@ class ConfigLoader:
         """
         custom_vars = self.get_custom_variables()
         return custom_vars.get(key, default)
+    
+    def set_custom_variable(self, key: str, value: Any) -> None:
+        """
+        Set a custom variable value in memory.
+        Note: This only updates the in-memory configuration, not the JSON file.
+        
+        Args:
+            key: Variable name
+            value: Variable value
+        """
+        # Initialize custom_variables in machines_info if it doesn't exist
+        if 'custom_variables' not in self.machines_info:
+            self.machines_info['custom_variables'] = {}
+        
+        # Set the variable
+        self.machines_info['custom_variables'][key] = value
 
 # Made with Bob
