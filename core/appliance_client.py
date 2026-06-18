@@ -955,11 +955,13 @@ class ApplianceClient:
         full_output = ""
         start_time = time.time()
         last_activity = time.time()
+        csr_confirmed = False
+        cert_sent = False
         
-        # Main loop
+        # Main loop - exactly as in original appliance_command.py
         while True:
             if time.time() - start_time > timeout_sec:
-                raise TimeoutError("GLOBAL TIMEOUT during External S-TAP certificate import")
+                raise TimeoutError("GLOBAL TIMEOUT during External S-TAP cert import")
             
             out = read_output()
             if out:
@@ -969,37 +971,45 @@ class ApplianceClient:
             # Alias prompt
             if "Please enter the alias associated with the certificate" in full_output:
                 if self.debug:
-                    print(f"[DEBUG] Sending alias line: {alias_line}", file=sys.stderr)
+                    print("[DEBUG] Sending External S-TAP alias line", file=sys.stderr)
                 send(alias_line)
                 full_output = ""
                 continue
             
-            # CSR correspondence confirmation
-            if "Does this certificate correspond to the CSR" in full_output or "Are you importing an External S-TAP certificate that corresponds to this CSR" in full_output:
+            # CSR confirmation
+            if (
+                not csr_confirmed
+                and "Are you importing an External S-TAP certificate" in full_output
+            ):
                 if self.debug:
-                    print("[DEBUG] Confirming CSR correspondence (y)", file=sys.stderr)
+                    print("[DEBUG] Confirming certificate corresponds to CSR (y)", file=sys.stderr)
                 send("y")
+                csr_confirmed = True
                 full_output = ""
                 continue
             
-            # Certificate paste prompt
-            if "Please paste your certificate below" in full_output:
+            # Paste certificate
+            if (
+                "Please paste your End-Entity certificate below" in full_output
+                and not cert_sent
+            ):
                 if self.debug:
                     print("[DEBUG] Pasting External S-TAP certificate", file=sys.stderr)
                 send_raw(stap_cert.strip() + "\n")
-                send("")       # ENTER
+                send("")        # ENTER
                 time.sleep(0.5)
-                send_ctrl_d()  # CTRL+D
+                send_ctrl_d()   # CTRL+D
+                cert_sent = True
                 full_output = ""
                 continue
             
             # Success
             if "SUCCESS: Certificate imported successfully" in full_output:
                 if self.debug:
-                    print("[DEBUG] Certificate imported successfully", file=sys.stderr)
+                    print("[DEBUG] External S-TAP certificate imported successfully", file=sys.stderr)
                 break
             
-            # Optional known error → normal termination
+            # Optional known error
             if (
                 ignore_time_parse_error
                 and "Error parsing time" in full_output
@@ -1009,7 +1019,7 @@ class ApplianceClient:
                 break
             
             if time.time() - last_activity > prompt_timeout_sec:
-                raise TimeoutError("PROMPT TIMEOUT during External S-TAP certificate import")
+                raise TimeoutError("PROMPT TIMEOUT during External S-TAP cert import")
             
             time.sleep(0.05)
 
