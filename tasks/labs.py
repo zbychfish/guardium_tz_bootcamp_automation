@@ -869,9 +869,7 @@ def deploy_etap_mysql(
     clone_command = "mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi"
     deploy_command = (
         "cd /opt/ETAP/Guardium_External_S-TAP && "
-        "export GIT_SSH_COMMAND=\"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\" && "
-        "export SSH_OPTIONS=\"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null\" && "
-        "./container_mgmt.sh "
+        "printf 'yes\n' | ./container_mgmt.sh "
         "--state-file mysql_etap_state "
         f"--db-host {raptor_ip} "
         "--proxy-num-workers 1 "
