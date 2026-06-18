@@ -100,7 +100,25 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ Required packages installed on raptor")
     
-    # Step 5: Install Java on sauropod (required for Oracle SQLcl)
+    # Step 5: Configure swap file on raptor
+    if verbose:
+        logger.info("Step 5: Configuring swap file on raptor")
+
+    commands = [
+        "fallocate -l 8G /home/swapfile",
+        "chmod 600 /home/swapfile",
+        "mkswap /home/swapfile",
+        "swapon /home/swapfile",
+        r"grep -q '^/home/swapfile[[:space:]]\+swap[[:space:]]\+swap[[:space:]]\+defaults[[:space:]]\+0[[:space:]]\+0$' /etc/fstab || echo '/home/swapfile swap swap defaults 0 0' >> /etc/fstab"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Swap file configuration failed")
+        return False
+
+    if verbose:
+        logger.info("✓ Swap file configured on raptor")
+
+    # Step 6: Install Java on sauropod (required for Oracle SQLcl)
     if verbose:
         logger.info("Step 5: Installing Java 11 on sauropod")
     
