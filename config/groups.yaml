@@ -68,7 +68,7 @@ groups:
         args:
           # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from custom_variables
           # cli_password: "password"  # Optional - defaults to cli_pwd from custom_variables
-          debug: true
+          debug: false
       
       - name: create_oauth_client
         function: create_oauth_client
