@@ -314,5 +314,18 @@ groups:
         description: "Install required packages and determine latest ETAP version for deployment"
         args:
           debug: false
+      
+      - name: setup_etap_certificates
+        function: setup_etap_certificates
+        module: tasks.labs
+        description: "Create CA, generate CSR, sign certificate, and import ETAP certificates to collector"
+        args:
+          collector_appliance: "coll1"
+          ca_dir: "/opt/ETAP/ca"
+          etap_alias: "mysql-etap"
+          etap_common_name: "mysql-etap"
+          etap_san1: "coll1.demo.com"
+          ca_alias: "etapca"
+          debug: false
 
 # Made with Bob

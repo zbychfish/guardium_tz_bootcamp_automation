@@ -955,3 +955,307 @@ def setup_raptor_to_deploy_etap(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
+
+
+def setup_etap_certificates(
+    config,
+    logger,
+    verbose: bool = False,
+    collector_appliance: str = "coll1",
+    ca_dir: str = "/opt/ETAP/ca",
+    etap_alias: str = "mysql-etap",
+    etap_common_name: str = "mysql-etap",
+    etap_san1: str = "coll1.demo.com",
+    ca_alias: str = "etapca",
+    debug: bool = False
+) -> bool:
+    """
+    Setup ETAP certificates: Create CA, generate CSR, sign certificate, and import to collector.
+    Combines logic from t_deploy_ca_on_raptor, t_create_mysql_csr_for_etap, 
+    t_import_etap_ca_cert, and t_import_etap_cert.
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        verbose: Enable verbose logging (default: False)
+        collector_appliance: Collector appliance name (default: coll1)
+        ca_dir: Directory for CA files (default: /opt/ETAP/ca)
+        etap_alias: ETAP certificate alias (default: mysql-etap)
+        etap_common_name: ETAP certificate common name (default: mysql-etap)
+        etap_san1: ETAP certificate SAN (default: coll1.demo.com)
+        ca_alias: CA certificate alias (default: etapca)
+        debug: Enable debug mode (default: False)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    import os
+    from core.utils import run_local_command
+    from core.appliance_config_loader import ApplianceConfigLoader
+    from core.appliance_client import ApplianceClient
+    
+    logger.info("=" * 80)
+    logger.info("SETUP ETAP CERTIFICATES")
+    logger.info("=" * 80)
+    
+    # Get collector configuration
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found in machines_info.json")
+        return False
+    
+    collector_ip = collector_config.get('ip')
+    if not collector_ip:
+        logger.error(f"Collector '{collector_appliance}' has no IP address configured")
+        return False
+    
+    logger.info(f"Collector: {collector_appliance} at {collector_ip}")
+    logger.info(f"CA Directory: {ca_dir}")
+    logger.info(f"ETAP Alias: {etap_alias}")
+    
+    # Get CLI password
+    cli_password = config.get_custom_variable('cli_pwd')
+    if not cli_password:
+        logger.error("CLI password not found in custom_variables (cli_pwd)")
+        return False
+    
+    # Step 1: Create CA directory
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 1: Create CA directory")
+    logger.info(f"{'=' * 80}")
+    
+    try:
+        logger.info(f"Creating directory: {ca_dir}")
+        result = run_local_command(
+            command=f"mkdir -p {ca_dir}",
+            shell=True,
+            timeout=30,
+            check=True
+        )
+        logger.info(f"✓ CA directory created")
+    except Exception as e:
+        logger.error(f"✗ Failed to create CA directory: {e}")
+        return False
+    
+    # Step 2: Create CA private key
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 2: Create CA private key")
+    logger.info(f"{'=' * 80}")
+    
+    ca_key_path = os.path.join(ca_dir, "ca.key")
+    try:
+        logger.info(f"Generating CA private key: {ca_key_path}")
+        result = run_local_command(
+            command=f"openssl genrsa -out {ca_key_path} 2048",
+            shell=True,
+            timeout=60,
+            check=True
+        )
+        logger.info(f"✓ CA private key generated")
+        
+        if debug and result.stdout:
+            logger.debug(f"openssl output: {result.stdout}")
+    except Exception as e:
+        logger.error(f"✗ Failed to generate CA private key: {e}")
+        return False
+    
+    # Step 3: Generate CA certificate
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 3: Generate CA certificate")
+    logger.info(f"{'=' * 80}")
+    
+    ca_cert_path = os.path.join(ca_dir, "ca.pem")
+    try:
+        logger.info(f"Generating CA certificate: {ca_cert_path}")
+        result = run_local_command(
+            command=f'openssl req -x509 -sha256 -new -key {ca_key_path} -days 3650 -out {ca_cert_path} -subj "/C=PL/O=Demo/OU=Training/CN=Demo Root CA"',
+            shell=True,
+            timeout=60,
+            check=True
+        )
+        logger.info(f"✓ CA certificate generated")
+        
+        if debug and result.stdout:
+            logger.debug(f"openssl output: {result.stdout}")
+    except Exception as e:
+        logger.error(f"✗ Failed to generate CA certificate: {e}")
+        return False
+    
+    # Step 4: Connect to collector and generate CSR
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 4: Generate CSR for ETAP on collector")
+    logger.info(f"{'=' * 80}")
+    
+    csr_path = os.path.join(ca_dir, "etap.csr")
+    etap_csr_id = None
+    etap_token = None
+    
+    try:
+        logger.info(f"Connecting to collector {collector_ip}...")
+        
+        appliance = ApplianceClient(
+            host=collector_ip,
+            user="cli",
+            password=cli_password,
+            prompt_regex=r">",
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not appliance.connect():
+            logger.error("Failed to connect to collector")
+            return False
+        
+        logger.info("✓ Connected to collector")
+        
+        logger.info(f"Generating CSR for alias '{etap_alias}'...")
+        csr, token, line_above = appliance.generate_external_stap_csr(
+            alias=etap_alias,
+            common_name=etap_common_name,
+            san1=etap_san1
+        )
+        
+        # Save CSR to file
+        with open(csr_path, "w", encoding="utf-8") as f:
+            f.write(csr)
+        
+        etap_csr_id = line_above
+        etap_token = token
+        
+        logger.info(f"✓ CSR generated and saved to {csr_path}")
+        logger.info(f"  CSR ID: {etap_csr_id}")
+        logger.info(f"  Deployment token: {etap_token}")
+        
+        appliance.disconnect()
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to generate CSR: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    
+    # Step 5: Sign CSR with CA
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 5: Sign CSR with CA")
+    logger.info(f"{'=' * 80}")
+    
+    etap_cert_path = os.path.join(ca_dir, "etap.pem")
+    try:
+        logger.info(f"Signing CSR...")
+        result = run_local_command(
+            command=f"openssl x509 -sha256 -req -days 3650 -CA {ca_cert_path} -CAkey {ca_key_path} -CAcreateserial -CAserial serial -in {csr_path} -out {etap_cert_path}",
+            shell=True,
+            timeout=60,
+            check=True
+        )
+        logger.info(f"✓ CSR signed, certificate saved to {etap_cert_path}")
+        
+        if debug and result.stdout:
+            logger.debug(f"openssl output: {result.stdout}")
+    except Exception as e:
+        logger.error(f"✗ Failed to sign CSR: {e}")
+        return False
+    
+    # Step 6: Import CA certificate to collector
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 6: Import CA certificate to collector")
+    logger.info(f"{'=' * 80}")
+    
+    try:
+        logger.info(f"Connecting to collector {collector_ip}...")
+        
+        appliance = ApplianceClient(
+            host=collector_ip,
+            user="cli",
+            password=cli_password,
+            prompt_regex=r">",
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not appliance.connect():
+            logger.error("Failed to connect to collector")
+            return False
+        
+        logger.info("✓ Connected to collector")
+        
+        # Read CA certificate
+        with open(ca_cert_path, "r", encoding="utf-8") as f:
+            ca_cert_pem = f.read()
+        
+        logger.info(f"Importing CA certificate with alias '{ca_alias}'...")
+        appliance.import_external_stap_ca_certificate(
+            alias=ca_alias,
+            ca_cert=ca_cert_pem
+        )
+        
+        logger.info(f"✓ CA certificate imported successfully")
+        
+        appliance.disconnect()
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to import CA certificate: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    
+    # Step 7: Import ETAP certificate to collector
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 7: Import ETAP certificate to collector")
+    logger.info(f"{'=' * 80}")
+    
+    try:
+        logger.info(f"Connecting to collector {collector_ip}...")
+        
+        appliance = ApplianceClient(
+            host=collector_ip,
+            user="cli",
+            password=cli_password,
+            prompt_regex=r">",
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not appliance.connect():
+            logger.error("Failed to connect to collector")
+            return False
+        
+        logger.info("✓ Connected to collector")
+        
+        # Read ETAP certificate
+        with open(etap_cert_path, "r", encoding="utf-8") as f:
+            etap_cert_pem = f.read()
+        
+        logger.info(f"Importing ETAP certificate...")
+        appliance.import_external_stap_certificate(
+            alias_line=etap_csr_id,
+            stap_cert=etap_cert_pem
+        )
+        
+        logger.info(f"✓ ETAP certificate imported successfully")
+        
+        appliance.disconnect()
+        
+    except Exception as e:
+        logger.error(f"✗ Failed to import ETAP certificate: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    
+    # Summary
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ ETAP CERTIFICATES SETUP COMPLETED SUCCESSFULLY")
+    logger.info("=" * 80)
+    logger.info(f"CA Directory: {ca_dir}")
+    logger.info(f"CA Certificate: {ca_cert_path}")
+    logger.info(f"ETAP Certificate: {etap_cert_path}")
+    logger.info(f"ETAP Deployment Token: {etap_token}")
+    logger.info("=" * 80)
+    
+    return True

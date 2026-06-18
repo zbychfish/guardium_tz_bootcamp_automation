@@ -558,6 +558,445 @@ class ApplianceClient:
             if self.debug:
                 print(f"[ERROR] Disconnect error: {e}", file=sys.stderr)
 
+    def generate_external_stap_csr(
+        self,
+        alias: str,
+        common_name: str,
+        san1: str,
+        organizational_unit: str = "Training",
+        organization: str = "Demo",
+        locality: str = "",
+        state: str = "",
+        country: str = "PL",
+        email: str = "",
+        encryption_algorithm: str = "2",
+        keysize: str = "2",
+        san2: str = "",
+        timeout_sec: int = 180,
+        prompt_timeout_sec: int = 20
+    ) -> Tuple[str, str, str]:
+        """
+        Generate CSR for Guardium External S-TAP using existing connection.
+        
+        Args:
+            alias: CSR alias (e.g. mysql-etap)
+            common_name: Certificate CN
+            san1: First SAN value
+            organizational_unit: Organizational unit (default "Training")
+            organization: Organization (default "Demo")
+            locality: City/location (default empty - skip)
+            state: State/province (default empty - skip)
+            country: Two-letter country code (default "PL")
+            email: Email address (default empty - skip)
+            encryption_algorithm: Encryption algorithm (default "2")
+            keysize: Key size (default "2")
+            san2: Second SAN value (default empty)
+            timeout_sec: Global timeout in seconds (default 180)
+            prompt_timeout_sec: Timeout for single prompt (default 20)
+        
+        Returns:
+            Tuple[str, str, str]: (csr_pem, deployment_token, line_above_token)
+        
+        Raises:
+            RuntimeError: If not connected or error occurred
+            TimeoutError: If timeout exceeded
+        """
+        if not self.channel:
+            raise RuntimeError("Not connected")
+        
+        # Wizard steps definition
+        steps = [
+            ("alias", "Please enter the hostname as the alias", alias),
+            ("CN", "What is the Common Name", common_name),
+            ("OU", "organizational unit", organizational_unit),
+            ("OU-confirm", "another organizational unit", "n"),
+            ("O", "organization (O=", organization),
+            ("L", "city or locality", locality),
+            ("L-skip", "skip 'L'", "y" if not locality else "n"),
+            ("ST", "state or province", state),
+            ("ST-skip", "skip 'ST'", "y" if not state else "n"),
+            ("C", "two-letter country code", country),
+            ("email", "email address", email),
+            ("email-skip", "skip 'emailAddress'", "y" if not email else "n"),
+            ("crypto", "encryption algorithm", encryption_algorithm),
+            ("keysize", "keysize", keysize),
+            ("SAN1", "What is the name of SAN #1", san1),
+            ("SAN2", "What is the name of SAN #2", san2),
+        ]
+        
+        if self.debug:
+            print(f"[DEBUG] Starting External S-TAP CSR generation", file=sys.stderr)
+            print(f"[DEBUG] Alias={alias}, CN={common_name}, SAN1={san1}", file=sys.stderr)
+        
+        # Helper functions
+        def read_output() -> str:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            buf = ""
+            while self.channel.recv_ready():
+                chunk = self.channel.recv(65535).decode("utf-8", errors="ignore")
+                if self.debug:
+                    print(f"[DEBUG] RECV <<< {chunk}", file=sys.stderr)
+                buf += chunk
+            return buf
+        
+        def send(text: str) -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print(f"[DEBUG] SEND >>> {text!r}", file=sys.stderr)
+            self.channel.send((text + "\n").encode("utf-8"))
+        
+        # Send command
+        send("create csr external_stap")
+        if self.debug:
+            print("[DEBUG] Command sent: create csr external_stap", file=sys.stderr)
+        
+        full_output = ""
+        step_idx = 0
+        start_time = time.time()
+        last_activity = time.time()
+        
+        # Main loop
+        while True:
+            if time.time() - start_time > timeout_sec:
+                raise TimeoutError("GLOBAL TIMEOUT: CSR generation took too long")
+            
+            out = read_output()
+            if out:
+                full_output += out
+                last_activity = time.time()
+            
+            # CSR already exists → select option [2]
+            if (
+                "CSR for this alias already exists" in full_output
+                or "How would you like to proceed?" in full_output
+            ):
+                if self.debug:
+                    print("[DEBUG] Existing CSR detected – selecting option [2]", file=sys.stderr)
+                send("2")
+                full_output = ""
+                continue
+            
+            # End – token
+            if "To deploy the external_stap, use the following token:" in full_output:
+                if self.debug:
+                    print("[DEBUG] Wizard completed – token detected", file=sys.stderr)
+                break
+            
+            # Standard flow
+            if step_idx < len(steps):
+                step_name, expected_prompt, answer = steps[step_idx]
+                
+                if expected_prompt in full_output:
+                    if self.debug:
+                        print(
+                            f"[DEBUG] Step [{step_idx + 1}/{len(steps)}] "
+                            f"{step_name} → sending "
+                            f"{'ENTER' if answer == '' else answer}",
+                            file=sys.stderr
+                        )
+                    send(answer)
+                    step_idx += 1
+                    full_output = ""
+                    continue
+                
+                if time.time() - last_activity > prompt_timeout_sec:
+                    raise TimeoutError(
+                        f"PROMPT TIMEOUT at step '{step_name}', "
+                        f"waiting for: '{expected_prompt}'"
+                    )
+            
+            time.sleep(0.3)
+        
+        if self.debug:
+            print("[DEBUG] CSR generation completed", file=sys.stderr)
+        
+        # Extract CSR
+        csr_match = re.search(
+            r"-----BEGIN NEW CERTIFICATE REQUEST-----(.*?)-----END NEW CERTIFICATE REQUEST-----",
+            full_output,
+            re.S,
+        )
+        if not csr_match:
+            raise RuntimeError("CSR not found in output")
+        
+        csr = (
+            "-----BEGIN NEW CERTIFICATE REQUEST-----"
+            + csr_match.group(1)
+            + "-----END NEW CERTIFICATE REQUEST-----"
+        )
+        
+        # Extract token and line above
+        lines = full_output.splitlines()
+        token: Optional[str] = None
+        line_above: Optional[str] = None
+        
+        for i, line in enumerate(lines):
+            if "To deploy the external_stap, use the following token:" in line:
+                token = line.split(":")[-1].strip()
+                if i > 0:
+                    line_above = lines[i - 1].strip()
+                break
+        
+        if token is None:
+            raise RuntimeError("Deployment token not found")
+        if line_above is None:
+            raise RuntimeError("Line above token not found")
+        
+        if self.debug:
+            print(f"[DEBUG] Deployment token extracted: {token}", file=sys.stderr)
+        
+        return csr, token, line_above
+    
+    def import_external_stap_ca_certificate(
+        self,
+        alias: str,
+        ca_cert: str,
+        timeout_sec: int = 120,
+        prompt_timeout_sec: int = 20,
+        ignore_time_parse_error: bool = True
+    ) -> None:
+        """
+        Import CA certificate to Guardium External S-TAP keystore using existing connection.
+        
+        Args:
+            alias: Alias for CA certificate
+            ca_cert: CA certificate in PEM format (string)
+            timeout_sec: Global timeout in seconds (default 120)
+            prompt_timeout_sec: Timeout for single prompt (default 20)
+            ignore_time_parse_error: Whether to ignore "Error parsing time" error (default True)
+        
+        Raises:
+            RuntimeError: If not connected or error occurred
+            TimeoutError: If timeout exceeded
+        """
+        if not self.channel:
+            raise RuntimeError("Not connected")
+        
+        if self.debug:
+            print(f"[DEBUG] Starting External S-TAP CA certificate import", file=sys.stderr)
+            print(f"[DEBUG] Alias: {alias}", file=sys.stderr)
+        
+        # Helper functions
+        def send(text: str) -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print(f"[DEBUG] SEND >>> {text!r}", file=sys.stderr)
+            self.channel.send((text + "\n").encode("utf-8"))
+        
+        def send_raw(data: str) -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print("[DEBUG] SEND >>> (raw certificate data)", file=sys.stderr)
+            self.channel.send(data.encode("utf-8"))
+        
+        def send_ctrl_d() -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print("[DEBUG] SEND >>> CTRL+D", file=sys.stderr)
+            self.channel.send(b"\x04")
+        
+        def read_output() -> str:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            buf = ""
+            while self.channel.recv_ready():
+                chunk = self.channel.recv(65535).decode("utf-8", errors="ignore")
+                if self.debug:
+                    print(f"[DEBUG] RECV <<< {chunk}", file=sys.stderr)
+                buf += chunk
+            return buf
+        
+        # Send command
+        send("store certificate keystore_external_stap")
+        if self.debug:
+            print("[DEBUG] Command sent: store certificate keystore_external_stap", file=sys.stderr)
+        
+        full_output = ""
+        start_time = time.time()
+        last_activity = time.time()
+        
+        # Main loop
+        while True:
+            if time.time() - start_time > timeout_sec:
+                raise TimeoutError("GLOBAL TIMEOUT during CA certificate import")
+            
+            out = read_output()
+            if out:
+                full_output += out
+                last_activity = time.time()
+            
+            # Alias prompt
+            if "Please enter the alias associated with the certificate" in full_output:
+                if self.debug:
+                    print(f"[DEBUG] Sending alias: {alias}", file=sys.stderr)
+                send(alias)
+                full_output = ""
+                continue
+            
+            # Certificate paste prompt
+            if "Please paste your Trusted certificate below" in full_output:
+                if self.debug:
+                    print("[DEBUG] Pasting CA certificate", file=sys.stderr)
+                send_raw(ca_cert.strip() + "\n")
+                send("")       # ENTER
+                time.sleep(0.5)
+                send_ctrl_d()  # CTRL+D
+                full_output = ""
+                continue
+            
+            # Success
+            if "SUCCESS: Certificate imported successfully" in full_output:
+                if self.debug:
+                    print("[DEBUG] Certificate imported successfully", file=sys.stderr)
+                break
+            
+            # Optional known error → normal termination
+            if (
+                ignore_time_parse_error
+                and "Error parsing time" in full_output
+            ):
+                if self.debug:
+                    print("[DEBUG] Known 'Error parsing time' detected – treating as success", file=sys.stderr)
+                break
+            
+            if time.time() - last_activity > prompt_timeout_sec:
+                raise TimeoutError("PROMPT TIMEOUT during CA certificate import")
+            
+            time.sleep(0.05)
+    
+    def import_external_stap_certificate(
+        self,
+        alias_line: str,
+        stap_cert: str,
+        timeout_sec: int = 180,
+        prompt_timeout_sec: int = 30,
+        ignore_time_parse_error: bool = True
+    ) -> None:
+        """
+        Import External S-TAP certificate (end-entity) to Guardium using existing connection.
+        
+        Args:
+            alias_line: Full alias line (e.g. "mysql-etap proxy_keycert 02717b9d-2a87-11f1-af30-c4df3d41f195")
+            stap_cert: External S-TAP certificate in PEM format (string)
+            timeout_sec: Global timeout in seconds (default 180)
+            prompt_timeout_sec: Timeout for single prompt (default 30)
+            ignore_time_parse_error: Whether to ignore "Error parsing time" error (default True)
+        
+        Raises:
+            RuntimeError: If not connected or error occurred
+            TimeoutError: If timeout exceeded
+        """
+        if not self.channel:
+            raise RuntimeError("Not connected")
+        
+        if self.debug:
+            print(f"[DEBUG] Starting External S-TAP certificate import", file=sys.stderr)
+            print(f"[DEBUG] Alias line: {alias_line}", file=sys.stderr)
+        
+        # Helper functions
+        def send(text: str) -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print(f"[DEBUG] SEND >>> {text!r}", file=sys.stderr)
+            self.channel.send((text + "\n").encode("utf-8"))
+        
+        def send_raw(data: str) -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print("[DEBUG] SEND >>> (raw certificate data)", file=sys.stderr)
+            self.channel.send(data.encode("utf-8"))
+        
+        def send_ctrl_d() -> None:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            if self.debug:
+                print("[DEBUG] SEND >>> CTRL+D", file=sys.stderr)
+            self.channel.send(b"\x04")
+        
+        def read_output() -> str:
+            if not self.channel:
+                raise RuntimeError("Channel not available")
+            buf = ""
+            while self.channel.recv_ready():
+                chunk = self.channel.recv(65535).decode("utf-8", errors="ignore")
+                if self.debug:
+                    print(f"[DEBUG] RECV <<< {chunk}", file=sys.stderr)
+                buf += chunk
+            return buf
+        
+        # Send command
+        send("store certificate external_stap")
+        if self.debug:
+            print("[DEBUG] Command sent: store certificate external_stap", file=sys.stderr)
+        
+        full_output = ""
+        start_time = time.time()
+        last_activity = time.time()
+        
+        # Main loop
+        while True:
+            if time.time() - start_time > timeout_sec:
+                raise TimeoutError("GLOBAL TIMEOUT during External S-TAP certificate import")
+            
+            out = read_output()
+            if out:
+                full_output += out
+                last_activity = time.time()
+            
+            # Alias prompt
+            if "Please enter the alias associated with the certificate" in full_output:
+                if self.debug:
+                    print(f"[DEBUG] Sending alias line: {alias_line}", file=sys.stderr)
+                send(alias_line)
+                full_output = ""
+                continue
+            
+            # CSR correspondence confirmation
+            if "Does this certificate correspond to the CSR" in full_output:
+                if self.debug:
+                    print("[DEBUG] Confirming CSR correspondence (y)", file=sys.stderr)
+                send("y")
+                full_output = ""
+                continue
+            
+            # Certificate paste prompt
+            if "Please paste your certificate below" in full_output:
+                if self.debug:
+                    print("[DEBUG] Pasting External S-TAP certificate", file=sys.stderr)
+                send_raw(stap_cert.strip() + "\n")
+                send("")       # ENTER
+                time.sleep(0.5)
+                send_ctrl_d()  # CTRL+D
+                full_output = ""
+                continue
+            
+            # Success
+            if "SUCCESS: Certificate imported successfully" in full_output:
+                if self.debug:
+                    print("[DEBUG] Certificate imported successfully", file=sys.stderr)
+                break
+            
+            # Optional known error → normal termination
+            if (
+                ignore_time_parse_error
+                and "Error parsing time" in full_output
+            ):
+                if self.debug:
+                    print("[DEBUG] Known 'Error parsing time' detected – treating as success", file=sys.stderr)
+                break
+            
+            if time.time() - last_activity > prompt_timeout_sec:
+                raise TimeoutError("PROMPT TIMEOUT during External S-TAP certificate import")
+            
+            time.sleep(0.05)
+
 # Made with Bob
 
 
