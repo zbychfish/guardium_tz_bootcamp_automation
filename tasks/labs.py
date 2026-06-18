@@ -838,9 +838,16 @@ def deploy_etap_mysql(
         logger.error("Collector 'coll1' IP not found in configuration")
         return False
 
+    version_file = "/opt/ETAP/ca/guardium_etap_version.txt"
     etap_version = config.get_custom_variable("guardium_etap_version")
+    if not etap_version and os.path.exists(version_file):
+        with open(version_file, "r", encoding="utf-8") as f:
+            etap_version = f.read().strip()
+        if etap_version:
+            logger.info(f"Loaded guardium_etap_version from {version_file}")
+
     if not etap_version:
-        logger.error("guardium_etap_version not found in custom_variables")
+        logger.error("guardium_etap_version not found in custom_variables or version file")
         return False
 
     token_file = "/opt/ETAP/ca/mysql_etap_token.txt"
@@ -1039,6 +1046,9 @@ def setup_raptor_to_deploy_etap(
         # Save to custom_variables in config
         # Note: This updates the in-memory config, not the JSON file
         config.set_custom_variable('guardium_etap_version', etap_version)
+        os.makedirs("/opt/ETAP/ca", exist_ok=True)
+        with open("/opt/ETAP/ca/guardium_etap_version.txt", "w", encoding="utf-8") as f:
+            f.write(etap_version)
         
         logger.info(f"✓ ETAP version saved to config: {etap_version}")
         
