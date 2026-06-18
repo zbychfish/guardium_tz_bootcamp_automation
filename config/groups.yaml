@@ -327,9 +327,13 @@ groups:
           etap_san1: "coll1.demo.com"
           etap_organizational_unit: "Demo"
           etap_organization: "Guardium"
+          etap_locality: "Nowa Sol"
+          etap_state: "Lubuskie"
           etap_country: "PL"
+          etap_email: "guardadmin@gmail.com"
           etap_encryption_algorithm: "2"
           etap_keysize: "2"
+          etap_san2: ""
           ca_common_name: "ETAP CA"
           ca_alias: "etapca"
           debug: false

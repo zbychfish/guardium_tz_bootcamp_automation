@@ -611,18 +611,36 @@ class ApplianceClient:
             ("OU", "organizational unit", organizational_unit),
             ("OU-confirm", "another organizational unit", "n"),
             ("O", "organization (O=", organization),
-            ("L", "city or locality", locality),
-            ("L-skip", "skip 'L'", "y" if not locality else "n"),
-            ("ST", "state or province", state),
-            ("ST-skip", "skip 'ST'", "y" if not state else "n"),
+        ]
+        
+        if locality:
+            steps.append(("L", "city or locality", locality))
+            steps.append(("L-skip", "skip 'L'", "n"))
+        else:
+            steps.append(("L-skip", "skip 'L'", "y"))
+        
+        if state:
+            steps.append(("ST", "state or province", state))
+            steps.append(("ST-skip", "skip 'ST'", "n"))
+        else:
+            steps.append(("ST-skip", "skip 'ST'", "y"))
+        
+        steps.extend([
             ("C", "two-letter country code", country),
-            ("email", "email address", email),
-            ("email-skip", "skip 'emailAddress'", "y" if not email else "n"),
+        ])
+        
+        if email:
+            steps.append(("email", "email address", email))
+            steps.append(("email-skip", "skip 'emailAddress'", "n"))
+        else:
+            steps.append(("email-skip", "skip 'emailAddress'", "y"))
+        
+        steps.extend([
             ("crypto", "encryption algorithm", encryption_algorithm),
             ("keysize", "keysize", keysize),
             ("SAN1", "What is the name of SAN #1", san1),
             ("SAN2", "What is the name of SAN #2", san2),
-        ]
+        ])
         
         if self.debug:
             print(f"[DEBUG] Starting External S-TAP CSR generation", file=sys.stderr)
