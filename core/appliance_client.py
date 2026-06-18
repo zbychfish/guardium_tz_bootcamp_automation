@@ -975,7 +975,7 @@ class ApplianceClient:
                 continue
             
             # CSR correspondence confirmation
-            if "Does this certificate correspond to the CSR" in full_output:
+            if "Does this certificate correspond to the CSR" in full_output or "Are you importing an External S-TAP certificate that corresponds to this CSR" in full_output:
                 if self.debug:
                     print("[DEBUG] Confirming CSR correspondence (y)", file=sys.stderr)
                 send("y")
