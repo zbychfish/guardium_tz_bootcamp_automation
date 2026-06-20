@@ -12,6 +12,7 @@ import subprocess
 import zipfile
 import requests
 from typing import Optional, Any, Callable
+import shlex
 from pathlib import Path
 from .logger import get_logger
 
@@ -701,6 +702,58 @@ def execute_mongo_js(
         # Clean up temporary file
         if os.path.exists(js_file):
             os.remove(js_file)
+
+
+def configure_local_disk(
+    device: str,
+    mount_point: str,
+    filesystem: str = "ext4",
+    logger=None,
+    verbose: bool = True
+) -> bool:
+    log = logger if logger else globals()['logger']
+
+    if verbose:
+        log.info(
+            f"Configuring local disk {device} with filesystem {filesystem} "
+            f"mounted at {mount_point}"
+        )
+
+    device_quoted = shlex.quote(device)
+    mount_point_quoted = shlex.quote(mount_point)
+    filesystem_quoted = shlex.quote(filesystem)
+
+    commands = [
+        f"test -b {device_quoted}",
+        (
+            f"blkid -o value -s TYPE {device_quoted} >/tmp/current_fs_type 2>/dev/null || true; "
+            f"CURRENT_FS=$(cat /tmp/current_fs_type 2>/dev/null); "
+            f"if [ -n \"$CURRENT_FS\" ] && [ \"$CURRENT_FS\" != {filesystem_quoted} ]; then "
+            f"echo \"Device {device} already has filesystem $CURRENT_FS, expected {filesystem}\" >&2; "
+            f"exit 1; "
+            f"fi; "
+            f"if [ -z \"$CURRENT_FS\" ]; then "
+            f"mkfs -t {filesystem_quoted} {device_quoted}; "
+            f"fi; "
+            f"rm -f /tmp/current_fs_type"
+        ),
+        f"mkdir -p {mount_point_quoted}",
+        (
+            f"UUID=$(blkid -o value -s UUID {device_quoted}) && "
+            f"[ -n \"$UUID\" ]"
+        ),
+        (
+            f"UUID=$(blkid -o value -s UUID {device_quoted}) && "
+            f"FSTAB_ENTRY=\"UUID=$UUID {mount_point} {filesystem} defaults 0 0\" && "
+            f"grep -Fqx \"$FSTAB_ENTRY\" /etc/fstab || echo \"$FSTAB_ENTRY\" >> /etc/fstab"
+        ),
+        (
+            f"findmnt -n -o TARGET {mount_point_quoted} | grep -Fx {mount_point_quoted} "
+            f"|| mount {mount_point_quoted}"
+        )
+    ]
+
+    return execute_commands(commands, log, verbose=verbose, stop_on_error=True)
 
 
 # ============================================================================

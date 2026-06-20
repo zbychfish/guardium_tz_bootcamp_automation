@@ -37,6 +37,7 @@ from .utils import validate_hostname         # Validate hostname format
 from .utils import download_file             # Download file from URL
 from .utils import extract_zip               # Extract ZIP archive
 from .utils import download_and_extract      # Download and extract ZIP in one step
+from .utils import configure_local_disk      # Configure local disk filesystem, mount and fstab
 
 __all__ = [
     'StateManager',
@@ -65,7 +66,8 @@ __all__ = [
     'validate_hostname',
     'download_file',
     'extract_zip',
-    'download_and_extract'
+    'download_and_extract',
+    'configure_local_disk'
 ]
 
 # Made with Bob
