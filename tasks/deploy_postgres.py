@@ -59,6 +59,7 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
         
         commands = [
             (["dnf", "-qy", "install", "@postgresql:16"], 600, "install"),
+            (["dnf", "-qy", "install", "postgresql-contrib"], 600, "install postgresql-contrib"),
             (["postgresql-setup", "--initdb", "--unit", "postgresql"], 300, "initialize"),
             (["chpasswd"], 60, "set password", f"postgres:{password}")
         ]
@@ -243,6 +244,24 @@ IP.1 = 127.0.0.1
         
         if verbose:
             logger.info(f"✓ Database users configured: {', '.join(users)}")
+        
+        # Step 7: Create required PostgreSQL extensions
+        if verbose:
+            logger.info('Step 7: Creating PostgreSQL extension "uuid-ossp"')
+        
+        result = subprocess.run(
+            ["sudo", "-u", "postgres", "psql", "-d", "postgres", "-U", "postgres", "-c", 'CREATE EXTENSION "uuid-ossp";'],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            logger.error(f'Failed to create extension "uuid-ossp": {result.stderr}')
+            return False
+        
+        if verbose:
+            logger.info('✓ PostgreSQL extension "uuid-ossp" created')
         
         if verbose:
             logger.info("=" * 80)
