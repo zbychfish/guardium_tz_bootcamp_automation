@@ -2842,7 +2842,28 @@ def install_patch_on_appliance(
                         logger.info("=" * 80)
                         logger.info(f"✓ Patch installation initiated on {appliance_name}")
                         logger.info("=" * 80)
-                        return True
+                        
+                        # Now monitor the installation to ensure all patches complete successfully
+                        logger.info("\n⏳ Monitoring patch installation progress...")
+                        logger.info("=" * 80)
+                        
+                        # Wait a moment before starting to monitor
+                        time.sleep(10)
+                        
+                        # Monitor the installation (check every 60 seconds, max 60 checks = 1 hour)
+                        monitor_result = monitor_patch_installation(
+                            config=config,
+                            logger=logger,
+                            appliance_name=appliance_name,
+                            patch_numbers=None,  # Monitor all patches
+                            check_interval=60,
+                            max_checks=60,
+                            user=user,
+                            password=password,
+                            debug=debug
+                        )
+                        
+                        return monitor_result
                 
             except socket.timeout:
                 # Timeout is normal - no data available
