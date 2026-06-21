@@ -924,6 +924,31 @@ def deploy_etap_mysql(
     return True
 
 
+def preparation_raptor_for_ltr(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False
+) -> bool:
+    logger.info("=" * 80)
+    logger.info("PREPARATION RAPTOR FOR LTR")
+    logger.info("=" * 80)
+
+    commands = [
+        "cd /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic && rm -rf venv && python3.12 -m venv venv",
+    ]
+
+    for command in commands:
+        result = execute_local_command(command, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed command: {command}")
+            logger.error(result["stderr"])
+            return False
+
+    logger.info("✓ Raptor prepared for LTR")
+    return True
+
+
 def setup_raptor_to_deploy_etap(
     config,
     logger,

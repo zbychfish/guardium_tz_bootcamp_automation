@@ -97,20 +97,21 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     
     if verbose:
         logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
-    
-    # Step 5: RH packages installation for different tasks
+
+    # Step 5: Install required packages on raptor
     if verbose:
         logger.info("Step 5: Installing required packages on raptor")
+
     commands = [
         "dnf install unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel -y"
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Package installation failed")
         return False
-    
+
     if verbose:
         logger.info("✓ Required packages installed on raptor")
-    
+
     # Step 6: Configure swap file on raptor
     if verbose:
         logger.info("Step 6: Configuring swap file on raptor")
