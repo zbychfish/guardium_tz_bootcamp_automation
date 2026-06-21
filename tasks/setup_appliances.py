@@ -1556,3 +1556,37 @@ def install_patch_on_appliance_single(
         password=password,
         debug=debug
     )
+
+
+
+def copy_single_file_to_appliance_task(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    source_file_path: Optional[str] = None,
+    target_dir: str = "/var/IBM/Guardium/log/patches/",
+    owner: str = "tomcat:tomcat",
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    from core.appliance_operations import copy_single_file_to_appliance
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    if not source_file_path:
+        logger.error("source_file_path is required")
+        return False
+    
+    return copy_single_file_to_appliance(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        source_file_path=source_file_path,
+        target_dir=target_dir,
+        owner=owner,
+        cloudsupport_password=cloudsupport_password,
+        debug=debug
+    )

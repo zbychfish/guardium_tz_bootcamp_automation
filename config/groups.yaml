@@ -372,12 +372,14 @@ groups:
           max_retries: 10
       
       - name: prepare_appnode_for_patching
-        function: prepare_appliance_for_patching_single
+        function: copy_single_file_to_appliance_task
         module: tasks.setup_appliances
         description: "Copy datalake patch file to appnode1 for installation"
         args:
           appliance_name: "appnode1"
-          patches_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/"
+          source_file_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/extensions/SqlGuard-12.0p80111_datalake_May_15_2026.tgz.enc.sig"
+          target_dir: "/var/IBM/Guardium/log/patches/"
+          owner: "tomcat:tomcat"
           debug: false
       
       - name: install_patch_on_appnode
