@@ -83,13 +83,24 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     
     if verbose:
         logger.info("✓ Supporting files downloaded and extracted successfully")
-        logger.info("=" * 80)
-        logger.info("System preparation completed successfully")
-        logger.info("=" * 80)
     
-    # Step 4: RH packages installation for different tasks
+    # Step 4: Clone guardium_notes_dbtraffic repository
     if verbose:
-        logger.info("Step 4: Installing required packages on raptor")
+        logger.info("Step 4: Cloning guardium_notes_dbtraffic repository")
+    
+    commands = [
+        "cd /opt/guardium_tz_bootcamp_automation/upload && rm -rf guardium_notes_dbtraffic && git clone https://github.com/zbychfish/guardium_notes_dbtraffic.git"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to clone guardium_notes_dbtraffic repository")
+        return False
+    
+    if verbose:
+        logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
+    
+    # Step 5: RH packages installation for different tasks
+    if verbose:
+        logger.info("Step 5: Installing required packages on raptor")
     commands = [
         "dnf install unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel -y"
     ]
@@ -100,9 +111,9 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ Required packages installed on raptor")
     
-    # Step 5: Configure swap file on raptor
+    # Step 6: Configure swap file on raptor
     if verbose:
-        logger.info("Step 5: Configuring swap file on raptor")
+        logger.info("Step 6: Configuring swap file on raptor")
 
     commands = [
         "fallocate -l 8G /home/swapfile",
@@ -118,9 +129,9 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ Swap file configured on raptor")
 
-    # Step 6: Install Java on sauropod (required for Oracle SQLcl)
+    # Step 7: Install Java on sauropod (required for Oracle SQLcl)
     if verbose:
-        logger.info("Step 5: Installing Java 11 on sauropod")
+        logger.info("Step 7: Installing Java 11 on sauropod")
     
     # Get sauropod machine IP (use private IP for internal communication)
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
