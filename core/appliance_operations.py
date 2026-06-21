@@ -353,6 +353,149 @@ def restart_appliance(
     logger.error("✗ Restart failed after all retry attempts")
     return False
 
+
+def setup_appnode(
+    config,
+    logger,
+    appliance_name: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True,
+    retry_interval: int = 60,
+    max_retries: int = 10
+) -> bool:
+    """
+    Setup app-node on Guardium appliance by executing 'store unit type app-node'.
+    Waits for confirmation, sends 'y', waits for disconnect, then retries connection.
+    """
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"SETUP APP-NODE: {appliance_name}")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=60,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        logger.info("\n➜ Executing: store unit type app-node")
+        logger.info("Waiting for confirmation prompt...")
+        
+        result = client.execute_command_with_confirmation(
+            command="store unit type app-node",
+            confirmation_pattern=r"Are you sure you want to proceed\s*\(y/n\)\?",
+            response="y",
+            confirm_idle=0.2
+        )
+        
+        logger.info("✓ Command executed, system restarting")
+        
+        client.disconnect()
+        
+        logger.info(f"\n⌛ Waiting for appliance to come back online...")
+        logger.info(f"   Retry interval: {retry_interval}s")
+        logger.info(f"   Max retries: {max_retries}")
+        
+        start_time = time.time()
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            retry_count += 1
+            logger.info(f"   Attempt {retry_count}/{max_retries}...")
+            
+            time.sleep(retry_interval)
+            
+            try:
+                test_client = ApplianceClient(
+                    host=host,
+                    user=user,
+                    password=password,
+                    prompt_regex=prompt_regex,
+                    initial_pattern=None,
+                    timeout=30,
+                    strip_ansi=True,
+                    debug=False
+                )
+                
+                if test_client.connect():
+                    test_client.disconnect()
+                    elapsed = int(time.time() - start_time)
+                    logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
+                    logger.info("=" * 80)
+                    logger.info("App-node setup completed successfully")
+                    logger.info("=" * 80)
+                    return True
+            except Exception:
+                pass
+        
+        elapsed = int(time.time() - start_time)
+        logger.error(f"✗ Timeout waiting for appliance (waited {elapsed}s, {retry_count} attempts)")
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error setting up app-node: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+    return False
+
 def configure_aggr_settings(
     config,
     logger,

@@ -16,6 +16,9 @@ from .group_manager import GroupManager      # Manage logical groups of stages
 from .logger import setup_logger             # Configure logging for a module
 from .logger import get_logger               # Get logger instance for a module
 
+# Appliance Operations
+from .appliance_operations import setup_appnode  # Setup app-node on appliance
+
 # Utilities
 from .utils import get_env                   # Get environment variable value
 from .utils import require_env               # Get required environment variable or raise error
@@ -47,6 +50,7 @@ __all__ = [
     'get_logger',
     'SSHClient',
     'WindowsClient',
+    'setup_appnode',
     'get_env',
     'require_env',
     'strip_ansi',

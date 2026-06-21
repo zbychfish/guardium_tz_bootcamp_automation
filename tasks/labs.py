@@ -1512,3 +1512,30 @@ def setup_etap_certificates_mysql(
     logger.info("=" * 80)
     
     return True
+
+
+
+def setup_appnode(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_operations import setup_appnode as core_setup_appnode
+    
+    if not kwargs.get('appliance_name'):
+        logger.error("appliance_name required")
+        return False
+    
+    return core_setup_appnode(
+        config=config,
+        logger=logger,
+        appliance_name=kwargs['appliance_name'],
+        user=kwargs.get('user'),
+        password=kwargs.get('password'),
+        prompt_regex=kwargs.get('prompt_regex'),
+        debug=debug,
+        retry_interval=kwargs.get('retry_interval', 60),
+        max_retries=kwargs.get('max_retries', 10)
+    )
