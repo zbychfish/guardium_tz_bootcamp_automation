@@ -360,5 +360,34 @@ groups:
         function: setup_minio_on_raptor
         module: tasks.labs
         description: "Prepare MinIO certificate authority, trust chain, private key, and CSR on raptor"
+      
+      - name: setup_appnode
+        function: setup_appnode
+        module: tasks.labs
+        description: "Setup app-node on appliance by executing 'store unit type app-node', wait for reboot and reconnection"
+        args:
+          appliance_name: "appnode1"
+          debug: false
+          retry_interval: 60
+          max_retries: 10
+      
+      - name: prepare_appnode_for_patching
+        function: prepare_appliance_for_patching
+        module: tasks.setup_appliances
+        description: "Copy datalake patch file to appnode1 for installation"
+        args:
+          appliance_name: "appnode1"
+          patches_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/"
+          debug: false
+      
+      - name: install_patch_on_appnode
+        function: install_patch_on_appliance
+        module: tasks.setup_appliances
+        description: "Install datalake patch on appnode1"
+        args:
+          appliance_name: "appnode1"
+          patch_selection: "1"
+          reinstall_answer: "y"
+          debug: false
 
 # Made with Bob

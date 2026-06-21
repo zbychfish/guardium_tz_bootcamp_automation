@@ -475,13 +475,23 @@ def setup_appnode(
                 )
                 
                 if test_client.connect():
-                    test_client.disconnect()
                     elapsed = int(time.time() - start_time)
                     logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
-                    logger.info("=" * 80)
-                    logger.info("App-node setup completed successfully")
-                    logger.info("=" * 80)
-                    return True
+                    
+                    logger.info("\n➜ Verifying unit type...")
+                    verify_result = test_client.execute_command("show unit type")
+                    
+                    if "App-Node" in verify_result or "App_Node" in verify_result:
+                        logger.info(f"✓ Unit type verified: {verify_result.strip()}")
+                        test_client.disconnect()
+                        logger.info("=" * 80)
+                        logger.info("App-node setup completed successfully")
+                        logger.info("=" * 80)
+                        return True
+                    else:
+                        logger.error(f"✗ Unit type verification failed. Expected 'App-Node', got: {verify_result.strip()}")
+                        test_client.disconnect()
+                        return False
             except Exception:
                 pass
         
