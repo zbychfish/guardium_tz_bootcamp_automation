@@ -456,7 +456,7 @@ def set_timezone_remote(ssh_client: SSHClient, timezone: str, logger) -> bool:
 
 def configure_raptor_data_disk_local(logger, verbose: bool = True) -> bool:
     return configure_local_disk(
-        device="/dev/sdd",
+        device="/dev/vdd",
         mount_point="/opt/data",
         filesystem="ext4",
         logger=logger,
