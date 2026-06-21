@@ -15,9 +15,9 @@ groups:
         description: "Configure /etc/hosts, SSHD, and root password on all machines"
         
       - name: preparation_for_services_deployment
-        function: preparation_raptor_for_ltr
+        function: preparation_for_services_deployment
         module: tasks.preparation_for_services_deployment
-        description: "Update system packages, prepare upload content, clone guardium_notes_dbtraffic, and create Python 3.12 venv"
+        description: "Update system packages, prepare upload content, and download supporting files"
 
   other_preparations:
     name: "Other general tasks, standard database installation"
