@@ -98,9 +98,49 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
 
-    # Step 5: Install required packages on raptor
+    # Step 5: Create pgsql.yaml for guardium_notes_dbtraffic
     if verbose:
-        logger.info("Step 5: Installing required packages on raptor")
+        logger.info("Step 5: Creating pgsql.yaml for guardium_notes_dbtraffic")
+
+    commands = [
+        """cat > /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/pgsql.yaml <<'EOF'
+# Admin config - for deploy-schema, seed-data, cleanup-schema, rebuild
+# Use super user (postgres, tom, etc.) with full privileges
+database:
+  type: postgres
+  host: raptor.demo.guardium
+  port: 5432
+  database: postgres
+  user: tom
+  password: Guardium123!
+
+workload:
+  duration_seconds: 3600  # 60 minutes (used if --duration not specified)
+  think_time_ms: 250      # normal speed (used if --speed not specified)
+
+scenario:
+  name: micro_payments
+  options:
+    locale: pl_PL
+    seed_customers: 100
+    app_users:
+      - appuser1
+      - appuser2
+    admin_users:
+      - adminuser1
+    default_password: password
+EOF"""
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to create pgsql.yaml for guardium_notes_dbtraffic")
+        return False
+
+    if verbose:
+        logger.info("✓ pgsql.yaml created for guardium_notes_dbtraffic")
+
+    # Step 6: Install required packages on raptor
+    if verbose:
+        logger.info("Step 6: Installing required packages on raptor")
 
     commands = [
         "dnf install unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel -y"
@@ -112,9 +152,9 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ Required packages installed on raptor")
 
-    # Step 6: Configure swap file on raptor
+    # Step 7: Configure swap file on raptor
     if verbose:
-        logger.info("Step 6: Configuring swap file on raptor")
+        logger.info("Step 7: Configuring swap file on raptor")
 
     commands = [
         "fallocate -l 8G /home/swapfile",
@@ -130,9 +170,9 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ Swap file configured on raptor")
 
-    # Step 7: Install Java on sauropod (required for Oracle SQLcl)
+    # Step 8: Install Java on sauropod (required for Oracle SQLcl)
     if verbose:
-        logger.info("Step 7: Installing Java 11 on sauropod")
+        logger.info("Step 8: Installing Java 11 on sauropod")
     
     # Get sauropod machine IP (use private IP for internal communication)
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
