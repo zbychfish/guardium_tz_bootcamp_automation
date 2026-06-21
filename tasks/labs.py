@@ -983,6 +983,61 @@ EOF""",
     return True
 
 
+def setup_minio_on_raptor(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False
+) -> bool:
+    logger.info("=" * 80)
+    logger.info("SETUP MINIO ON RAPTOR")
+    logger.info("=" * 80)
+
+    raptor_ip = config.get_machine_ip("raptor", use_private=True)
+    if not raptor_ip:
+        logger.error("Could not determine raptor IP address")
+        return False
+
+    minio_password = config.get_custom_variable("pwd")
+    if not minio_password:
+        logger.error("Custom variable 'pwd' not found")
+        return False
+
+    commands = [
+        "mkdir -p /home/minio/ca/{certs,private,newcerts}",
+        "chmod 700 /home/minio/ca/private",
+        "touch /home/minio/ca/index.txt",
+        "echo 1000 > /home/minio/ca/serial",
+        "mkdir -p /home/minio/certs/CAs",
+        "openssl genrsa -out /home/minio/ca/private/ca.key 4096",
+        'openssl req -x509 -new -nodes -key /home/minio/ca/private/ca.key -sha256 -days 3650 -subj "/CN=MinIO-Root-CA" -out /home/minio/ca/certs/ca.crt',
+        "cp /home/minio/ca/certs/ca.crt /home/minio/certs/CAs/",
+        "cp /home/minio/ca/certs/ca.crt /etc/pki/ca-trust/source/anchors/",
+        "update-ca-trust",
+        "openssl genrsa -out /home/minio/certs/private.key 4096 && chmod 600 /home/minio/certs/private.key",
+        f'openssl req -new -key /home/minio/certs/private.key -out /home/minio/minio.csr -subj "/CN=minio.demo.guardium" -addext "subjectAltName=DNS:raptor.demo.guardium,IP:{raptor_ip}"',
+        "openssl x509 -req -in /home/minio/minio.csr -CA /home/minio/ca/certs/ca.crt -CAkey /home/minio/ca/private/ca.key -CAcreateserial -out /home/minio/certs/public.crt -days 3600 -sha256 -copy_extensions copy",
+        "dnf -y install podman",
+        "mkdir -p /home/data/minio",
+        "chmod 700 /home/data/minio",
+        "curl -L -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc",
+        "chmod +x /usr/local/bin/mc",
+        f"podman run -d --name minio --restart=always -p 0.0.0.0:9000:9000 -p 0.0.0.0:9001:9001 -v /home/data/minio:/data:Z -v /home/minio/certs:/root/.minio/certs:Z -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD='{minio_password}' quay.io/minio/minio server /data --console-address ':9001'",
+        f"mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{minio_password}'",
+        "mc mb myminio/guardium-ltr",
+    ]
+
+    for command in commands:
+        result = execute_local_command(command, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed command: {command}")
+            logger.error(result["stderr"])
+            return False
+
+    logger.info("✓ MinIO certificates prepared and MinIO started on raptor")
+    return True
+
+
 def setup_raptor_to_deploy_etap(
     config,
     logger,

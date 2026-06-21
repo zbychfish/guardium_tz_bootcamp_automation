@@ -354,6 +354,11 @@ groups:
       - name: preparation_raptor_for_ltr
         function: preparation_raptor_for_ltr
         module: tasks.labs
-        description: "Prepare raptor upload content, clone guardium_notes_dbtraffic, and create Python 3.12 venv"
+        description: "Prepare raptor upload content, create pgsql.yaml, and create Python 3.12 venv"
+
+      - name: setup_minio_on_raptor
+        function: setup_minio_on_raptor
+        module: tasks.labs
+        description: "Prepare MinIO certificate authority, trust chain, private key, and CSR on raptor"
 
 # Made with Bob
