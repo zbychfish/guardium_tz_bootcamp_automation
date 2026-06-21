@@ -367,7 +367,7 @@ groups:
         description: "Setup app-node on appliance by executing 'store unit type app-node', wait for reboot and reconnection"
         args:
           appliance_name: "appnode1"
-          debug: false
+          debug: true
           retry_interval: 60
           max_retries: 10
       
