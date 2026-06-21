@@ -1497,3 +1497,62 @@ def install_and_monitor_patches_all(
     logger.info("=" * 80)
     
     return all_success
+
+
+
+def prepare_appliance_for_patching_single(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    from core.appliance_operations import prepare_appliance_for_patching as core_prepare
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    return core_prepare(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        patches_source_dir=patches_source_dir,
+        cloudsupport_password=cloudsupport_password,
+        debug=debug
+    )
+
+
+def install_patch_on_appliance_single(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: Optional[str] = None,
+    patch_selection: Optional[str] = None,
+    reinstall_answer: str = "y",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    from core.appliance_operations import install_patch_on_appliance as core_install
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    if not patch_selection:
+        logger.error("patch_selection is required")
+        return False
+    
+    return core_install(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        patch_selection=patch_selection,
+        reinstall_answer=reinstall_answer,
+        user=user,
+        password=password,
+        debug=debug
+    )

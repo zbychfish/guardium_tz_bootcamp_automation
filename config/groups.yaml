@@ -372,7 +372,7 @@ groups:
           max_retries: 10
       
       - name: prepare_appnode_for_patching
-        function: prepare_appliance_for_patching
+        function: prepare_appliance_for_patching_single
         module: tasks.setup_appliances
         description: "Copy datalake patch file to appnode1 for installation"
         args:
@@ -381,7 +381,7 @@ groups:
           debug: false
       
       - name: install_patch_on_appnode
-        function: install_patch_on_appliance
+        function: install_patch_on_appliance_single
         module: tasks.setup_appliances
         description: "Install datalake patch on appnode1"
         args:
