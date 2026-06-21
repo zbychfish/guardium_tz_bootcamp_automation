@@ -438,16 +438,24 @@ def setup_appnode(
         logger.info("\n➜ Executing: store unit type app-node")
         logger.info("Waiting for confirmation prompt...")
         
-        result = client.execute_command_with_confirmation(
-            command="store unit type app-node",
-            confirmation_pattern=r"Are you sure you want to proceed\s*\(y/n\)\?",
-            response="y",
-            confirm_idle=0.2
-        )
+        try:
+            result = client.execute_command_with_confirmation(
+                command="store unit type app-node",
+                confirmation_pattern=r"Are you sure you want to proceed\s*\(y/n\)\?",
+                response="y",
+                confirm_idle=0.2
+            )
+            logger.info("✓ Command executed, system restarting")
+        except RuntimeError as e:
+            if "Channel closed" in str(e):
+                logger.info("✓ System restarting (connection closed as expected)")
+            else:
+                raise
         
-        logger.info("✓ Command executed, system restarting")
-        
-        client.disconnect()
+        try:
+            client.disconnect()
+        except Exception:
+            pass
         
         logger.info(f"\n⌛ Waiting for appliance to come back online...")
         logger.info(f"   Retry interval: {retry_interval}s")
