@@ -4030,7 +4030,7 @@ def distribute_datalake_certificate(
         logger.info("Command: distribute application certificate datalake all_managed true")
         
         try:
-            output = client.execute_command("distribute application certificate datalake all_managed true", timeout=30)
+            output = client.execute_command("distribute application certificate datalake all_managed true", timeout=180)
             logger.info("✓ Distribution command executed")
             if debug:
                 logger.debug(f"Output: {output}")
@@ -4051,7 +4051,7 @@ def distribute_datalake_certificate(
             
             # Check status
             try:
-                output = client.execute_command("distribute certificate showlog all", timeout=30)
+                output = client.execute_command("distribute certificate showlog all", timeout=180)
             except Exception as e:
                 logger.warning(f"Failed to check status: {e}")
                 continue
@@ -4093,7 +4093,7 @@ def distribute_datalake_certificate(
         
         # Show final output for debugging
         try:
-            final_output = client.execute_command("distribute certificate showlog all", timeout=30)
+            final_output = client.execute_command("distribute certificate showlog all", timeout=180)
             logger.error(f"\nFinal output:\n{final_output}")
         except Exception as e:
             logger.error(f"Failed to get final output: {e}")
