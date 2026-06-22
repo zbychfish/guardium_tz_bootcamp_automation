@@ -1213,7 +1213,6 @@ def setup_raptor_to_deploy_etap(
         return False
 
 
-
 def setup_etap_certificates_mysql(
     config,
     logger,
@@ -1536,7 +1535,6 @@ def setup_etap_certificates_mysql(
     return True
 
 
-
 def setup_appnode(
     config,
     logger,
@@ -1563,7 +1561,6 @@ def setup_appnode(
     )
 
 
-
 def enable_ltr_on_appnode(
     config,
     logger,
@@ -1586,7 +1583,6 @@ def enable_ltr_on_appnode(
         prompt_regex=kwargs.get('prompt_regex'),
         debug=debug
     )
-
 
 
 def import_minio_CA_certificate(
@@ -1664,3 +1660,40 @@ def activate_ltr(
         prompt_regex=kwargs.get('prompt_regex'),
         debug=debug
     )
+
+
+def import_ltr_dashboard(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+    
+    logger.info("=" * 80)
+    logger.info("IMPORT LTR DASHBOARD ON CM")
+    logger.info("=" * 80)
+    
+    definition_files = ["exp_dashboard_ltr.sql"]
+    
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"Definitions directory: {definitions_dir}")
+    logger.info(f"File to import: {definition_files[0]}")
+    
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+    
+    if success:
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ LTR dashboard imported successfully")
+        logger.info("=" * 80)
+    
+    return success

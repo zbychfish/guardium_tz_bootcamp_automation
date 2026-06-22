@@ -425,6 +425,15 @@ groups:
         description: "Activate LTR (Long Term Retention) by configuring complete cold storage on CM with MinIO S3 backend"
         args:
           appliance_name: "cm"
-          debug: true
+          debug: false
+      
+      - name: import_ltr_dashboard
+        function: import_ltr_dashboard
+        module: tasks.labs
+        description: "Import LTR dashboard (exp_dashboard_ltr.sql) to CM via REST API"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
 
 # Made with Bob
