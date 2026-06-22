@@ -415,7 +415,7 @@ groups:
         description: "Distribute datalake certificate to all managed appliances (appnodes and collectors)"
         args:
           appliance_name: "cm"
-          timeout: 180
+          timeout: 600
           check_interval: 10
           debug: true
 
