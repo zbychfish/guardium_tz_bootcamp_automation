@@ -399,5 +399,14 @@ groups:
         args:
           appliance_name: "appnode1"
           debug: true
+      
+      - name: start_ltr_services_on_cm
+        function: start_ltr_services_on_cm
+        module: tasks.labs
+        description: "Import MinIO S3 certificate to CM for datalake integration"
+        args:
+          appliance_name: "cm"
+          certificate_file_path: "/home/minio/ca/certs/ca.crt"
+          debug: false
 
 # Made with Bob

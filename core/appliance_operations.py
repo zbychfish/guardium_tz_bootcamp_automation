@@ -3701,3 +3701,230 @@ def enable_ltr_on_appnode(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
+
+def import_datalake_s3_certificate(
+    config,
+    logger,
+    appliance_name: str,
+    certificate_file_path: str = "/home/minio/ca/certs/ca.crt",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Import S3 certificate for datalake on CM appliance.
+    
+    Steps:
+    1. Read certificate from raptor:/home/minio/ca/certs/ca.crt
+    2. Connect to CM CLI
+    3. Execute 'store certificate application datalake s3 console'
+    4. Paste certificate content
+    5. Send CTRL+D
+    6. Verify "SUCCESS: Certificate imported successfully"
+    """
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"IMPORT DATALAKE S3 CERTIFICATE: {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Get raptor IP and read certificate
+    raptor_ip = config.get_machine_ip('raptor', use_private=True)
+    if not raptor_ip:
+        logger.error("Could not find raptor IP in machines_info.json")
+        return False
+    
+    raptor_root_password = config.get_custom_variable('pwd')
+    if not raptor_root_password:
+        logger.error("pwd not found in machines_info.json custom_variables")
+        return False
+    
+    logger.info(f"Reading certificate from raptor:{certificate_file_path}")
+    
+    try:
+        from .ssh_client import SSHClient
+        
+        raptor_ssh = SSHClient(
+            host=raptor_ip,
+            username='root',
+            password=raptor_root_password,
+            port=22,
+            timeout=30
+        )
+        
+        if not raptor_ssh.connect():
+            logger.error("Failed to connect to raptor")
+            return False
+        
+        result = raptor_ssh.execute_command(f"cat {certificate_file_path}", print_output=False)
+        
+        if result['rc'] != 0:
+            logger.error(f"Failed to read certificate file: {result['stderr']}")
+            raptor_ssh.disconnect()
+            return False
+        
+        certificate_content = result['stdout']
+        raptor_ssh.disconnect()
+        
+        if not certificate_content or 'BEGIN CERTIFICATE' not in certificate_content:
+            logger.error("Invalid certificate content")
+            return False
+        
+        logger.info("✓ Certificate read successfully from raptor")
+        
+    except Exception as e:
+        logger.error(f"Error reading certificate from raptor: {e}")
+        return False
+    
+    # Now connect to CM and import certificate
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=120,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Verify channel is available
+        if client.channel is None:
+            logger.error("SSH channel not available after connection")
+            return False
+        
+        logger.info("\n➜ Importing S3 certificate for datalake...")
+        logger.info("Executing: store certificate application datalake s3 console")
+        
+        import time
+        import sys
+        
+        # Send command
+        client.channel.send(b"store certificate application datalake s3 console\r")
+        
+        # Wait for prompt asking for certificate
+        time.sleep(1)
+        buf = ""
+        deadline = time.time() + 30
+        
+        while time.time() < deadline:
+            if client.channel.recv_ready():
+                chunk = client.channel.recv(65535).decode(errors="replace")
+                buf += chunk
+                if debug:
+                    print(f"[DEBUG] Received: {repr(chunk)}", file=sys.stderr)
+                
+                # Check if we see the certificate prompt
+                if "Please paste your Trusted certificate below in PEM encoded format" in buf:
+                    logger.info("✓ Certificate prompt detected")
+                    break
+            time.sleep(0.1)
+        
+        # Send certificate content line by line
+        logger.info("Sending certificate content...")
+        for line in certificate_content.splitlines():
+            client.channel.send((line + "\n").encode())
+            time.sleep(0.01)
+        
+        # Send CTRL+D to finish input
+        logger.info("Sending CTRL+D...")
+        time.sleep(0.5)
+        client.channel.send(b"\x04")  # CTRL+D
+        
+        # Wait for completion message
+        time.sleep(2)
+        buf = ""
+        deadline = time.time() + 60
+        
+        while time.time() < deadline:
+            if client.channel.recv_ready():
+                chunk = client.channel.recv(65535).decode(errors="replace")
+                buf += chunk
+                if debug:
+                    print(f"[DEBUG] Received: {repr(chunk)}", file=sys.stderr)
+            
+            # Check for success message
+            if "SUCCESS: Certificate imported successfully" in buf:
+                logger.info("✓ SUCCESS: Certificate imported successfully")
+                client.disconnect()
+                logger.info("=" * 80)
+                logger.info("Datalake S3 certificate imported successfully")
+                logger.info("=" * 80)
+                return True
+            
+            # Check if prompt returned (command completed)
+            if client.prompt_re.search(buf):
+                break
+            
+            time.sleep(0.1)
+        
+        client.disconnect()
+        
+        if "SUCCESS: Certificate imported successfully" in buf:
+            logger.info("✓ SUCCESS: Certificate imported successfully")
+            logger.info("=" * 80)
+            logger.info("Datalake S3 certificate imported successfully")
+            logger.info("=" * 80)
+            return True
+        else:
+            logger.error("✗ Certificate import failed or success message not detected")
+            logger.error(f"Output: {buf}")
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error importing certificate: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False

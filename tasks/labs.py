@@ -1586,3 +1586,29 @@ def enable_ltr_on_appnode(
         prompt_regex=kwargs.get('prompt_regex'),
         debug=debug
     )
+
+
+
+def start_ltr_services_on_cm(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_operations import import_datalake_s3_certificate
+    
+    if not kwargs.get('appliance_name'):
+        logger.error("appliance_name required")
+        return False
+    
+    return import_datalake_s3_certificate(
+        config=config,
+        logger=logger,
+        appliance_name=kwargs['appliance_name'],
+        certificate_file_path=kwargs.get('certificate_file_path', '/home/minio/ca/certs/ca.crt'),
+        user=kwargs.get('user'),
+        password=kwargs.get('password'),
+        prompt_regex=kwargs.get('prompt_regex'),
+        debug=debug
+    )
