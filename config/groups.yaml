@@ -398,7 +398,7 @@ groups:
         description: "Enable LTR (Lake Threat Response) on appnode1 - install, configure, start datalake and verify status"
         args:
           appliance_name: "appnode1"
-          debug: true
+          debug: false
       
       - name: import_minio_CA_certificate
         function: import_minio_CA_certificate
@@ -407,6 +407,16 @@ groups:
         args:
           appliance_name: "cm"
           certificate_file_path: "/home/minio/ca/certs/ca.crt"
+          debug: false
+      
+      - name: distribute_minio_certificate
+        function: distribute_minio_certificate
+        module: tasks.labs
+        description: "Distribute datalake certificate to all managed appliances (appnodes and collectors)"
+        args:
+          appliance_name: "cm"
+          timeout: 300
+          check_interval: 10
           debug: false
 
 # Made with Bob

@@ -1612,3 +1612,30 @@ def import_minio_CA_certificate(
         prompt_regex=kwargs.get('prompt_regex'),
         debug=debug
     )
+
+
+def distribute_minio_certificate(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    """
+    Distribute MinIO S3 certificate to all managed appliances.
+    
+    Wrapper for distribute_datalake_certificate from appliance_operations.
+    """
+    from core.appliance_operations import distribute_datalake_certificate
+    
+    return distribute_datalake_certificate(
+        config=config,
+        logger=logger,
+        appliance_name=kwargs.get('appliance_name', 'cm'),
+        user=kwargs.get('user'),
+        password=kwargs.get('password'),
+        prompt_regex=kwargs.get('prompt_regex'),
+        timeout=kwargs.get('timeout', 300),
+        check_interval=kwargs.get('check_interval', 10),
+        debug=debug
+    )

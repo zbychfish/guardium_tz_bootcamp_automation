@@ -3900,3 +3900,210 @@ def import_datalake_s3_certificate(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
+def distribute_datalake_certificate(
+    config,
+    logger,
+    appliance_name: str = "cm",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    timeout: int = 300,
+    check_interval: int = 10,
+    debug: bool = False
+) -> bool:
+    """
+    Distribute datalake S3 certificate to all managed appliances and monitor synchronization.
+    
+    Steps:
+    1. Execute 'distribute application certificate datalake all_managed true' on CM
+    2. Monitor with 'distribute certificate showlog all' until complete
+    3. Verify Success status for all appnodes (2 entries per appnode) and collectors (1 entry per collector)
+    4. Verify INFO status for CM (2 entries)
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        appliance_name: Name of CM appliance (default: 'cm')
+        user: SSH username (optional)
+        password: SSH password (optional)
+        prompt_regex: Prompt regex (optional)
+        timeout: Maximum time to wait for distribution (seconds, default: 300)
+        check_interval: Interval between status checks (seconds, default: 10)
+        debug: Enable debug output
+    
+    Returns:
+        True if distribution successful, False otherwise
+    """
+    from .appliance_config_loader import ApplianceConfigLoader
+    from .appliance_client import ApplianceClient
+    import time
+    import re
+    
+    logger.info("=" * 80)
+    logger.info(f"DISTRIBUTE DATALAKE CERTIFICATE FROM {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Get all appliances to determine expected entries
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    all_appliances = appliance_loader.get_all_appliances()
+    
+    # Count appnodes and collectors
+    appnodes = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'appnode']
+    collectors = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'collector']
+    cms = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'cm']
+    
+    logger.info(f"Expected distribution targets:")
+    logger.info(f"  - Appnodes: {len(appnodes)} ({', '.join(appnodes)})")
+    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors)})")
+    logger.info(f"  - CM: {len(cms)} ({', '.join(cms)})")
+    
+    # Expected entries: 2 per appnode, 1 per collector, 2 for CM
+    expected_success_entries = len(appnodes) * 2 + len(collectors)
+    expected_info_entries = 2  # CM entries
+    
+    logger.info(f"Expected results:")
+    logger.info(f"  - Success entries: {expected_success_entries}")
+    logger.info(f"  - INFO entries: {expected_info_entries}")
+    
+    # Get CM appliance config
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Connecting to {appliance_name} ({appliance_type}) at {host}")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=120,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Verify channel is available
+        if client.channel is None:
+            logger.error("SSH channel not available after connection")
+            return False
+        
+        # Execute distribution command
+        logger.info("\n➜ Executing certificate distribution...")
+        logger.info("Command: distribute application certificate datalake all_managed true")
+        
+        try:
+            output = client.execute_command("distribute application certificate datalake all_managed true", timeout=30)
+            logger.info("✓ Distribution command executed")
+            if debug:
+                logger.debug(f"Output: {output}")
+        except Exception as e:
+            logger.error(f"Failed to execute distribution command: {e}")
+            client.disconnect()
+            return False
+        
+        # Monitor distribution status
+        logger.info(f"\n➜ Monitoring distribution status (timeout: {timeout}s, check interval: {check_interval}s)...")
+        
+        start_time = time.time()
+        success_count = 0
+        info_count = 0
+        
+        while time.time() - start_time < timeout:
+            time.sleep(check_interval)
+            
+            # Check status
+            try:
+                output = client.execute_command("distribute certificate showlog all", timeout=30)
+            except Exception as e:
+                logger.warning(f"Failed to check status: {e}")
+                continue
+            
+            # Count Success and INFO entries
+            success_count = len(re.findall(r'\bSuccess\b', output, re.IGNORECASE))
+            info_count = len(re.findall(r'\bINFO\b', output))
+            
+            elapsed = int(time.time() - start_time)
+            logger.info(f"[{elapsed}s] Status: Success={success_count}/{expected_success_entries}, INFO={info_count}/{expected_info_entries}")
+            
+            if debug:
+                logger.debug(f"Current output:\n{output}")
+            
+            # Check if distribution is complete
+            if success_count >= expected_success_entries and info_count >= expected_info_entries:
+                logger.info("\n" + "=" * 80)
+                logger.info("✓ CERTIFICATE DISTRIBUTION COMPLETED SUCCESSFULLY")
+                logger.info("=" * 80)
+                logger.info(f"Final status:")
+                logger.info(f"  - Success entries: {success_count}/{expected_success_entries}")
+                logger.info(f"  - INFO entries: {info_count}/{expected_info_entries}")
+                logger.info(f"  - Time elapsed: {elapsed}s")
+                
+                if debug:
+                    logger.debug(f"\nFinal output:\n{output}")
+                
+                client.disconnect()
+                return True
+        
+        # Timeout reached
+        logger.error("\n" + "=" * 80)
+        logger.error("✗ CERTIFICATE DISTRIBUTION TIMEOUT")
+        logger.error("=" * 80)
+        logger.error(f"Distribution did not complete within {timeout}s")
+        logger.error(f"Final status:")
+        logger.error(f"  - Success entries: {success_count}/{expected_success_entries}")
+        logger.error(f"  - INFO entries: {info_count}/{expected_info_entries}")
+        
+        # Show final output for debugging
+        try:
+            final_output = client.execute_command("distribute certificate showlog all", timeout=30)
+            logger.error(f"\nFinal output:\n{final_output}")
+        except Exception as e:
+            logger.error(f"Failed to get final output: {e}")
+        
+        client.disconnect()
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error during certificate distribution: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+        return False
