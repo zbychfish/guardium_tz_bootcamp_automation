@@ -390,7 +390,7 @@ groups:
           appliance_name: "appnode1"
           patch_selection: "1"
           reinstall_answer: "y"
-          debug: true
+          debug: false
       
       - name: enable_ltr_on_appnode
         function: enable_ltr_on_appnode
