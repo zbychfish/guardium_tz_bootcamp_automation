@@ -417,6 +417,14 @@ groups:
           appliance_name: "cm"
           timeout: 600
           check_interval: 10
+          debug: false
+      
+      - name: activate_ltr
+        function: activate_ltr
+        module: tasks.labs
+        description: "Activate LTR (Long Term Retention) by configuring complete cold storage on CM with MinIO S3 backend"
+        args:
+          appliance_name: "cm"
           debug: true
 
 # Made with Bob

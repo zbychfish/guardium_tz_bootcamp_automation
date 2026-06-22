@@ -4106,4 +4106,186 @@ def distribute_datalake_certificate(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
+def activate_ltr(
+    config,
+    logger,
+    appliance_name: str = "cm",
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Activate LTR (Long Term Retention) by configuring complete cold storage on CM appliance.
+    
+    Executes grdapi configure_complete_cold_storage command with parameters:
+    - protocol: CUSTOM
+    - objectStorageEndpoint: https://raptor.demo.guardium:9000
+    - accessKey: minioadmin
+    - secretKey: from custom_variables (pwd)
+    - dataBucket: guardium-ltr
+    - resultSchema: datalake_reports
+    - region: US_EAST_1
+    - coldCatalogEndpoint: thrift://appnode1.demo.guardium:9083
+    - coldCatalogSchema: datalake
+    - coldStorageName: datalake
+    - queryEngineHost: appnode1.demo.guardium
+    - debug: 3
+    
+    Expected success output:
+    - "Cold Storage Maintenance Setup Completed"
+    - "Cold Storage ID: 1"
+    - "Cold Storage Name: datalake"
+    - Status: Success
+    - Message: "Complete cold storage configuration successful"
+    
+    Args:
+        config: ConfigLoader instance
+        logger: Logger instance
+        appliance_name: Name of CM appliance (default: 'cm')
+        user: SSH username (optional)
+        password: SSH password (optional)
+        prompt_regex: Prompt regex (optional)
+        debug: Enable debug output
+    
+    Returns:
+        True if activation successful, False otherwise
+    """
+    from .appliance_config_loader import ApplianceConfigLoader
+    from .appliance_client import ApplianceClient
+    
+    logger.info("=" * 80)
+    logger.info(f"ACTIVATE LTR (LONG TERM RETENTION) ON {appliance_name}")
+    logger.info("=" * 80)
+    
+    # Get admin password from custom_variables
+    admin_password = config.get_custom_variable('pwd')
+    if not admin_password:
+        logger.error("Admin password not found in custom_variables (pwd)")
+        return False
+    
+    logger.info("✓ Admin password retrieved from custom_variables (pwd)")
+    
+    # Get CM appliance config
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    # Build the grdapi command
+    command = (
+        f'grdapi configure_complete_cold_storage '
+        f'protocol="CUSTOM" '
+        f'objectStorageEndpoint="https://raptor.demo.guardium:9000" '
+        f'accessKey=minioadmin '
+        f'secretKey="{admin_password}" '
+        f'dataBucket=guardium-ltr '
+        f'resultSchema="datalake_reports" '
+        f'region="US_EAST_1" '
+        f'coldCatalogEndpoint="thrift://appnode1.demo.guardium:9083" '
+        f'coldCatalogSchema="datalake" '
+        f'coldStorageName="datalake" '
+        f'queryEngineHost="appnode1.demo.guardium" '
+        f'debug=3'
+    )
+    
+    logger.info("\n➜ Executing LTR activation command...")
+    logger.info(f"Command: {command.replace(admin_password, '***')}")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=300,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Execute the command with extended timeout (5 minutes)
+        output = client.execute_command(command, timeout=300)
+        
+        client.disconnect()
+        
+        # Check for success indicators
+        success_indicators = [
+            "Cold Storage Maintenance Setup Completed",
+            "Cold Storage ID:",
+            "Cold Storage Name: datalake",
+            '"status":"success"',
+            "Complete cold storage configuration successful"
+        ]
+        
+        found_indicators = []
+        for indicator in success_indicators:
+            if indicator.lower() in output.lower():
+                found_indicators.append(indicator)
+        
+        logger.info("\n" + "=" * 80)
+        if len(found_indicators) >= 3:
+            logger.info("✓ LTR ACTIVATION SUCCESSFUL")
+            logger.info("=" * 80)
+            logger.info(f"Found {len(found_indicators)}/{len(success_indicators)} success indicators:")
+            for indicator in found_indicators:
+                logger.info(f"  ✓ {indicator}")
+            
+            if debug:
+                logger.debug(f"\nFull output:\n{output}")
+            
+            return True
+        else:
+            logger.error("✗ LTR ACTIVATION FAILED")
+            logger.error("=" * 80)
+            logger.error(f"Found only {len(found_indicators)}/{len(success_indicators)} success indicators:")
+            for indicator in found_indicators:
+                logger.error(f"  ✓ {indicator}")
+            logger.error(f"\nOutput:\n{output}")
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error activating LTR: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False

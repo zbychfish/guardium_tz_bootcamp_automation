@@ -1639,3 +1639,28 @@ def distribute_minio_certificate(
         check_interval=kwargs.get('check_interval', 10),
         debug=debug
     )
+
+
+def activate_ltr(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    """
+    Activate LTR (Long Term Retention) by configuring complete cold storage.
+    
+    Wrapper for activate_ltr from appliance_operations.
+    """
+    from core.appliance_operations import activate_ltr as activate_ltr_op
+    
+    return activate_ltr_op(
+        config=config,
+        logger=logger,
+        appliance_name=kwargs.get('appliance_name', 'cm'),
+        user=kwargs.get('user'),
+        password=kwargs.get('password'),
+        prompt_regex=kwargs.get('prompt_regex'),
+        debug=debug
+    )
