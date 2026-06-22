@@ -3734,52 +3734,24 @@ def import_datalake_s3_certificate(
     logger.info(f"IMPORT DATALAKE S3 CERTIFICATE: {appliance_name}")
     logger.info("=" * 80)
     
-    # Get raptor IP and read certificate
-    raptor_ip = config.get_machine_ip('raptor', use_private=True)
-    if not raptor_ip:
-        logger.error("Could not find raptor IP in machines_info.json")
-        return False
-    
-    raptor_root_password = config.get_custom_variable('pwd')
-    if not raptor_root_password:
-        logger.error("pwd not found in machines_info.json custom_variables")
-        return False
-    
-    logger.info(f"Reading certificate from raptor:{certificate_file_path}")
+    # Read certificate from local file (script runs on raptor)
+    logger.info(f"Reading certificate from local file: {certificate_file_path}")
     
     try:
-        from .ssh_client import SSHClient
-        
-        raptor_ssh = SSHClient(
-            host=raptor_ip,
-            username='root',
-            password=raptor_root_password,
-            port=22,
-            timeout=30
-        )
-        
-        if not raptor_ssh.connect():
-            logger.error("Failed to connect to raptor")
-            return False
-        
-        result = raptor_ssh.execute_command(f"cat {certificate_file_path}", print_output=False)
-        
-        if result['rc'] != 0:
-            logger.error(f"Failed to read certificate file: {result['stderr']}")
-            raptor_ssh.disconnect()
-            return False
-        
-        certificate_content = result['stdout']
-        raptor_ssh.disconnect()
+        with open(certificate_file_path, 'r') as f:
+            certificate_content = f.read()
         
         if not certificate_content or 'BEGIN CERTIFICATE' not in certificate_content:
             logger.error("Invalid certificate content")
             return False
         
-        logger.info("✓ Certificate read successfully from raptor")
+        logger.info("✓ Certificate read successfully from local file")
         
+    except FileNotFoundError:
+        logger.error(f"Certificate file not found: {certificate_file_path}")
+        return False
     except Exception as e:
-        logger.error(f"Error reading certificate from raptor: {e}")
+        logger.error(f"Error reading certificate file: {e}")
         return False
     
     # Now connect to CM and import certificate
