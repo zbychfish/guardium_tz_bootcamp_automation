@@ -1003,7 +1003,7 @@ def setup_minio_on_raptor(
         logger.error("Custom variable 'pwd' not found")
         return False
 
-    commands = [
+    commands_before_podman = [
         "mkdir -p /home/minio/ca/{certs,private,newcerts}",
         "chmod 700 /home/minio/ca/private",
         "touch /home/minio/ca/index.txt",
@@ -1022,12 +1022,34 @@ def setup_minio_on_raptor(
         "chmod 700 /home/data/minio",
         "curl -L -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc",
         "chmod +x /usr/local/bin/mc",
-        f"podman run -d --name minio --restart=always -p 0.0.0.0:9000:9000 -p 0.0.0.0:9001:9001 -v /home/data/minio:/data:Z -v /home/minio/certs:/root/.minio/certs:Z -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD='{minio_password}' quay.io/minio/minio server /data --console-address ':9001'",
+    ]
+    
+    podman_run_command = f"podman run -d --name minio --restart=always -p 0.0.0.0:9000:9000 -p 0.0.0.0:9001:9001 -v /home/data/minio:/data:Z -v /home/minio/certs:/root/.minio/certs:Z -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD='{minio_password}' quay.io/minio/minio server /data --console-address ':9001'"
+    
+    commands_after_podman = [
         f"mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{minio_password}'",
         "mc mb myminio/guardium-ltr",
     ]
 
-    for command in commands:
+    for command in commands_before_podman:
+        result = execute_local_command(command, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed command: {command}")
+            logger.error(result["stderr"])
+            return False
+    
+    logger.info("➜ Starting MinIO container...")
+    result = execute_local_command(podman_run_command, logger=logger, verbose=verbose)
+    if result["rc"] != 0:
+        logger.error(f"✗ Failed to start MinIO container")
+        logger.error(result["stderr"])
+        return False
+    
+    import time
+    logger.info("⌛ Waiting 10 seconds for MinIO to start...")
+    time.sleep(10)
+    
+    for command in commands_after_podman:
         result = execute_local_command(command, logger=logger, verbose=verbose)
         if result["rc"] != 0:
             logger.error(f"✗ Failed command: {command}")
