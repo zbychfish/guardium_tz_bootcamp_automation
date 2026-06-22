@@ -342,8 +342,8 @@ groups:
         module: tasks.labs
         description: "Temporarily add SSH port 22 on raptor, restart sshd, clone Guardium External S-TAP repository, and run ETAP MySQL deployment"
         args:
+          collector_appliance: "coll1"
           debug: false
-          debug: true
 
   ltr_lab:
     name: "LTR Lab"

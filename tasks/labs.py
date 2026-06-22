@@ -810,11 +810,14 @@ def deploy_etap_mysql(
     config,
     logger,
     verbose: bool = False,
-    debug: bool = False
+    debug: bool = False,
+    **kwargs
 ) -> bool:
     logger.info("=" * 80)
     logger.info("DEPLOY ETAP MYSQL")
     logger.info("=" * 80)
+
+    collector_appliance = kwargs.get('collector_appliance', 'coll1')
 
     raptor_info = config.get_machine("raptor")
     if not raptor_info:
@@ -827,14 +830,14 @@ def deploy_etap_mysql(
         return False
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
-    collector_config = appliance_loader.get_appliance("coll1")
+    collector_config = appliance_loader.get_appliance(collector_appliance)
     if not collector_config:
-        logger.error("Collector 'coll1' not found in configuration")
+        logger.error(f"Collector '{collector_appliance}' not found in configuration")
         return False
 
     collector_ip = collector_config.get("ip")
     if not collector_ip:
-        logger.error("Collector 'coll1' IP not found in configuration")
+        logger.error(f"Collector '{collector_appliance}' IP not found in configuration")
         return False
 
     version_file = "/opt/ETAP/ca/guardium_etap_version.txt"
@@ -866,24 +869,6 @@ def deploy_etap_mysql(
     add_command = f"printf '\\n# Temporary port for ETAP\\nPort 22\\n' >> {sshd_config}"
     restart_command = "systemctl restart sshd"
     clone_command = "mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi"
-    prepare_known_hosts_command = "mkdir -p ~/.ssh && chmod 700 ~/.ssh && ssh-keyscan -H localhost 127.0.0.1 ::1 >> ~/.ssh/known_hosts 2>/dev/null || true && chmod 600 ~/.ssh/known_hosts"
-    deploy_command = (
-        "cd /opt/ETAP/Guardium_External_S-TAP && "
-        "./container_mgmt.sh "
-        "--state-file mysql_etap_state "
-        f"--db-host {raptor_ip} "
-        "--proxy-num-workers 1 "
-        "--proxy-protocol 0 "
-        "--db-port 3306 "
-        f"--proxy-secret '{etap_token}' "
-        "--db-type mysql "
-        f"--sqlguard-ip {collector_ip} "
-        "--participate-in-load-balancing 0 "
-        "--tenant-id MYSQLETAP "
-        f"--svc-image 'icr.io/guardium/guardium_external_s-tap:v{etap_version}' "
-        "--svc-port-range '63333-63333' "
-        "--ni --c"
-    )
 
     logger.info("Checking if SSH port 22 is configured in sshd_config")
     check_result = execute_local_command(check_command, logger=logger, verbose=False)
@@ -908,19 +893,89 @@ def deploy_etap_mysql(
         logger.error(f"✗ Failed to clone Guardium External S-TAP repository: {clone_result['stderr']}")
         return False
 
-    logger.info("Preparing known_hosts for localhost")
-    prepare_known_hosts_result = execute_local_command(prepare_known_hosts_command, logger=logger, verbose=verbose)
-    if prepare_known_hosts_result['rc'] != 0:
-        logger.error(f"✗ Failed to prepare known_hosts: {prepare_known_hosts_result['stderr']}")
+    container_file_content = f"""[Unit]
+Description=mysql-etap
+Documentation=man:podman-generate-systemd(1)
+
+[Container]
+# Obraz i nazwa kontenera wyciągnięte dokładnie z ExecStart
+Image=icr.io/guardium/guardium_external_s-tap:v{etap_version}
+ContainerName=mysql-etap
+HostName=localhost-mysql-etap
+
+# Przekazanie limitu pamięci oraz shm-size, które było w oryginalnej komendzie
+PodmanArgs=--memory=4g --shm-size=800M
+
+# Mapowanie portu
+PublishPort=63333:8888/tcp
+
+# Zmienne środowiskowe przeniesione 1:1
+Environment=STAP_CONFIG_TAP_TAP_IP=NULL
+Environment=STAP_CONFIG_TAP_PRIVATE_TAP_IP=NULL
+Environment=STAP_CONFIG_TAP_FORCE_SERVER_IP=0
+Environment=STAP_CONFIG_PROXY_GROUP_UUID=305575f5-c47b-48b2-b3f8-67138fd36d61
+Environment=STAP_CONFIG_PROXY_GROUP_MEMBER_COUNT=1
+Environment=STAP_CONFIG_PROXY_NUM_WORKERS=1
+Environment=STAP_CONFIG_PROXY_PROXY_PROTOCOL=0
+Environment=STAP_CONFIG_PROXY_DISCONNECT_ON_INVALID_CERTIFICATE=0
+Environment=STAP_CONFIG_PROXY_NOTIFY_ON_INVALID_CERTIFICATE=0
+Environment=STAP_CONFIG_PROXY_DETECT_SSL_WITHIN_X_PACKETS=-1
+Environment=STAP_CONFIG_DB_0_REAL_DB_PORT=3306
+Environment=STAP_CONFIG_PROXY_LISTEN_PORT=8888
+Environment=STAP_CONFIG_PROXY_DEBUG=0
+Environment=STAP_CONFIG_PROXY_SECRET={etap_token}
+Environment=STAP_CONFIG_PROXY_CSR_NAME=
+Environment=STAP_CONFIG_PROXY_CSR_COUNTRY=
+Environment=STAP_CONFIG_PROXY_CSR_PROVINCE=
+Environment=STAP_CONFIG_PROXY_CSR_CITY=
+Environment=STAP_CONFIG_PROXY_CSR_ORGANIZATION=
+Environment=STAP_CONFIG_PROXY_CSR_KEYLENGTH=2048
+Environment=STAP_CONFIG_DB_0_DB_TYPE=mysql
+Environment=STAP_CONFIG_PARTICIPATE_IN_LOAD_BALANCING=0
+Environment=STAP_CONFIG_TAP_TENANT_ID=MYSQLETAP
+Environment=STAP_CONFIG_SQLGUARD_0_SQLGUARD_IP={collector_ip}
+Environment=STAP_CONFIG_PROXY_DB_HOST={raptor_ip}
+
+[Service]
+Restart=always
+TimeoutStopSec=70
+
+[Install]
+# Zmieniono na multi-user.target (standard dla usług systemowych root)
+WantedBy=multi-user.target
+"""
+
+    container_file_path = "/etc/containers/systemd/mysql-etap.container"
+    create_dir_command = "mkdir -p /etc/containers/systemd"
+    write_file_command = f"cat > {container_file_path} << 'EOF'\n{container_file_content}\nEOF"
+
+    logger.info("Creating systemd container directory")
+    create_dir_result = execute_local_command(create_dir_command, logger=logger, verbose=verbose)
+    if create_dir_result['rc'] != 0:
+        logger.error(f"✗ Failed to create systemd container directory: {create_dir_result['stderr']}")
         return False
 
-    logger.info("Running ETAP MySQL deployment")
-    deploy_result = execute_local_command(deploy_command, logger=logger, verbose=verbose)
-    if deploy_result['rc'] != 0:
-        logger.error(f"✗ Failed to deploy ETAP MySQL: {deploy_result['stderr']}")
+    logger.info(f"Creating systemd container file: {container_file_path}")
+    write_file_result = execute_local_command(write_file_command, logger=logger, verbose=verbose)
+    if write_file_result['rc'] != 0:
+        logger.error(f"✗ Failed to create systemd container file: {write_file_result['stderr']}")
         return False
 
-    logger.info("✓ ETAP MySQL deployed on raptor")
+    daemon_reload_command = "systemctl daemon-reload"
+    logger.info("Reloading systemd daemon")
+    daemon_reload_result = execute_local_command(daemon_reload_command, logger=logger, verbose=verbose)
+    if daemon_reload_result['rc'] != 0:
+        logger.error(f"✗ Failed to reload systemd daemon: {daemon_reload_result['stderr']}")
+        return False
+
+    start_service_command = "systemctl start mysql-etap"
+    logger.info("Starting mysql-etap service")
+    start_service_result = execute_local_command(start_service_command, logger=logger, verbose=verbose)
+    if start_service_result['rc'] != 0:
+        logger.error(f"✗ Failed to start mysql-etap service: {start_service_result['stderr']}")
+        return False
+
+    logger.info("✓ ETAP MySQL deployed and started on raptor")
     return True
 
 
