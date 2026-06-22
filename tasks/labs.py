@@ -885,9 +885,10 @@ def deploy_etap_mysql(
         "--ni --c"
     )
 
-    check_result = execute_local_command(check_command, logger=logger, verbose=verbose)
+    logger.info("Checking if SSH port 22 is configured in sshd_config")
+    check_result = execute_local_command(check_command, logger=logger, verbose=False)
     if check_result['rc'] != 0:
-        logger.info("Adding temporary SSH port 22 to sshd_config")
+        logger.info("Port 22 not found - adding temporary SSH port 22 to sshd_config")
         add_result = execute_local_command(add_command, logger=logger, verbose=verbose)
         if add_result['rc'] != 0:
             logger.error(f"✗ Failed to add port 22 to sshd_config: {add_result['stderr']}")
