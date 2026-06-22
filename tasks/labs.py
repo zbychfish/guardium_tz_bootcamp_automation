@@ -1589,7 +1589,7 @@ def enable_ltr_on_appnode(
 
 
 
-def start_ltr_services_on_cm(
+def import_minio_CA_certificate(
     config,
     logger,
     verbose: bool = False,
