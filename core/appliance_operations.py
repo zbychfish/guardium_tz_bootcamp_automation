@@ -3557,3 +3557,147 @@ def install_gim_module(
             logger.error(traceback.format_exc())
         logger.error("=" * 80)
         return False
+
+
+
+def enable_ltr_on_appnode(
+    config,
+    logger,
+    appliance_name: str,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    prompt_regex: Optional[str] = None,
+    debug: bool = True
+) -> bool:
+    """
+    Enable LTR (Lake Threat Response) on appnode by executing datalake commands.
+    
+    Steps:
+    1. store datalake install - verify "Datalake installation was successful"
+    2. store datalake all_in_one xxsmall - verify "Datalake all_in_one was brought up correctly"
+    3. store datalake service start
+    4. show datalake status - verify "Datalake is running!"
+    """
+    
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+    
+    logger.info("=" * 80)
+    logger.info(f"ENABLE LTR ON APPNODE: {appliance_name}")
+    logger.info("=" * 80)
+    
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
+        available = list(appliance_loader.get_all_appliances().keys())
+        logger.error(f"Available appliances: {', '.join(available)}")
+        return False
+    
+    appliance_type = appliance_config.get('type')
+    host = appliance_config.get('ip')
+    
+    if not host:
+        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        return False
+    
+    if not user:
+        if appliance_type:
+            user = appliance_loader.get_default_user(appliance_type)
+        else:
+            user = "cli"
+    
+    if not password:
+        password = config.get_custom_variable('cli_pwd')
+        if password:
+            logger.info("Using password from custom_variables (cli_pwd)")
+    
+    if not password:
+        logger.error("Password not provided and cli_pwd not found in custom_variables")
+        return False
+    
+    if not prompt_regex:
+        if appliance_type:
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
+        if not prompt_regex:
+            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
+            return False
+    
+    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
+    logger.info(f"User: {user}")
+    
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=300,
+            strip_ansi=True,
+            debug=debug
+        )
+        
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+        
+        # Step 1: store datalake install
+        logger.info("\n➜ Step 1: Installing datalake...")
+        logger.info("Executing: store datalake install")
+        result1 = client.execute_command("store datalake install", timeout=300)
+        
+        if "Datalake installation was successful" in result1:
+            logger.info("✓ Datalake installation was successful")
+        else:
+            logger.error("✗ Datalake installation failed")
+            logger.error(f"Output: {result1}")
+            client.disconnect()
+            return False
+        
+        # Step 2: store datalake all_in_one xxsmall
+        logger.info("\n➜ Step 2: Configuring datalake all_in_one xxsmall...")
+        logger.info("Executing: store datalake all_in_one xxsmall")
+        result2 = client.execute_command("store datalake all_in_one xxsmall", timeout=300)
+        
+        if "Datalake all_in_one was brought up correctly" in result2:
+            logger.info("✓ Datalake all_in_one was brought up correctly")
+        else:
+            logger.error("✗ Datalake all_in_one configuration failed")
+            logger.error(f"Output: {result2}")
+            client.disconnect()
+            return False
+        
+        # Step 3: store datalake service start
+        logger.info("\n➜ Step 3: Starting datalake service...")
+        logger.info("Executing: store datalake service start")
+        result3 = client.execute_command("store datalake service start", timeout=300)
+        logger.info(f"Command output: {result3}")
+        
+        # Step 4: show datalake status - verify it's running
+        logger.info("\n➜ Step 4: Verifying datalake status...")
+        logger.info("Executing: show datalake status")
+        result4 = client.execute_command("show datalake status", timeout=60)
+        
+        if "Datalake is running!" in result4:
+            logger.info("✓ Datalake is running!")
+        else:
+            logger.error("✗ Datalake is not running")
+            logger.error(f"Output: {result4}")
+            client.disconnect()
+            return False
+        
+        client.disconnect()
+        
+        logger.info("\n" + "=" * 80)
+        logger.info("LTR enabled successfully on appnode")
+        logger.info("=" * 80)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error enabling LTR on appnode: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False

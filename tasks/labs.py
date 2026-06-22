@@ -1561,3 +1561,28 @@ def setup_appnode(
         retry_interval=kwargs.get('retry_interval', 60),
         max_retries=kwargs.get('max_retries', 10)
     )
+
+
+
+def enable_ltr_on_appnode(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_operations import enable_ltr_on_appnode as core_enable_ltr
+    
+    if not kwargs.get('appliance_name'):
+        logger.error("appliance_name required")
+        return False
+    
+    return core_enable_ltr(
+        config=config,
+        logger=logger,
+        appliance_name=kwargs['appliance_name'],
+        user=kwargs.get('user'),
+        password=kwargs.get('password'),
+        prompt_regex=kwargs.get('prompt_regex'),
+        debug=debug
+    )
