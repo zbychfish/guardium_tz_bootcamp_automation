@@ -939,7 +939,7 @@ def preparation_raptor_for_ltr(
         return False
 
     commands = [
-        f"""cat > /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/pgsql.yaml <<'EOF'
+        f"""cat > /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/config/pgsql.yaml <<'EOF'
 # Admin config - for deploy-schema, seed-data, cleanup-schema, rebuild
 # Use super user (postgres, tom, etc.) with full privileges
 database:
