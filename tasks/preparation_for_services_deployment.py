@@ -167,8 +167,53 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
             return False
         
         try:
+            # Install kernel-devel for current kernel
+            kernel_devel_cmd = "dnf install -y kernel-devel-$(uname -r)"
+            if verbose:
+                logger.info("Installing kernel-devel for current kernel")
+            result = ssh.execute_command(
+                kernel_devel_cmd,
+                timeout=300,
+                print_output=verbose
+            )
+            
+            if result['rc'] != 0:
+                # Check if error is related to EUS repository (404 error)
+                if 'rhel-8-for-x86_64-appstream-eus-rpms' in result['stderr'] or '404' in result['stderr']:
+                    logger.warning("EUS repository error detected, applying workaround...")
+                    logger.info("Disabling EUS repositories and enabling standard repos")
+                    
+                    # Disable EUS repositories
+                    disable_cmd = 'subscription-manager repos --disable="*eus*"'
+                    result = ssh.execute_command(disable_cmd, timeout=60, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.warning(f"Failed to disable EUS repos (rc={result['rc']}), continuing anyway")
+                    
+                    # Enable standard repositories
+                    enable_cmd = 'subscription-manager repos --enable=rhel-8-for-x86_64-baseos-rpms --enable=rhel-8-for-x86_64-appstream-rpms'
+                    result = ssh.execute_command(enable_cmd, timeout=60, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.error("Failed to enable standard repositories")
+                        return False
+                    
+                    logger.info("✓ Repository configuration updated, retrying kernel-devel installation")
+                    
+                    # Retry kernel-devel installation
+                    result = ssh.execute_command(kernel_devel_cmd, timeout=300, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.error("Failed to install kernel-devel on sauropod after workaround")
+                        return False
+                else:
+                    logger.error("Failed to install kernel-devel on sauropod")
+                    return False
+            
+            if verbose:
+                logger.info("✓ kernel-devel installed successfully on sauropod")
+
             # Install Java 11 on sauropod
             java_install_cmd = "dnf install -y java-11-openjdk"
+            if verbose:
+                logger.info("Installing Java 11")
             result = ssh.execute_command(
                 java_install_cmd,
                 timeout=300,
