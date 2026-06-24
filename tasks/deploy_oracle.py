@@ -174,6 +174,7 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
 export ORACLE_BASE=/u01/app/oracle
 export ORACLE_HOME=\\$ORACLE_BASE/product/21c/dbhome_1
 export ORACLE_SID=ORCLCDB
+export TNS_ADMIN=\\$ORACLE_HOME/network/admin
 export PATH=\\$ORACLE_HOME/bin:\\$PATH
 
 # SQLcl PATH
@@ -803,14 +804,186 @@ EOF
             
             if verbose:
                 logger.info("=" * 80)
+                logger.info("Configuring SSL/TLS support for Oracle")
+                logger.info("=" * 80)
+            
+            oracle_home = "/u01/app/oracle/product/21c/dbhome_1"
+            wallet_dir = f"{oracle_home}/wallet"
+            client_wallet_dir = f"{oracle_home}/client_wallet"
+            orapki_bin = f"{oracle_home}/bin/orapki"
+            
+            if verbose:
+                logger.info("Step 1: Creating server wallet")
+            result = ssh.execute_command(
+                f"su - oracle -c 'mkdir -p {wallet_dir}'",
+                timeout=30,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to create server wallet directory: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet create -wallet {wallet_dir} -auto_login_local -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to create server wallet: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("Step 2: Adding self-signed certificate to server wallet")
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to add certificate to server wallet: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("Step 3: Creating client wallet")
+            result = ssh.execute_command(
+                f"su - oracle -c 'mkdir -p {client_wallet_dir}'",
+                timeout=30,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to create client wallet directory: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet create -wallet {client_wallet_dir} -auto_login_local -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to create client wallet: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("Step 4: Adding self-signed certificate to client wallet")
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet add -wallet {client_wallet_dir} -dn 'CN=client' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to add certificate to client wallet: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("Step 5: Exporting public keys")
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet export -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -cert /tmp/server-cert.crt -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to export server certificate: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet export -wallet {client_wallet_dir} -dn 'CN=client' -cert /tmp/client-cert.crt -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to export client certificate: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("Step 6: Importing public keys (cross-trust)")
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet add -wallet {client_wallet_dir} -trusted_cert -cert /tmp/server-cert.crt -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to import server cert to client wallet: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -trusted_cert -cert /tmp/client-cert.crt -pwd '{root_password}'\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to import client cert to server wallet: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                "su - oracle -c 'rm -f /tmp/server-cert.crt /tmp/client-cert.crt'",
+                timeout=30,
+                print_output=verbose
+            )
+            
+            if verbose:
+                logger.info("Step 7: Updating listener configuration for SSL")
+            
+            result = ssh.execute_command(
+                f"cp -f /opt/guardium_tz_bootcamp_automation/automation_config_files/listener.ora {oracle_home}/network/admin/listener.ora",
+                timeout=30,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to copy listener.ora: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"cp -f /opt/guardium_tz_bootcamp_automation/automation_config_files/tnsnames.ora {oracle_home}/network/admin/tnsnames.ora",
+                timeout=30,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to copy tnsnames.ora: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"cp -f /opt/guardium_tz_bootcamp_automation/automation_config_files/sqlnet.ora {oracle_home}/network/admin/sqlnet.ora",
+                timeout=30,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to copy sqlnet.ora: {result['stderr']}")
+                return False
+            
+            result = ssh.execute_command(
+                f"chown -R oracle:oinstall {oracle_home}/network/admin/",
+                timeout=30,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to set ownership on network admin files: {result['stderr']}")
+                return False
+            
+            if verbose:
+                logger.info("Step 8: Reloading listener")
+            result = ssh.execute_command(
+                f"su - oracle -c '{oracle_home}/bin/lsnrctl reload'",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.warning(f"Listener reload returned non-zero: {result['stderr']}")
+            
+            if verbose:
+                logger.info("=" * 80)
                 logger.info("Oracle Database 21c installation completed successfully!")
                 logger.info("Database: ORCLCDB")
                 logger.info("PDB: ORCLPDB1")
                 logger.info(f"Passwords: {root_password}")
                 logger.info("Network Configuration:")
-                logger.info("  - listener.ora: Configured on localhost:1521")
-                logger.info("  - tnsnames.ora: ORCLPDB1 service configured")
-                logger.info("  - sqlnet.ora: TNSNAMES, EZCONNECT enabled")
+                logger.info("  - listener.ora: TCP on port 1521, TCPS on port 2484")
+                logger.info("  - tnsnames.ora: ORCLPDB1 (TCP), ORCLPDB1_SSL (TCPS)")
+                logger.info("  - sqlnet.ora: SSL/TLS enabled with wallet")
+                logger.info("SSL/TLS:")
+                logger.info(f"  - Server wallet: {wallet_dir}")
+                logger.info(f"  - Client wallet: {client_wallet_dir}")
+                logger.info("  - Server CN: sauropod.demo.guardium")
+                logger.info("  - Client CN: client")
                 logger.info("Auto-start: Enabled in /etc/oratab")
                 logger.info("Sample Data: HR schema installed in hr_data tablespace")
                 logger.info("Tools: SQLcl installed and configured")
