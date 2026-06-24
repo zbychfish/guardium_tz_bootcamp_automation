@@ -40,6 +40,11 @@ groups:
         module: tasks.deploy_postgres
         description: "Install postgres 16 on raptor"
       
+      - name: configure_oracle_ssl_on_sauropod
+        function: configure_oracle_ssl_on_sauropod
+        module: tasks.deploy_oracle
+        description: "Configure SSL/TLS support for Oracle 21c on sauropod"
+
       - name: deploy_oracle_on_sauropod
         function: deploy_oracle_on_sauropod
         module: tasks.deploy_oracle
