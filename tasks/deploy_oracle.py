@@ -835,7 +835,7 @@ EOF
             if verbose:
                 logger.info("Step 2: Adding self-signed certificate to server wallet")
             result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
+                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.guardium.demo' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
                 timeout=60,
                 print_output=verbose
             )
@@ -877,7 +877,7 @@ EOF
             if verbose:
                 logger.info("Step 5: Exporting public keys")
             result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet export -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -cert /tmp/server-cert.crt -pwd '{root_password}'\"",
+                f"su - oracle -c \"{orapki_bin} wallet export -wallet {wallet_dir} -dn 'CN=sauropod.guardium.demo' -cert /tmp/server-cert.crt -pwd '{root_password}'\"",
                 timeout=60,
                 print_output=verbose
             )
@@ -988,7 +988,7 @@ EOF
                 logger.info("SSL/TLS:")
                 logger.info(f"  - Server wallet: {wallet_dir}")
                 logger.info(f"  - Client wallet: {client_wallet_dir}")
-                logger.info("  - Server CN: sauropod.demo.guardium")
+                logger.info("  - Server CN: sauropod.guardium.demo")
                 logger.info("  - Client CN: client")
                 logger.info("Auto-start: Enabled in /etc/oratab")
                 logger.info("Sample Data: HR schema installed in hr_data tablespace")
