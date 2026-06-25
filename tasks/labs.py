@@ -1892,8 +1892,27 @@ def install_stap_on_sauropod(
     finally:
         ssh.disconnect()
 
-    logger.info("\n⌛ Waiting 60 seconds before STAP installation...")
-    time.sleep(60)
+    logger.info("\n⌛ Waiting for GIM client to register on CM...")
+    from core.guardium_rest_api import create_guardium_api
+    api = create_guardium_api(config, logger, appliance_name)
+    demo_password = config.get_custom_variable('pwd')
+    api.get_token(username='demo', password=demo_password)
+
+    max_wait = 300
+    interval = 15
+    elapsed = 0
+    while elapsed < max_wait:
+        try:
+            api.gim_list_client_modules(client_ip=client_ip)
+            logger.info(f"✓ GIM client {client_ip} registered on CM (after {elapsed}s)")
+            break
+        except Exception:
+            logger.info(f"  Client not yet registered, waiting {interval}s... ({elapsed}/{max_wait}s)")
+            time.sleep(interval)
+            elapsed += interval
+    else:
+        logger.error(f"✗ GIM client {client_ip} did not register within {max_wait}s")
+        return False
 
     stap_params = {
         "STAP_SQLGUARD_IP": sqlguard_ip,
