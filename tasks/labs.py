@@ -1868,7 +1868,7 @@ def install_stap_on_sauropod(
 
         install_cmd = (
             f"cd {remote_lab_dir} && "
-            f"./{gim_installer_filename} -- --dir /opt/guardium --tapip sauropod --sqlguardip cm"
+            f"./{gim_installer_filename} -- --dir /opt/guardium --tapip sauropod --sqlguardip cm -q"
         )
         logger.info(f"\n➜ Installing GIM on sauropod...")
         logger.info(f"Command: {install_cmd}")
