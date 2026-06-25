@@ -46,11 +46,6 @@ groups:
         module: tasks.deploy_oracle
         description: "Deploy Oracle 21c on sauropod"
       
-      - name: configure_oracle_ssl_on_sauropod
-        function: configure_oracle_ssl_on_sauropod
-        module: tasks.deploy_oracle
-        description: "Configure SSL/TLS support for Oracle 21c on sauropod"
-        
       - name: deploy_db2_on_raptor
         function: deploy_db2_on_raptor
         module: tasks.deploy_db2
