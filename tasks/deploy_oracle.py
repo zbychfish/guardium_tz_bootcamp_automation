@@ -986,7 +986,7 @@ EOF
             if verbose:
                 logger.info("Step 9: Registering database with listener")
             result = ssh.execute_command(
-                f"su - oracle -c \"echo -e 'ALTER SYSTEM REGISTER;\\nexit' | {oracle_home}/bin/sqlplus / as sysdba\"",
+                f"su - oracle -c \"echo -e 'ALTER SYSTEM SET local_listener=\\\"(ADDRESS=(PROTOCOL=TCP)(HOST=sauropod.demo.guardium)(PORT=1521))\\\" SCOPE=BOTH;\\nALTER SYSTEM REGISTER;\\nexit' | {oracle_home}/bin/sqlplus / as sysdba\"",
                 timeout=60,
                 print_output=verbose
             )
