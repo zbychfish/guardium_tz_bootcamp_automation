@@ -62,7 +62,7 @@ class ApplianceConfigLoader:
             return 'cm'
         elif name.startswith('coll'):
             return 'collector'
-        elif name.startswith('appnode'):
+        elif name.startswith('appnode') or name.startswith('kafka'):
             return 'appnode'
         elif name.startswith('aggr'):
             return 'aggregator'
