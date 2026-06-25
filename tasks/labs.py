@@ -1851,6 +1851,21 @@ def install_stap_on_sauropod(
         if result['rc'] != 0:
             logger.warning(f"chmod returned non-zero: {result['stderr']}")
 
+        # --- DEBUG START (remove when working) ---
+        logger.info(f"\n➜ [DEBUG] Checking /opt/lab_files contents before install...")
+        r = ssh.execute_command(f"ls -la {remote_lab_dir}/", print_output=True)
+        logger.info(f"[DEBUG] ls rc={r['rc']} stdout={r['stdout']!r} stderr={r['stderr']!r}")
+        logger.info(f"[DEBUG] Checking if installer is executable...")
+        r = ssh.execute_command(f"test -x {remote_installer_path} && echo YES || echo NO", print_output=True)
+        logger.info(f"[DEBUG] executable={r['stdout'].strip()!r}")
+        logger.info(f"[DEBUG] Current user on sauropod:")
+        r = ssh.execute_command("id", print_output=True)
+        logger.info(f"[DEBUG] id={r['stdout'].strip()!r}")
+        logger.info(f"[DEBUG] Bash version:")
+        r = ssh.execute_command("bash --version | head -1", print_output=True)
+        logger.info(f"[DEBUG] bash={r['stdout'].strip()!r}")
+        # --- DEBUG END ---
+
         install_cmd = (
             f"cd {remote_lab_dir} && "
             f"./{gim_installer_filename} -- --dir /opt/guardium --tapip sauropod --sqlguardip cm"
@@ -1858,6 +1873,11 @@ def install_stap_on_sauropod(
         logger.info(f"\n➜ Installing GIM on sauropod...")
         logger.info(f"Command: {install_cmd}")
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        # --- DEBUG START (remove when working) ---
+        logger.info(f"[DEBUG] install rc={result['rc']}")
+        logger.info(f"[DEBUG] install stdout={result['stdout']!r}")
+        logger.info(f"[DEBUG] install stderr={result['stderr']!r}")
+        # --- DEBUG END ---
         if result['rc'] != 0:
             logger.error(f"GIM installation failed: {result['stderr']}")
             return False
