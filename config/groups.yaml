@@ -367,7 +367,7 @@ groups:
       - name: enable_atap_for_oracle
         function: enable_atap_for_oracle
         module: tasks.labs
-        description: "Stop Oracle listener and database on sauropod before ATAP activation"
+        description: "Enable ATAP for Oracle on sauropod"
         args:
           debug: false
 
