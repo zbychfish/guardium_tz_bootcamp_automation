@@ -220,6 +220,7 @@ class ConfigLoader:
             'cm',           # Central Manager
             'appnode',      # Application Nodes (appnode1, appnode2, etc.)
             'coll',         # Collectors (coll1, coll2, etc.)
+            'kafka',        # Kafka nodes (kafka1, kafka2, etc.) - treated as appnode
         ]
         
         for pattern in appliance_patterns:
