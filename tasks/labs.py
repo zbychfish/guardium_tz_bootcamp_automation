@@ -1788,17 +1788,18 @@ def install_stap_on_sauropod(
         logger.error("collector_name is required (collector for SQLGUARD_IP, e.g., 'coll1')")
         return False
 
-    machines = config.get('machines', {})
-    sauropod_info = machines.get('sauropod', {})
-    sauropod_ip = sauropod_info.get('private_ip')
-    sauropod_password = sauropod_info.get('password')
-
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
         logger.error("Sauropod IP not found in machines config")
         return False
 
-    if not sauropod_password:
-        logger.error("Sauropod password not found in machines config")
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
         return False
 
     if not client_ip:
@@ -1816,14 +1817,14 @@ def install_stap_on_sauropod(
         logger.error(f"Collector '{collector_name}' has no IP address configured")
         return False
 
-    logger.info(f"Sauropod IP: {sauropod_ip}")
+    logger.info(f"Sauropod IP: {sauropod_ip}:{ssh_port}")
     logger.info(f"SQL Guard IP (collector '{collector_name}'): {sqlguard_ip}")
 
     gim_local_path = f"{gim_source_dir}/{gim_installer_filename}"
     remote_lab_dir = "/opt/lab_files"
     remote_installer_path = f"{remote_lab_dir}/{gim_installer_filename}"
 
-    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
     try:
         logger.info("\n➜ Connecting to sauropod...")
