@@ -361,7 +361,7 @@ groups:
           collector_name: "coll1"
           gim_installer_filename: "guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-8-linux-x86_64.gim.sh"
           module: "BUNDLE-STAP"
-          module_version: "12.2.2.0_r123489_3"
+          module_version: "12.2.2.0_r123489_11"
           debug: false
 
   ltr_lab:
