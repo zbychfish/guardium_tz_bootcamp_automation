@@ -10,8 +10,9 @@ SID_LIST_LISTENER =
 LISTENER =
   (DESCRIPTION_LIST =
     (DESCRIPTION =
-      (ADDRESS = (PROTOCOL = TCP)(HOST = localhost)(PORT = 1521))
-      (ADDRESS = (PROTOCOL = TCPS)(HOST = localhost)(PORT = 2484))
+      (ADDRESS = (PROTOCOL = TCP)(HOST = sauropod.demo.guardium)(PORT = 1521))
+      (ADDRESS = (PROTOCOL = TCPS)(HOST = sauropod.demo.guardium)(PORT = 2484))
+      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC1521))
     )
   )
 
