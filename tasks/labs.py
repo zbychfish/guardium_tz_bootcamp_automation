@@ -1755,6 +1755,83 @@ def import_ltr_dashboard(
     return success
 
 
+def setup_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    image_source_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_db_21c_image_with_oua.tar.gz",
+    debug: bool = False
+) -> bool:
+    from core.ssh_client import SSHClient
+    import os
+
+    logger.info("=" * 80)
+    logger.info("SETUP ORACLE CONTAINER ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    image_filename = os.path.basename(image_source_path)
+    remote_image_path = f"/opt/lab_files/{image_filename}"
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+
+    try:
+        logger.info(f"\n➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        logger.info(f"\n➜ Creating /opt/lab_files directory...")
+        result = ssh.execute_command("mkdir -p /opt/lab_files", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create directory: {result['stderr']}")
+            return False
+
+        logger.info(f"\n➜ Uploading {image_filename} to sauropod...")
+        logger.info(f"  Source: {image_source_path}")
+        logger.info(f"  Destination: {remote_image_path}")
+        if not ssh.upload_file(image_source_path, remote_image_path):
+            logger.error(f"Failed to upload {image_filename}")
+            return False
+        logger.info("✓ Image uploaded")
+
+        logger.info("\n➜ Loading image into podman...")
+        load_cmd = f"cd /opt/lab_files && gunzip -c {image_filename} | podman load"
+        result = ssh.execute_command(load_cmd, timeout=600, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"podman load failed: {result['stderr']}")
+            return False
+        logger.info("✓ Oracle container image loaded")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    logger.info("=" * 80)
+    logger.info("✓ Oracle container image loaded successfully on sauropod")
+    logger.info("=" * 80)
+    return True
+
+
 def enable_atap_for_oracle(
     config,
     logger,

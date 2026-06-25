@@ -371,6 +371,14 @@ groups:
         args:
           debug: false
 
+      - name: setup_oracle_container
+        function: setup_oracle_container
+        module: tasks.labs
+        description: "Copy Oracle 21c container image from raptor to sauropod and load into podman"
+        args:
+          image_source_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_db_21c_image_with_oua.tar.gz"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
