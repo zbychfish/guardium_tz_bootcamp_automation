@@ -1753,3 +1753,151 @@ def import_ltr_dashboard(
         logger.info("=" * 80)
     
     return success
+
+
+def install_stap_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    appliance_name: Optional[str] = None,
+    collector_name: Optional[str] = None,
+    client_ip: Optional[str] = None,
+    gim_installer_filename: str = "guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-8-linux-x86_64.gim.sh",
+    gim_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell",
+    module: str = "BUNDLE-STAP",
+    module_version: str = "12.2.2.0_r123489_3",
+    use_tls: str = "1",
+    statistics: str = "-3",
+    connection_pool_size: str = "2",
+    debug: bool = False
+) -> bool:
+    from core.ssh_client import SSHClient
+    from core.appliance_operations import install_gim_module
+    from core.appliance_config_loader import ApplianceConfigLoader
+    import time
+
+    logger.info("=" * 80)
+    logger.info("INSTALL STAP ON SAUROPOD")
+    logger.info("=" * 80)
+
+    if not appliance_name:
+        logger.error("appliance_name is required (GIM server, e.g., 'cm')")
+        return False
+
+    if not collector_name:
+        logger.error("collector_name is required (collector for SQLGUARD_IP, e.g., 'coll1')")
+        return False
+
+    machines = config.get('machines', {})
+    sauropod_info = machines.get('sauropod', {})
+    sauropod_ip = sauropod_info.get('private_ip')
+    sauropod_password = sauropod_info.get('password')
+
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    if not sauropod_password:
+        logger.error("Sauropod password not found in machines config")
+        return False
+
+    if not client_ip:
+        client_ip = sauropod_ip
+        logger.info(f"Auto-detected sauropod client IP: {client_ip}")
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_name)
+    if not collector_config:
+        logger.error(f"Collector '{collector_name}' not found in machines_info.json")
+        return False
+
+    sqlguard_ip = collector_config.get('ip')
+    if not sqlguard_ip:
+        logger.error(f"Collector '{collector_name}' has no IP address configured")
+        return False
+
+    logger.info(f"Sauropod IP: {sauropod_ip}")
+    logger.info(f"SQL Guard IP (collector '{collector_name}'): {sqlguard_ip}")
+
+    gim_local_path = f"{gim_source_dir}/{gim_installer_filename}"
+    remote_lab_dir = "/opt/lab_files"
+    remote_installer_path = f"{remote_lab_dir}/{gim_installer_filename}"
+
+    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
+
+    try:
+        logger.info("\n➜ Connecting to sauropod...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        logger.info(f"\n➜ Creating directory {remote_lab_dir}...")
+        result = ssh.execute_command(f"mkdir -p {remote_lab_dir}", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create directory: {result['stderr']}")
+            return False
+        logger.info(f"✓ {remote_lab_dir} created")
+
+        logger.info(f"\n➜ Copying {gim_installer_filename} to sauropod...")
+        if not ssh.upload_file(gim_local_path, remote_installer_path):
+            logger.error(f"Failed to upload {gim_installer_filename}")
+            return False
+        logger.info("✓ GIM installer uploaded")
+
+        logger.info("\n➜ Setting execute permissions on *.sh files...")
+        result = ssh.execute_command(f"chmod +x {remote_lab_dir}/*.sh", print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"chmod returned non-zero: {result['stderr']}")
+
+        install_cmd = (
+            f"cd {remote_lab_dir} && "
+            f"./{gim_installer_filename} -- --dir /opt/guardium --tapip sauropod --sqlguardip cm"
+        )
+        logger.info(f"\n➜ Installing GIM on sauropod...")
+        logger.info(f"Command: {install_cmd}")
+        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"GIM installation failed: {result['stderr']}")
+            return False
+        logger.info("✓ GIM installed on sauropod")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    logger.info("\n⌛ Waiting 60 seconds before STAP installation...")
+    time.sleep(60)
+
+    stap_params = {
+        "STAP_SQLGUARD_IP": sqlguard_ip,
+        "STAP_USE_TLS": use_tls,
+        "STAP_STATISTIC": statistics,
+        "STAP_CONNECTION_POOL_SIZE": connection_pool_size
+    }
+
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STAP Configuration:")
+    logger.info(f"  - Client IP (sauropod): {client_ip}")
+    logger.info(f"  - SQL Guard IP (collector): {sqlguard_ip}")
+    logger.info(f"  - Use TLS: {use_tls}")
+    logger.info(f"  - Statistics: {statistics}")
+    logger.info(f"  - Connection Pool Size: {connection_pool_size}")
+
+    return install_gim_module(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        client_ip=client_ip,
+        module=module,
+        module_version=module_version,
+        params=stap_params,
+        monitor_installation=True,
+        installation_delay=10,
+        debug=debug
+    )

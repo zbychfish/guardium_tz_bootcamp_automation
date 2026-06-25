@@ -346,6 +346,24 @@ groups:
           collector_appliance: "coll1"
           debug: false
 
+  oracle_lab:
+    name: "Oracle Lab"
+    description: "Install GIM and STAP on sauropod for Oracle monitoring"
+    auto_execute: false
+    dependencies: [etap_lab]
+    stages:
+      - name: install_stap_on_sauropod
+        function: install_stap_on_sauropod
+        module: tasks.labs
+        description: "Create /opt/lab_files, copy and install GIM on sauropod, then install STAP via API"
+        args:
+          appliance_name: "cm"
+          collector_name: "coll1"
+          gim_installer_filename: "guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-8-linux-x86_64.gim.sh"
+          module: "BUNDLE-STAP"
+          module_version: "12.2.2.0_r123489_3"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
