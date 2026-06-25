@@ -966,14 +966,32 @@ EOF
                 return False
             
             if verbose:
-                logger.info("Step 8: Reloading listener")
+                logger.info("Step 8: Restarting listener")
             result = ssh.execute_command(
-                f"su - oracle -c '{oracle_home}/bin/lsnrctl reload'",
+                f"su - oracle -c '{oracle_home}/bin/lsnrctl stop'",
                 timeout=60,
                 print_output=verbose
             )
             if result['rc'] != 0:
-                logger.warning(f"Listener reload returned non-zero: {result['stderr']}")
+                logger.warning(f"Listener stop returned non-zero: {result['stderr']}")
+
+            result = ssh.execute_command(
+                f"su - oracle -c '{oracle_home}/bin/lsnrctl start'",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.warning(f"Listener start returned non-zero: {result['stderr']}")
+
+            if verbose:
+                logger.info("Step 9: Registering database with listener")
+            result = ssh.execute_command(
+                f"su - oracle -c \"echo -e 'ALTER SYSTEM REGISTER;\\nexit' | {oracle_home}/bin/sqlplus / as sysdba\"",
+                timeout=60,
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.warning(f"ALTER SYSTEM REGISTER returned non-zero: {result['stderr']}")
             
             if verbose:
                 logger.info("=" * 80)

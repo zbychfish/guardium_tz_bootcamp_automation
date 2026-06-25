@@ -1755,6 +1755,116 @@ def import_ltr_dashboard(
     return success
 
 
+def enable_atap_for_oracle(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False
+) -> bool:
+    from core.ssh_client import SSHClient
+
+    logger.info("=" * 80)
+    logger.info("ENABLE ATAP FOR ORACLE ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+
+    try:
+        logger.info(f"\n➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        logger.info("\n➜ Stopping Oracle listener...")
+        result = ssh.execute_command("su - oracle -c 'lsnrctl stop'", timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"lsnrctl stop returned non-zero: {result['stderr']}")
+
+        logger.info("\n➜ Shutting down Oracle database...")
+        result = ssh.execute_command(
+            'su - oracle -c "echo -e \'shutdown immediate;\\nexit\' | sqlplus / as sysdba"',
+            timeout=120,
+            print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Oracle shutdown failed: {result['stderr']}")
+            return False
+
+        logger.info("✓ Oracle stopped")
+
+        guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
+
+        logger.info("\n➜ Authorizing oracle user...")
+        result = ssh.execute_command(f"{guardctl} authorize-user oracle", timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"authorize-user failed: {result['stderr']}")
+            return False
+
+        logger.info("\n➜ Storing ATAP configuration for Oracle...")
+        result = ssh.execute_command(
+            f"{guardctl} --db-type=oracle --db-instance=ORCLCDB --db_user=oracle"
+            f" --db_home=/u01/app/oracle/product/21c/dbhome_1/ --db_base=/home/oracle --db_version=21 store-conf",
+            timeout=60, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"store-conf failed: {result['stderr']}")
+            return False
+
+        logger.info("\n➜ Activating ATAP for Oracle...")
+        result = ssh.execute_command(
+            f"{guardctl} --db-type=oracle --db-instance=ORCLCDB activate",
+            timeout=60, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"activate failed: {result['stderr']}")
+            return False
+
+        logger.info("\n➜ Starting Oracle database...")
+        result = ssh.execute_command(
+            'su - oracle -c "echo -e \'startup\\nexit\' | sqlplus / as sysdba"',
+            timeout=120, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Oracle startup failed: {result['stderr']}")
+            return False
+
+        logger.info("\n➜ Starting Oracle listener...")
+        result = ssh.execute_command("su - oracle -c 'lsnrctl start'", timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"lsnrctl start returned non-zero: {result['stderr']}")
+
+        logger.info("✓ Oracle started")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    logger.info("=" * 80)
+    logger.info("✓ Oracle stopped successfully")
+    logger.info("=" * 80)
+    return True
+
+
 def install_stap_on_sauropod(
     config,
     logger,

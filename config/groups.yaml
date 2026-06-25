@@ -364,6 +364,13 @@ groups:
           module_version: "12.2.2.0_r123489_11"
           debug: false
 
+      - name: enable_atap_for_oracle
+        function: enable_atap_for_oracle
+        module: tasks.labs
+        description: "Stop Oracle listener and database on sauropod before ATAP activation"
+        args:
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
