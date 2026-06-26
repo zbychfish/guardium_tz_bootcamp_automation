@@ -1531,6 +1531,189 @@ def setup_etap_certificates_mysql(
     return True
 
 
+def create_oracle_container_etap_certificate(
+    config,
+    logger,
+    verbose: bool = False,
+    collector_appliance: str = "coll1",
+    ca_dir: str = "/opt/ETAP/ca",
+    etap_alias: str = "oracle-etap",
+    etap_common_name: str = "oracle-etap",
+    etap_san1: str = "coll1.demo.com",
+    etap_organizational_unit: str = "Demo",
+    etap_organization: str = "Guardium",
+    etap_locality: str = "",
+    etap_state: str = "",
+    etap_country: str = "PL",
+    etap_email: str = "",
+    etap_encryption_algorithm: str = "2",
+    etap_keysize: str = "2",
+    etap_san2: str = "",
+    ca_alias: str = "etapca",
+    debug: bool = False
+) -> bool:
+    import os
+    from core.utils import run_local_command
+    from core.appliance_config_loader import ApplianceConfigLoader
+    from core.appliance_client import ApplianceClient
+
+    logger.info("=" * 80)
+    logger.info("CREATE ORACLE CONTAINER ETAP CERTIFICATE")
+    logger.info("=" * 80)
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found in machines_info.json")
+        return False
+
+    collector_ip = collector_config.get('ip')
+    if not collector_ip:
+        logger.error(f"Collector '{collector_appliance}' has no IP address configured")
+        return False
+
+    cli_password = config.get_custom_variable('cli_pwd')
+    if not cli_password:
+        logger.error("CLI password not found in custom_variables (cli_pwd)")
+        return False
+
+    ca_key_path = os.path.join(ca_dir, "ca.key")
+    ca_cert_path = os.path.join(ca_dir, "ca.pem")
+    csr_path = os.path.join(ca_dir, "etap2.csr")
+    etap_cert_path = os.path.join(ca_dir, "etap2.pem")
+    token_file = os.path.join(ca_dir, "oracle_etap_token.txt")
+
+    logger.info(f"Collector: {collector_appliance} at {collector_ip}")
+    logger.info(f"CA Directory: {ca_dir}")
+    logger.info(f"ETAP Alias: {etap_alias}")
+
+    # Step 1: Generate CSR on collector
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 1: Generate CSR for Oracle ETAP on collector")
+    logger.info(f"{'=' * 80}")
+
+    etap_csr_id = None
+    etap_token = None
+
+    try:
+        appliance = ApplianceClient(
+            host=collector_ip,
+            user="cli",
+            password=cli_password,
+            prompt_regex=r">",
+            strip_ansi=True,
+            debug=debug
+        )
+        if not appliance.connect():
+            logger.error("Failed to connect to collector")
+            return False
+
+        logger.info("✓ Connected to collector")
+        logger.info(f"Generating CSR for alias '{etap_alias}' (alias already exists → will select option 2)...")
+
+        csr, token, line_above = appliance.generate_external_stap_csr(
+            alias=etap_alias,
+            common_name=etap_common_name,
+            san1=etap_san1,
+            organizational_unit=etap_organizational_unit,
+            organization=etap_organization,
+            country=etap_country,
+            encryption_algorithm=etap_encryption_algorithm,
+            keysize=etap_keysize,
+            locality=etap_locality,
+            state=etap_state,
+            email=etap_email,
+            san2=etap_san2
+        )
+
+        with open(csr_path, "w", encoding="utf-8") as f:
+            f.write(csr)
+
+        etap_csr_id = line_above
+        etap_token = token
+        config.set_custom_variable('oracle_etap_token', etap_token)
+        with open(token_file, "w", encoding="utf-8") as f:
+            f.write(etap_token)
+
+        logger.info(f"✓ CSR generated and saved to {csr_path}")
+        logger.info(f"  CSR ID: {etap_csr_id}")
+        logger.info(f"  Deployment token: {etap_token}")
+
+        appliance.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Failed to generate CSR: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    # Step 2: Sign CSR with existing CA
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 2: Sign CSR with CA")
+    logger.info(f"{'=' * 80}")
+
+    try:
+        result = run_local_command(
+            command=f"openssl x509 -sha256 -req -days 3650 -CA {ca_cert_path} -CAkey {ca_key_path} -CAcreateserial -CAserial {ca_dir}/serial -in {csr_path} -out {etap_cert_path}",
+            shell=True,
+            timeout=60,
+            check=True
+        )
+        logger.info(f"✓ CSR signed, certificate saved to {etap_cert_path}")
+    except Exception as e:
+        logger.error(f"✗ Failed to sign CSR: {e}")
+        return False
+
+    # Step 3: Import ETAP certificate to collector
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 3: Import ETAP certificate to collector")
+    logger.info(f"{'=' * 80}")
+
+    try:
+        appliance = ApplianceClient(
+            host=collector_ip,
+            user="cli",
+            password=cli_password,
+            prompt_regex=r">",
+            strip_ansi=True,
+            debug=debug
+        )
+        if not appliance.connect():
+            logger.error("Failed to connect to collector")
+            return False
+
+        logger.info("✓ Connected to collector")
+
+        with open(etap_cert_path, "r", encoding="utf-8") as f:
+            etap_cert_pem = f.read()
+
+        appliance.import_external_stap_certificate(
+            alias_line=etap_csr_id,
+            stap_cert=etap_cert_pem
+        )
+
+        logger.info("✓ ETAP certificate imported successfully")
+        appliance.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Failed to import ETAP certificate: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ ORACLE CONTAINER ETAP CERTIFICATE COMPLETED")
+    logger.info("=" * 80)
+    logger.info(f"CSR: {csr_path}")
+    logger.info(f"Certificate: {etap_cert_path}")
+    logger.info(f"Deployment Token: {etap_token}")
+    logger.info("=" * 80)
+
+    return True
+
+
 def setup_appnode(
     config,
     logger,

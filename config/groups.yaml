@@ -371,12 +371,34 @@ groups:
           module_version: "12.2.2.0_r123489_11"
           debug: false
 
+
       - name: enable_atap_for_oracle
         function: enable_atap_for_oracle
         module: tasks.labs
         description: "Enable ATAP for Oracle on sauropod"
         args:
           debug: false
+
+      - name: create_oracle_container_etap_certificate
+        function: create_oracle_container_etap_certificate
+        module: tasks.labs
+        description: "Generate CSR for Oracle ETAP, sign with existing CA, import certificate to collector"
+        args:
+          collector_appliance: "coll1"
+          ca_dir: "/opt/ETAP/ca"
+          etap_alias: "oracle-etap"
+          etap_common_name: "oracle-etap"
+          etap_san1: "coll1.demo.com"
+          etap_organizational_unit: "Demo"
+          etap_organization: "Guardium"
+          etap_locality: "Nowa Sol"
+          etap_state: "Lubuskie"
+          etap_country: "PL"
+          etap_email: "guardadmin@gmail.com"
+          etap_encryption_algorithm: "2"
+          etap_keysize: "2"
+          etap_san2: ""
+          ca_alias: "etapca"
 
   ltr_lab:
     name: "LTR Lab"
