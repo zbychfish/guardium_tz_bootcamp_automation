@@ -979,66 +979,6 @@ WantedBy=multi-user.target
     return True
 
 
-def preparation_raptor_for_ltr(
-    config,
-    logger,
-    verbose: bool = False,
-    debug: bool = False
-) -> bool:
-    logger.info("=" * 80)
-    logger.info("PREPARATION RAPTOR FOR LTR")
-    logger.info("=" * 80)
-
-    root_password = config.get_custom_variable("pwd")
-    if not root_password:
-        logger.error("Custom variable 'pwd' not found")
-        return False
-
-    commands = [
-        f"""cat > /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/config/pgsql.yaml <<'EOF'
-# Admin config - for deploy-schema, seed-data, cleanup-schema, rebuild
-# Use super user (postgres, tom, etc.) with full privileges
-database:
-  type: postgres
-  host: raptor.guardium.demo
-  port: 5432
-  database: postgres
-  user: tom
-  password: {root_password}
-
-workload:
-  duration_seconds: 3600  # 60 minutes (used if --duration not specified)
-  think_time_ms: 250      # normal speed (used if --speed not specified)
-
-scenario:
-  name: micro_payments
-  options:
-    locale: pl_PL
-    seed_customers: 100
-    app_users:
-      - appuser1
-      - appuser2
-    admin_users:
-      - adminuser1
-    default_password: password
-EOF""",
-        "cd /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic && rm -rf venv && python3.12 -m venv venv",
-        "cd /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic && /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/venv/bin/python -m pip install --upgrade pip",
-        "cd /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic && /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/venv/bin/pip install -e .",
-        "cd /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic && /opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic/venv/bin/pip install -r requirements.txt",
-    ]
-
-    for command in commands:
-        result = execute_local_command(command, logger=logger, verbose=verbose)
-        if result["rc"] != 0:
-            logger.error(f"✗ Failed command: {command}")
-            logger.error(result["stderr"])
-            return False
-
-    logger.info("✓ Raptor prepared for LTR")
-    return True
-
-
 def setup_minio_on_raptor(
     config,
     logger,

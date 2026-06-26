@@ -98,9 +98,78 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
 
-    # Step 5: Install required packages on raptor
+    # Step 5: Configure guardium_notes_dbtraffic (pgsql.yaml, venv, dependencies)
     if verbose:
-        logger.info("Step 5: Installing required packages on raptor")
+        logger.info("Step 5: Configuring guardium_notes_dbtraffic")
+
+    root_password = config.get_custom_variable("pwd")
+    if not root_password:
+        logger.error("Custom variable 'pwd' not found")
+        return False
+
+    dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
+    venv_python = f"{dbtraffic_dir}/venv/bin/python"
+    venv_pip = f"{dbtraffic_dir}/venv/bin/pip"
+
+    common_scenario = """\
+workload:
+  duration_seconds: 3600  # 60 minutes (used if --duration not specified)
+  think_time_ms: 250      # normal speed (used if --speed not specified)
+
+scenario:
+  name: micro_payments
+  options:
+    locale: pl_PL
+    seed_customers: 100
+    app_users:
+      - appuser1
+      - appuser2
+    admin_users:
+      - adminuser1
+    default_password: password"""
+
+    commands = [
+        f"""cat > {dbtraffic_dir}/config/pgsql.yaml <<'EOF'
+# Admin config - for deploy-schema, seed-data, cleanup-schema, rebuild
+# Use super user (postgres, tom, etc.) with full privileges
+database:
+  type: postgres
+  host: raptor.guardium.demo
+  port: 5432
+  database: postgres
+  user: tom
+  password: {root_password}
+
+{common_scenario}
+EOF""",
+        f"""cat > {dbtraffic_dir}/config/oracle_container_sauropod.yaml <<'EOF'
+# Admin config - for deploy-schema, seed-data, cleanup-schema, rebuild
+# Use super user (postgres, tom, etc.) with full privileges
+database:
+  type: oracle
+  host: sauropod.demo.guardium
+  port: 1522
+  database: ORCLPDB1
+  user: system
+  password: {root_password}
+
+{common_scenario}
+EOF""",
+        f"cd {dbtraffic_dir} && rm -rf venv && python3.12 -m venv venv",
+        f"cd {dbtraffic_dir} && {venv_python} -m pip install --upgrade pip",
+        f"cd {dbtraffic_dir} && {venv_pip} install -e .",
+        f"cd {dbtraffic_dir} && {venv_pip} install -r requirements.txt",
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to configure guardium_notes_dbtraffic")
+        return False
+
+    if verbose:
+        logger.info("✓ guardium_notes_dbtraffic configured successfully")
+
+    # Step 6: Install required packages on raptor
+    if verbose:
+        logger.info("Step 6: Installing required packages on raptor")
 
     commands = [
         "dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git"

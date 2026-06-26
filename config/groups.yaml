@@ -384,11 +384,6 @@ groups:
     auto_execute: false
     dependencies: [etap_lab]
     stages:
-      - name: preparation_raptor_for_ltr
-        function: preparation_raptor_for_ltr
-        module: tasks.labs
-        description: "Prepare raptor upload content, create pgsql.yaml, and create Python 3.12 venv"
-
       - name: setup_minio_on_raptor
         function: setup_minio_on_raptor
         module: tasks.labs
