@@ -66,7 +66,7 @@ groups:
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
-    auto_execute: false  # Executed on demand
+    auto_execute: true  # Executed on demand
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: reset_cli_password_all
@@ -370,7 +370,6 @@ groups:
           module: "BUNDLE-STAP"
           module_version: "12.2.2.0_r123489_11"
           debug: false
-
 
       - name: enable_atap_for_oracle
         function: enable_atap_for_oracle
