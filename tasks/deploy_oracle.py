@@ -1020,4 +1020,115 @@ EOF
         return False
 
 
+def setup_oracle_container_on_sauropod(
+    config: ConfigLoader,
+    logger,
+    verbose: bool = False,
+    image_source_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_db_21c_image_with_oua.tar.gz",
+    debug: bool = False
+) -> bool:
+    import os
+
+    logger.info("=" * 80)
+    logger.info("SETUP ORACLE CONTAINER ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    image_filename = os.path.basename(image_source_path)
+    remote_image_path = f"/opt/lab_files/{image_filename}"
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+
+    try:
+        logger.info(f"\n➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        result = ssh.execute_command("mkdir -p /opt/lab_files", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create directory: {result['stderr']}")
+            return False
+
+        logger.info(f"\n➜ Uploading {image_filename} to sauropod...")
+        logger.info(f"  Source: {image_source_path}")
+        logger.info(f"  Destination: {remote_image_path}")
+        if not ssh.upload_file(image_source_path, remote_image_path):
+            logger.error(f"Failed to upload {image_filename}")
+            return False
+        logger.info("✓ Image uploaded")
+
+        logger.info("\n➜ Loading image into podman...")
+        result = ssh.execute_command(
+            f"cd /opt/lab_files && gunzip -c {image_filename} | podman load",
+            timeout=600, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"podman load failed: {result['stderr']}")
+            return False
+        logger.info("✓ Oracle container image loaded")
+
+        logger.info("\n➜ Configuring oradata directory...")
+        for cmd in [
+            "mkdir -p /opt/oradata",
+            "chown -R 54321:54321 /opt/oradata",
+            "chmod -R 775 /opt/oradata",
+            "semanage fcontext -a -t container_file_t '/opt/oradata(/.*)?' ",
+            "restorecon -Rv /opt/oradata",
+        ]:
+            result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"Failed: {cmd} — {result['stderr']}")
+                return False
+        logger.info("✓ oradata directory configured")
+
+        logger.info("\n➜ Starting Oracle container...")
+        run_cmd = (
+            f"podman run -d --restart unless-stopped --name oracle_db_21c"
+            f" -p 1522:1521 -p 5501:5500"
+            f" -e ORACLE_EDITION=EE -e ORACLE_SID=ORCL -e ORACLE_PDB=ORCLPDB1"
+            f" -e ORACLE_CHARACTERSET=AL32UTF8 -e ORACLE_SERVICE_NAME=ORCLPDB1.localdomain"
+            f" -v /opt/oradata:/opt/oracle/oradata"
+            f" -e ORACLE_PWD='{root_password}'"
+            f" oracle/database:21.3.0-ee-oua"
+        )
+        result = ssh.execute_command(run_cmd, timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"podman run failed: {result['stderr']}")
+            return False
+        logger.info("✓ Oracle container started")
+
+        logger.info("\n➜ Removing image archive...")
+        result = ssh.execute_command(f"rm -f {remote_image_path}", print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"Failed to remove image archive: {result['stderr']}")
+        else:
+            logger.info("✓ Image archive removed")
+
+    except Exception as e:
+        logger.error(f"Error during Oracle container setup: {e}")
+        return False
+    finally:
+        ssh.disconnect()
+
+    logger.info("=" * 80)
+    logger.info("✓ Oracle container image loaded successfully on sauropod")
+    logger.info("=" * 80)
+    return True
+
+
 # Made with Bob
