@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from core.ssh_client import SSHClient
 from core.logger import setup_logger
-from core import modify_config_file, configure_local_disk
+from core import modify_config_file
 
 
 def generate_hosts_content(machines: Dict[str, Dict[str, Any]]) -> str:
@@ -454,16 +454,6 @@ def set_timezone_remote(ssh_client: SSHClient, timezone: str, logger) -> bool:
         return False
 
 
-def configure_raptor_data_disk_local(logger, verbose: bool = True) -> bool:
-    return configure_local_disk(
-        device="/dev/vdd",
-        mount_point="/opt/data",
-        filesystem="ext4",
-        logger=logger,
-        verbose=verbose
-    )
-
-
 def configure_firewall_local(logger) -> bool:
     """
     Configure firewall on local machine to open required database ports.
@@ -664,12 +654,6 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
             logger.error("Failed to configure SSHD")
             return False
     
-    logger.info("Configuring raptor data disk")
-    disk_success = configure_raptor_data_disk_local(logger, verbose=verbose)
-    if not disk_success:
-        logger.error("Failed to configure raptor data disk")
-        return False
-
     # Set root password if provided
     if root_password:
         logger.info("Setting root password")
