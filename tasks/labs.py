@@ -1011,7 +1011,7 @@ def setup_minio_on_raptor(
         "cp /home/minio/ca/certs/ca.crt /etc/pki/ca-trust/source/anchors/",
         "update-ca-trust",
         "openssl genrsa -out /home/minio/certs/private.key 4096 && chmod 600 /home/minio/certs/private.key",
-        f'openssl req -new -key /home/minio/certs/private.key -out /home/minio/minio.csr -subj "/CN=minio.guardium.demo" -addext "subjectAltName=DNS:raptor.guardium.demo,IP:{raptor_ip}"',
+        f'openssl req -new -key /home/minio/certs/private.key -out /home/minio/minio.csr -subj "/CN=minio.demo.guardium" -addext "subjectAltName=DNS:raptor.demo.guardium,IP:{raptor_ip}"',
         "openssl x509 -req -in /home/minio/minio.csr -CA /home/minio/ca/certs/ca.crt -CAkey /home/minio/ca/private/ca.key -CAcreateserial -out /home/minio/certs/public.crt -days 3600 -sha256 -copy_extensions copy",
         "dnf -y install podman",
         "mkdir -p /home/data/minio",
@@ -1023,7 +1023,7 @@ def setup_minio_on_raptor(
     podman_run_command = f"podman run -d --name minio --restart=always -p 0.0.0.0:9000:9000 -p 0.0.0.0:9001:9001 -v /home/data/minio:/data:Z -v /home/minio/certs:/root/.minio/certs:Z -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD='{minio_password}' quay.io/minio/minio server /data --console-address ':9001'"
     
     commands_after_podman = [
-        f"mc alias set myminio https://raptor.guardium.demo:9000 minioadmin '{minio_password}'",
+        f"mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{minio_password}'",
         "mc mb myminio/guardium-ltr",
     ]
 

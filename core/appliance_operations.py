@@ -4122,7 +4122,7 @@ def activate_ltr(
     
     Executes grdapi configure_complete_cold_storage command with parameters:
     - protocol: CUSTOM
-    - objectStorageEndpoint: https://raptor.guardium.demo:9000
+    - objectStorageEndpoint: https://raptor.demo.guardium:9000
     - accessKey: minioadmin
     - secretKey: from custom_variables (pwd)
     - dataBucket: guardium-ltr
@@ -4212,7 +4212,7 @@ def activate_ltr(
     command = (
         f'grdapi configure_complete_cold_storage '
         f'protocol="CUSTOM" '
-        f'objectStorageEndpoint="https://raptor.guardium.demo:9000" '
+        f'objectStorageEndpoint="https://raptor.demo.guardium:9000" '
         f'accessKey=minioadmin '
         f'secretKey="{admin_password}" '
         f'dataBucket=guardium-ltr '

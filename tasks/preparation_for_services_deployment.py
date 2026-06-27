@@ -148,7 +148,7 @@ scenario:
 # Use super user (postgres, tom, etc.) with full privileges
 database:
   type: postgres
-  host: raptor.guardium.demo
+  host: raptor.demo.guardium
   port: 5432
   database: postgres
   user: tom

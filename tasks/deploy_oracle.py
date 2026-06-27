@@ -835,7 +835,7 @@ EOF
             if verbose:
                 logger.info("Step 2: Adding self-signed certificate to server wallet")
             result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.guardium.demo' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
+                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
                 timeout=60,
                 print_output=verbose
             )

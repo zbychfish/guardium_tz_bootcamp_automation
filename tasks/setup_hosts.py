@@ -621,7 +621,7 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
     logger.info(f"Setting up local machine ({machine_name})")
     
     # Set hostname
-    hostname = f"{machine_name}.guardium.demo"
+    hostname = f"{machine_name}.demo.guardium"
     logger.info(f"Setting hostname to {hostname}")
     hostname_success = set_hostname_local(hostname, logger)
     if not hostname_success:
@@ -721,7 +721,7 @@ def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any
             logger.info(f"Connected to {machine_name}")
             
             # Set hostname
-            hostname = f"{machine_name}.guardium.demo"
+            hostname = f"{machine_name}.demo.guardium"
             logger.info(f"Setting hostname to {hostname}")
             hostname_success = set_hostname_remote(ssh, hostname, logger)
             if not hostname_success:
