@@ -98,9 +98,23 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
 
-    # Step 5: Configure guardium_notes_dbtraffic (pgsql.yaml, venv, dependencies)
+    # Step 5: Install required packages on raptor
     if verbose:
-        logger.info("Step 5: Configuring guardium_notes_dbtraffic")
+        logger.info("Step 5: Installing required packages on raptor")
+
+    commands = [
+        "dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git"
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Package installation failed")
+        return False
+
+    if verbose:
+        logger.info("✓ Required packages installed on raptor")
+
+    # Step 6: Configure guardium_notes_dbtraffic (pgsql.yaml, venv, dependencies)
+    if verbose:
+        logger.info("Step 6: Configuring guardium_notes_dbtraffic")
 
     root_password = config.get_custom_variable("pwd")
     if not root_password:
@@ -162,20 +176,6 @@ EOF""",
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Failed to configure guardium_notes_dbtraffic")
-        return False
-
-    if verbose:
-        logger.info("✓ guardium_notes_dbtraffic configured successfully")
-
-    # Step 6: Install required packages on raptor
-    if verbose:
-        logger.info("Step 6: Installing required packages on raptor")
-
-    commands = [
-        "dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git"
-    ]
-    if not execute_commands(commands, logger, verbose):
-        logger.error("Package installation failed")
         return False
 
     if verbose:
