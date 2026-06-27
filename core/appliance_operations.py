@@ -3953,18 +3953,19 @@ def distribute_datalake_certificate(
     appnodes = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'appnode']
     collectors = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'collector']
     cms = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'cm']
-    
+
+    # Every managed appliance (appnode + collector) gets 1 Success entry for datalake-s3-gui.
+    # Exactly one appnode (the LTR node) gets an additional Success entry for datalake-gui.
+    managed = len(appnodes) + len(collectors)
+    expected_success_entries = managed + 1  # +1 for datalake-gui on LTR appnode
+    expected_info_entries = 2  # CM entries (datalake-gui + datalake-s3-gui)
+
     logger.info(f"Expected distribution targets:")
     logger.info(f"  - Appnodes: {len(appnodes)} ({', '.join(appnodes)})")
     logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors)})")
     logger.info(f"  - CM: {len(cms)} ({', '.join(cms)})")
-    
-    # Expected entries: 2 per appnode, 1 per collector, 2 for CM
-    expected_success_entries = len(appnodes) * 2 + len(collectors)
-    expected_info_entries = 2  # CM entries
-    
     logger.info(f"Expected results:")
-    logger.info(f"  - Success entries: {expected_success_entries}")
+    logger.info(f"  - Success entries: {expected_success_entries} ({managed} x datalake-s3-gui + 1 x datalake-gui)")
     logger.info(f"  - INFO entries: {expected_info_entries}")
     
     # Get CM appliance config
