@@ -833,18 +833,20 @@ def download_file(url: str, destination: str, logger=None, verbose: bool = True)
         # Write file in chunks
         downloaded = 0
         chunk_size = 8192
-        
+        last_reported = -1
+
         with open(destination, 'wb') as f:
             for chunk in response.iter_content(chunk_size=chunk_size):
                 if chunk:
                     f.write(chunk)
                     downloaded += len(chunk)
-                    
-                    # Log progress for large files
+
                     if verbose and total_size > 0:
-                        progress = (downloaded / total_size) * 100
-                        if downloaded % (chunk_size * 100) == 0:  # Log every ~800KB
-                            log.info(f"Progress: {progress:.1f}% ({downloaded}/{total_size} bytes)")
+                        pct = int((downloaded / total_size) * 100)
+                        milestone = (pct // 5) * 5
+                        if milestone > last_reported:
+                            last_reported = milestone
+                            log.info(f"⬇  Downloading... {milestone}% ({downloaded // 1024 // 1024} MB / {total_size // 1024 // 1024} MB)")
         
         if verbose:
             log.info(f"✓ File downloaded successfully: {destination}")
@@ -886,18 +888,24 @@ def extract_zip(zip_path: str, extract_to: str, logger=None, verbose: bool = Tru
         
         # Extract ZIP file
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Get list of files
             file_list = zip_ref.namelist()
-            
+            total_files = len(file_list)
+
             if verbose:
-                log.info(f"Archive contains {len(file_list)} file(s)")
-            
-            # Extract all files
-            zip_ref.extractall(extract_to)
-            
+                log.info(f"Archive contains {total_files} file(s)")
+
+            last_reported = -1
+            for i, name in enumerate(file_list, 1):
+                zip_ref.extract(name, extract_to)
+                if verbose:
+                    pct = int((i / total_files) * 100)
+                    milestone = (pct // 5) * 5
+                    if milestone > last_reported:
+                        last_reported = milestone
+                        log.info(f"📦  Extracting... {milestone}% ({i}/{total_files} files)")
+
             if verbose:
-                log.info("✓ ZIP archive extracted successfully")
-                log.info(f"  Extracted {len(file_list)} file(s) to: {extract_to}")
+                log.info(f"✓ ZIP archive extracted successfully ({total_files} file(s) to: {extract_to})")
         
         return True
         
