@@ -1556,6 +1556,7 @@ def create_oracle_container_etap_certificate(
     from core.utils import run_local_command
     from core.appliance_config_loader import ApplianceConfigLoader
     from core.appliance_client import ApplianceClient
+    from core import execute_local_command
 
     logger.info("=" * 80)
     logger.info("CREATE ORACLE CONTAINER ETAP CERTIFICATE")
@@ -1703,12 +1704,109 @@ def create_oracle_container_etap_certificate(
             logger.error(traceback.format_exc())
         return False
 
+    # Step 4: Deploy Oracle ETAP quadlet
+    logger.info(f"\n{'=' * 80}")
+    logger.info("STEP 4: Deploy Oracle ETAP quadlet")
+    logger.info(f"{'=' * 80}")
+
+    sauropod_info = config.get_machine("sauropod")
+    if not sauropod_info:
+        logger.error("Machine 'sauropod' not found in configuration")
+        return False
+    sauropod_ip = sauropod_info.get("private_ip") or sauropod_info.get("host")
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in configuration")
+        return False
+
+    version_file = "/opt/ETAP/ca/guardium_etap_version.txt"
+    etap_version = config.get_custom_variable("guardium_etap_version")
+    if not etap_version and os.path.exists(version_file):
+        with open(version_file, "r", encoding="utf-8") as f:
+            etap_version = f.read().strip()
+        if etap_version:
+            logger.info(f"Loaded guardium_etap_version from {version_file}")
+    if not etap_version:
+        logger.error("guardium_etap_version not found in custom_variables or version file")
+        return False
+
+    container_file_content = f"""[Unit]
+Description=oracle-etap
+Documentation=man:podman-generate-systemd(1)
+
+[Container]
+Image=icr.io/guardium/guardium_external_s-tap:v{etap_version}
+ContainerName=oracle-etap
+HostName=localhost-oracle-etap
+
+PodmanArgs=--memory=4g --shm-size=800M
+
+PublishPort=63334:8888/tcp
+
+Environment=STAP_CONFIG_TAP_TAP_IP=NULL
+Environment=STAP_CONFIG_TAP_PRIVATE_TAP_IP=NULL
+Environment=STAP_CONFIG_TAP_FORCE_SERVER_IP=0
+Environment=STAP_CONFIG_PROXY_GROUP_UUID=7a2f91bc-d83e-41c5-a6f9-12047ae58b32
+Environment=STAP_CONFIG_PROXY_GROUP_MEMBER_COUNT=1
+Environment=STAP_CONFIG_PROXY_NUM_WORKERS=1
+Environment=STAP_CONFIG_PROXY_PROXY_PROTOCOL=0
+Environment=STAP_CONFIG_PROXY_DISCONNECT_ON_INVALID_CERTIFICATE=0
+Environment=STAP_CONFIG_PROXY_NOTIFY_ON_INVALID_CERTIFICATE=0
+Environment=STAP_CONFIG_PROXY_DETECT_SSL_WITHIN_X_PACKETS=-1
+Environment=STAP_CONFIG_DB_0_REAL_DB_PORT=1522
+Environment=STAP_CONFIG_PROXY_LISTEN_PORT=8888
+Environment=STAP_CONFIG_PROXY_DEBUG=0
+Environment=STAP_CONFIG_PROXY_SECRET={etap_token}
+Environment=STAP_CONFIG_PROXY_CSR_NAME=
+Environment=STAP_CONFIG_PROXY_CSR_COUNTRY=
+Environment=STAP_CONFIG_PROXY_CSR_PROVINCE=
+Environment=STAP_CONFIG_PROXY_CSR_CITY=
+Environment=STAP_CONFIG_PROXY_CSR_ORGANIZATION=
+Environment=STAP_CONFIG_PROXY_CSR_KEYLENGTH=2048
+Environment=STAP_CONFIG_DB_0_DB_TYPE=oracle
+Environment=STAP_CONFIG_PARTICIPATE_IN_LOAD_BALANCING=0
+Environment=STAP_CONFIG_TAP_TENANT_ID=ORACLEETAP
+Environment=STAP_CONFIG_SQLGUARD_0_SQLGUARD_IP={collector_ip}
+Environment=STAP_CONFIG_PROXY_DB_HOST={sauropod_ip}
+
+[Service]
+Restart=always
+TimeoutStopSec=70
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+    container_file_path = "/etc/containers/systemd/oracle-etap.container"
+
+    result = execute_local_command("mkdir -p /etc/containers/systemd", logger=logger, verbose=verbose)
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to create systemd container directory: {result['stderr']}")
+        return False
+
+    result = execute_local_command(f"cat > {container_file_path} << 'EOF'\n{container_file_content}\nEOF", logger=logger, verbose=verbose)
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to create systemd container file: {result['stderr']}")
+        return False
+    logger.info(f"✓ Quadlet file created: {container_file_path}")
+
+    result = execute_local_command("systemctl daemon-reload", logger=logger, verbose=verbose)
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to reload systemd daemon: {result['stderr']}")
+        return False
+
+    result = execute_local_command("systemctl start oracle-etap", logger=logger, verbose=verbose)
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to start oracle-etap service: {result['stderr']}")
+        return False
+
     logger.info("\n" + "=" * 80)
     logger.info("✓ ORACLE CONTAINER ETAP CERTIFICATE COMPLETED")
     logger.info("=" * 80)
     logger.info(f"CSR: {csr_path}")
     logger.info(f"Certificate: {etap_cert_path}")
     logger.info(f"Deployment Token: {etap_token}")
+    logger.info(f"Quadlet: {container_file_path}")
+    logger.info(f"ETAP DB Host: {sauropod_ip}:1522")
     logger.info("=" * 80)
 
     return True
