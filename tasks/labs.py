@@ -2367,10 +2367,24 @@ ORCLPDB1 =
     finally:
         ssh.disconnect()
 
+    # Step 2: Create game schema in Oracle container via guardium-notes-dbtraffic
+    logger.info("\n➜ Step 2: Create game schema in Oracle container (rebuild)")
+    dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
+    rebuild_cmd = (
+        f"cd {dbtraffic_dir} && "
+        f"source venv/bin/activate && "
+        f"guardium-notes-dbtraffic --config config/oracle_container_sauropod.yaml rebuild"
+    )
+    result = execute_local_command(rebuild_cmd, logger=logger, verbose=verbose)
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to create game schema: {result['stderr']}")
+        return False
+    logger.info("✓ Game schema created in Oracle container")
+
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
-    # Step 2: Create secadmin and guardium users, grant privileges
-    logger.info("\n➜ Step 2: Create secadmin and guardium users")
+    # Step 3: Create secadmin and guardium users, grant privileges
+    logger.info("\n➜ Step 3: Create secadmin and guardium users")
     try:
         import oracledb
         dsn = f"{sauropod_ip}:1522/ORCLPDB1"
@@ -2390,8 +2404,8 @@ ORCLPDB1 =
         conn.close()
         logger.info("✓ secadmin and guardium users created")
 
-        # Step 3: Create audit policy GAME_APP and scheduler job as secadmin
-        logger.info("\n➜ Step 3: Setup OUA audit policy GAME_APP as secadmin")
+        # Step 4: Create audit policy GAME_APP and scheduler job as secadmin
+        logger.info("\n➜ Step 4: Setup OUA audit policy GAME_APP as secadmin")
         conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
         for sql in [
             r"BEGIN DECLARE v_cnt NUMBER; BEGIN SELECT COUNT(*) INTO v_cnt FROM audit_unified_policies WHERE policy_name='GAME_APP'; IF v_cnt=0 THEN EXECUTE IMMEDIATE 'CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features'; END IF; EXECUTE IMMEDIATE 'AUDIT POLICY GAME_APP'; END; END;",
@@ -2410,8 +2424,8 @@ ORCLPDB1 =
             logger.error(traceback.format_exc())
         return False
 
-    # Step 4: Configure guard_tap.ini for OUA monitoring
-    logger.info("\n➜ Step 4: Configure guard_tap.ini for OUA")
+    # Step 5: Configure guard_tap.ini for OUA monitoring
+    logger.info("\n➜ Step 5: Configure guard_tap.ini for OUA")
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
     try:
         if not ssh.connect():
