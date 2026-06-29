@@ -1531,7 +1531,7 @@ def setup_etap_certificates_mysql(
     return True
 
 
-def create_oracle_container_etap_certificate(
+def deploy_etap_for_oracle_container_on_sauropod(
     config,
     logger,
     verbose: bool = False,
@@ -2099,7 +2099,6 @@ def install_stap_on_sauropod(
     module_version: str = "12.2.2.0_r123489_3",
     use_tls: str = "1",
     statistics: str = "-3",
-    connection_pool_size: str = "2",
     debug: bool = False
 ) -> bool:
     from core.ssh_client import SSHClient
@@ -2229,7 +2228,9 @@ def install_stap_on_sauropod(
         "STAP_SQLGUARD_IP": sqlguard_ip,
         "STAP_USE_TLS": use_tls,
         "STAP_STATISTIC": statistics,
-        "STAP_CONNECTION_POOL_SIZE": connection_pool_size
+        "KTAP_ENABLED": "0",
+        "STAP_ENABLED": "0",
+        "KTAP_ALLOW_MODULE_COMBOS": "Y"
     }
 
     logger.info(f"\n{'=' * 80}")
@@ -2238,7 +2239,9 @@ def install_stap_on_sauropod(
     logger.info(f"  - SQL Guard IP (collector): {sqlguard_ip}")
     logger.info(f"  - Use TLS: {use_tls}")
     logger.info(f"  - Statistics: {statistics}")
-    logger.info(f"  - Connection Pool Size: {connection_pool_size}")
+    logger.info(f"  - KTAP_ENABLED: 0")
+    logger.info(f"  - STAP_ENABLED: 0")
+    logger.info(f"  - KTAP_ALLOW_MODULE_COMBOS: Y")
 
     return install_gim_module(
         config=config,

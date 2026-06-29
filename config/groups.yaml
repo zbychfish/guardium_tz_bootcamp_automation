@@ -379,7 +379,7 @@ groups:
           debug: false
 
       - name: create_oracle_container_etap_certificate
-        function: create_oracle_container_etap_certificate
+        function: deploy_etap_for_oracle_container_on_sauropod
         module: tasks.labs
         description: "Generate CSR for Oracle ETAP, sign with existing CA, import certificate to collector"
         args:
