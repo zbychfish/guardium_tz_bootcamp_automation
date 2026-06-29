@@ -214,6 +214,9 @@ groups:
         description: "Import GIM module files to Guardium appliance"
         args:
           appliance_name: "cm"
+          demo_user: "demo"
+          gim_directory: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim"
+          gim_target_dir: "/var/dump"
           debug: false
       
   atap_lab:
@@ -229,6 +232,9 @@ groups:
         description: "Install GIM (Guardium Installation Manager) on raptor machine"
         args:
           gim_installer_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
+          install_dir: "/opt/guardium"
+          # tapip: ""     # Optional - auto-detected from raptor config if not provided
+          # sqlguardip: "" # Optional - auto-detected from cm config if not provided
           debug: false
     
       - name: install_stap_on_raptor
@@ -240,12 +246,22 @@ groups:
           collector_name: "coll1"
           module: "BUNDLE-STAP"
           module_version: "12.2.2.0_r123489_3"
+          use_tls: "1"
+          statistics: "-3"
+          connection_pool_size: "2"
           debug: false
 
       - name: enable_atap_for_postgres_on_raptor
         function: enable_atap_for_postgres_on_raptor
         module: tasks.labs
         description: "Enable ATAP (Application Transparent Access Protection) for PostgreSQL on raptor"
+        args:
+          db_user: "postgres"
+          db_home: "/usr"
+          db_user_dir: "/var/lib/pgsql"
+          db_type: "postgres"
+          db_instance: "postgres"
+          db_version: "16"
 
       - name: correct_mysql_ie
         function: correct_mysql_ie
@@ -385,6 +401,9 @@ groups:
         args:
           appliance_name: "cm"
           collector_name: "coll1"
+          guardium_password: "guardium"
+          instantclient_rpm: "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm"
+          instantclient_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle"
           debug: false
 
       - name: create_oracle_container_etap_certificate
