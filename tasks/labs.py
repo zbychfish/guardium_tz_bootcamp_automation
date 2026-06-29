@@ -2228,8 +2228,8 @@ def install_stap_on_sauropod(
         "STAP_SQLGUARD_IP": sqlguard_ip,
         "STAP_USE_TLS": use_tls,
         "STAP_STATISTIC": statistics,
-        "KTAP_ENABLED": "0",
-        "STAP_ENABLED": "0",
+        "KTAP_ENABLED": "1",
+        "STAP_ENABLED": "1",
         "KTAP_ALLOW_MODULE_COMBOS": "Y"
     }
 
@@ -2239,8 +2239,8 @@ def install_stap_on_sauropod(
     logger.info(f"  - SQL Guard IP (collector): {sqlguard_ip}")
     logger.info(f"  - Use TLS: {use_tls}")
     logger.info(f"  - Statistics: {statistics}")
-    logger.info(f"  - KTAP_ENABLED: 0")
-    logger.info(f"  - STAP_ENABLED: 0")
+    logger.info(f"  - KTAP_ENABLED: 1")
+    logger.info(f"  - STAP_ENABLED: 1")
     logger.info(f"  - KTAP_ALLOW_MODULE_COMBOS: Y")
 
     return install_gim_module(
