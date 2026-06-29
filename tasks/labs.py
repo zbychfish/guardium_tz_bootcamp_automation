@@ -2372,41 +2372,53 @@ ORCLPDB1 =
     # Step 2: Create secadmin and guardium users, grant privileges
     logger.info("\n➜ Step 2: Create secadmin and guardium users")
     try:
-        if not ssh.connect():
-            logger.error("Failed to connect to sauropod")
-            return False
-        logger.info("✓ Connected to sauropod")
+        import oracledb
+        dsn = f"{sauropod_ip}:1522/ORCLPDB1"
 
-        sql_system = [
+        conn = oracledb.connect(user="system", password=root_password, dsn=dsn)
+        for sql in [
             f'CREATE USER secadmin IDENTIFIED BY "{root_password}"',
             f'CREATE USER guardium IDENTIFIED BY "{guardium_password}"',
             "GRANT CONNECT, SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE, AUDIT_ADMIN, CREATE PROCEDURE, DROP ANY PROCEDURE, AUDIT SYSTEM, AUDIT ANY, CREATE JOB TO SECADMIN",
             "GRANT CONNECT, RESOURCE TO guardium",
             "GRANT SELECT ANY DICTIONARY TO guardium",
             r"BEGIN DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(host => 'localhost', ace => xs$ace_type(privilege_list => xs$name_list('connect', 'resolve'), principal_name => 'guardium', principal_type => xs_acl.ptype_db)); END;",
-        ]
-        sql_block = "\n".join(sql_system) + "\nexit"
-        cmd = f"su - oracle -c \"sqlplus -s system/{root_password}@ORCLPDB1 << 'EOF'\n{sql_block}\nEOF\""
-        result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
-        if result['rc'] != 0:
-            logger.warning(f"system SQL block returned non-zero: {result['stderr']}")
+        ]:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+            conn.commit()
+        conn.close()
         logger.info("✓ secadmin and guardium users created")
 
         # Step 3: Create audit policy GAME_APP and scheduler job as secadmin
         logger.info("\n➜ Step 3: Setup OUA audit policy GAME_APP as secadmin")
-        sql_secadmin = [
+        conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
+        for sql in [
             r"BEGIN DECLARE v_cnt NUMBER; BEGIN SELECT COUNT(*) INTO v_cnt FROM audit_unified_policies WHERE policy_name='GAME_APP'; IF v_cnt=0 THEN EXECUTE IMMEDIATE 'CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features'; END IF; EXECUTE IMMEDIATE 'AUDIT POLICY GAME_APP'; END; END;",
             r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
-        ]
-        sql_block = "\n".join(sql_secadmin) + "\nexit"
-        cmd = f"su - oracle -c \"sqlplus -s secadmin/{root_password}@ORCLPDB1 << 'EOF'\n{sql_block}\nEOF\""
-        result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
-        if result['rc'] != 0:
-            logger.warning(f"secadmin SQL block returned non-zero: {result['stderr']}")
+        ]:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+            conn.commit()
+        conn.close()
         logger.info("✓ Audit policy GAME_APP created and enabled")
 
-        # Step 4: Configure guard_tap.ini for OUA monitoring
-        logger.info("\n➜ Step 4: Configure guard_tap.ini for OUA")
+    except Exception as e:
+        logger.error(f"✗ Oracle connection failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    # Step 4: Configure guard_tap.ini for OUA monitoring
+    logger.info("\n➜ Step 4: Configure guard_tap.ini for OUA")
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+    try:
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
         ini_cmds = [
             "sed -i 's|^sqlc_properties_dir=.*|sqlc_properties_dir=/usr/lib/oracle/21/client64/lib/network/admin|' /opt/guardium/modules/STAP/current/guard_tap.ini",
             "sed -i 's|^ld_library_paths=.*|ld_library_paths=/usr/lib/oracle/21/client64/lib|' /opt/guardium/modules/STAP/current/guard_tap.ini",
