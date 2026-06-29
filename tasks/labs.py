@@ -2255,3 +2255,221 @@ def install_stap_on_sauropod(
         installation_delay=10,
         debug=debug
     )
+
+
+def setup_stap_with_oua_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    appliance_name: str = "cm",
+    collector_name: str = "coll1",
+    guardium_password: str = "guardium",
+    instantclient_rpm: str = "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm",
+    instantclient_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle",
+    debug: bool = False
+) -> bool:
+    from core.ssh_client import SSHClient
+    from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
+    import time
+
+    logger.info("=" * 80)
+    logger.info("SETUP STAP WITH OUA ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_name)
+    if not collector_config:
+        logger.error(f"Collector '{collector_name}' not found in machines_info.json")
+        return False
+
+    collector_ip = collector_config.get('ip')
+    if not collector_ip:
+        logger.error(f"Collector '{collector_name}' has no IP address configured")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    remote_lab_dir = "/opt/lab_files"
+    local_rpm = f"{instantclient_source_dir}/{instantclient_rpm}"
+    remote_rpm = f"{remote_lab_dir}/{instantclient_rpm}"
+
+    tnsnames_content = """\
+ORCLPDB1 =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = sauropod.gdemo.com)(PORT = 1522))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SERVICE_NAME = ORCLPDB1)
+    )
+  )"""
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+
+    # Step 1: Install Oracle Instant Client and configure tnsnames.ora
+    logger.info("\n➜ Step 1: Install Oracle Instant Client on sauropod")
+    try:
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        result = ssh.execute_command(f"mkdir -p {remote_lab_dir}", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create {remote_lab_dir}: {result['stderr']}")
+            return False
+
+        logger.info(f"  Uploading {instantclient_rpm}...")
+        if not ssh.upload_file(local_rpm, remote_rpm):
+            logger.error(f"Failed to upload {instantclient_rpm}")
+            return False
+        logger.info("✓ RPM uploaded")
+
+        result = ssh.execute_command(f"dnf -y install {remote_rpm}", timeout=120, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to install Oracle Instant Client: {result['stderr']}")
+            return False
+        logger.info("✓ Oracle Instant Client installed")
+
+        tnsnames_dir = "/usr/lib/oracle/21/client64/lib/network/admin"
+        result = ssh.execute_command(f"mkdir -p {tnsnames_dir}", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create tnsnames dir: {result['stderr']}")
+            return False
+
+        result = ssh.execute_command(
+            f"cat > {tnsnames_dir}/tnsnames.ora << 'EOF'\n{tnsnames_content}\nEOF",
+            print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Failed to write tnsnames.ora: {result['stderr']}")
+            return False
+        logger.info(f"✓ tnsnames.ora configured at {tnsnames_dir}/tnsnames.ora")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+
+    # Step 2: Create secadmin and guardium users, grant privileges
+    logger.info("\n➜ Step 2: Create secadmin and guardium users")
+    try:
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        sql_system = [
+            f'CREATE USER secadmin IDENTIFIED BY "{root_password}"',
+            f'CREATE USER guardium IDENTIFIED BY "{guardium_password}"',
+            "GRANT CONNECT, SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE, AUDIT_ADMIN, CREATE PROCEDURE, DROP ANY PROCEDURE, AUDIT SYSTEM, AUDIT ANY, CREATE JOB TO SECADMIN",
+            "GRANT CONNECT, RESOURCE TO guardium",
+            "GRANT SELECT ANY DICTIONARY TO guardium",
+            r"BEGIN DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(host => 'localhost', ace => xs$ace_type(privilege_list => xs$name_list('connect', 'resolve'), principal_name => 'guardium', principal_type => xs_acl.ptype_db)); END;",
+        ]
+        sql_block = "\n".join(sql_system) + "\nexit"
+        cmd = f"su - oracle -c \"sqlplus -s system/{root_password}@ORCLPDB1 << 'EOF'\n{sql_block}\nEOF\""
+        result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"system SQL block returned non-zero: {result['stderr']}")
+        logger.info("✓ secadmin and guardium users created")
+
+        # Step 3: Create audit policy GAME_APP and scheduler job as secadmin
+        logger.info("\n➜ Step 3: Setup OUA audit policy GAME_APP as secadmin")
+        sql_secadmin = [
+            r"BEGIN DECLARE v_cnt NUMBER; BEGIN SELECT COUNT(*) INTO v_cnt FROM audit_unified_policies WHERE policy_name='GAME_APP'; IF v_cnt=0 THEN EXECUTE IMMEDIATE 'CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features'; END IF; EXECUTE IMMEDIATE 'AUDIT POLICY GAME_APP'; END; END;",
+            r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
+        ]
+        sql_block = "\n".join(sql_secadmin) + "\nexit"
+        cmd = f"su - oracle -c \"sqlplus -s secadmin/{root_password}@ORCLPDB1 << 'EOF'\n{sql_block}\nEOF\""
+        result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"secadmin SQL block returned non-zero: {result['stderr']}")
+        logger.info("✓ Audit policy GAME_APP created and enabled")
+
+        # Step 4: Configure guard_tap.ini for OUA monitoring
+        logger.info("\n➜ Step 4: Configure guard_tap.ini for OUA")
+        ini_cmds = [
+            "sed -i 's|^sqlc_properties_dir=.*|sqlc_properties_dir=/usr/lib/oracle/21/client64/lib/network/admin|' /opt/guardium/modules/STAP/current/guard_tap.ini",
+            "sed -i 's|^ld_library_paths=.*|ld_library_paths=/usr/lib/oracle/21/client64/lib|' /opt/guardium/modules/STAP/current/guard_tap.ini",
+            "/opt/guardium/modules/STAP/current/guard-config-update --restart STAP"
+        ]
+        for cmd in ini_cmds:
+            result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+            if result['rc'] != 0:
+                logger.warning(f"Command returned non-zero: {cmd}\n{result['stderr']}")
+        logger.info("✓ guard_tap.ini configured and STAP restarted")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    # Step 5: Store SQL credentials and create SQL configuration via REST API
+    logger.info("\n➜ Step 5: Store Oracle credentials and create SQL configuration")
+    try:
+        api = create_guardium_api(config, logger, appliance_name)
+        api.get_token(username='demo', password=root_password)
+
+        logger.info("  Storing guardium user credentials on collector...")
+        api.store_sql_credentials(
+            password=guardium_password,
+            username="guardium",
+            stap_host=sauropod_ip,
+            api_target_host=collector_ip
+        )
+        logger.info("✓ SQL credentials stored")
+
+        time.sleep(60)
+
+        logger.info("  Creating SQL configuration for Oracle OUA...")
+        api.create_sql_configuration(
+            db_type="Oracle",
+            instance="ORCLPDB1",
+            stap_host=sauropod_ip,
+            username="guardium",
+            api_target_host=collector_ip
+        )
+        logger.info("✓ SQL configuration created")
+
+        time.sleep(60)
+
+        # Step 6: Disable STAP (STAP_ENABLED=0) and reinstall
+        logger.info("\n➜ Step 6: Set STAP_ENABLED=0 and apply")
+        api.gim_client_params(client_ip=sauropod_ip, param_name="STAP_ENABLED", param_value="0")
+        api.gim_schedule_install(client_ip=sauropod_ip, date="now")
+        logger.info("✓ STAP_ENABLED=0 scheduled")
+
+    except Exception as e:
+        logger.error(f"✗ REST API operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ SETUP STAP WITH OUA ON SAUROPOD COMPLETED")
+    logger.info("=" * 80)
+    return True

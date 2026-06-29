@@ -658,7 +658,57 @@ class GuardiumRestAPI:
         # Return last result (should always have a result after loop)
         return result if result else {'ErrorCode': '999', 'ErrorMessage': 'Unknown error'}
 
+    def store_sql_credentials(
+        self,
+        password: str,
+        stap_host: str,
+        username: str,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/stap'
+        data: Dict[str, Any] = {
+            'password': password,
+            'stapHost': stap_host,
+            'username': username
+        }
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        response = requests.post(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
 
+    def create_sql_configuration(
+        self,
+        db_type: str,
+        instance: str,
+        stap_host: str,
+        username: str,
+        data_pull_interval: Optional[str] = None,
+        data_pull_rows: Optional[str] = None,
+        timeout: Optional[str] = None,
+        user_role: Optional[str] = None,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/create_sql_configuration'
+        data: Dict[str, Any] = {
+            'dbType': db_type,
+            'instance': instance,
+            'stapHost': stap_host,
+            'username': username
+        }
+        if data_pull_interval:
+            data['dataPullInterval'] = data_pull_interval
+        if data_pull_rows:
+            data['dataPullRows'] = data_pull_rows
+        if timeout:
+            data['timeout'] = timeout
+        if user_role:
+            data['userRole'] = user_role
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        response = requests.post(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
 
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':
