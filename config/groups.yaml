@@ -394,18 +394,6 @@ groups:
         args:
           debug: false
 
-      - name: setup_stap_with_oua_on_sauropod
-        function: setup_stap_with_oua_on_sauropod
-        module: tasks.labs
-        description: "Configure Oracle OUA: create secadmin/guardium users, GAME_APP audit policy, guard_tap.ini, store SQL credentials and SQL configuration on collector"
-        args:
-          appliance_name: "cm"
-          collector_name: "coll1"
-          guardium_password: "guardium"
-          instantclient_rpm: "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm"
-          instantclient_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle"
-          debug: false
-
       - name: create_oracle_container_etap_certificate
         function: deploy_etap_for_oracle_container_on_sauropod
         module: tasks.labs
@@ -426,6 +414,18 @@ groups:
           etap_keysize: "2"
           etap_san2: ""
           ca_alias: "etapca"
+
+      - name: setup_stap_with_oua_on_sauropod
+        function: setup_stap_with_oua_on_sauropod
+        module: tasks.labs
+        description: "Configure Oracle OUA: create secadmin/guardium users, GAME_APP audit policy, guard_tap.ini, store SQL credentials and SQL configuration on collector"
+        args:
+          appliance_name: "cm"
+          collector_name: "coll1"
+          guardium_password: "guardium"
+          instantclient_rpm: "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm"
+          instantclient_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle"
+          debug: false
 
   ltr_lab:
     name: "LTR Lab"
