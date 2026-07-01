@@ -6,6 +6,7 @@ Adapted for guardium_tz_bootcamp_automation project
 """
 
 import os
+import json
 import requests
 import time
 from typing import Optional, Dict, Any, Callable
@@ -729,7 +730,43 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def create_uc_credential(
+        self,
+        name: str,
+        credential_type: str,
+        parameters: Optional[Dict[str, str]] = None,
+        description: str = "",
+        files_params: Optional[list] = None,
+        files_paths: Optional[list] = None,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/ucCredential'
+        credential: Dict[str, Any] = {
+            'name': name,
+            'credentialType': credential_type,
+            'description': description
+        }
+        if parameters:
+            credential['parameters'] = parameters
+        if files_params:
+            credential['files'] = files_params
 
+        if files_paths:
+            form_data = [('credential', (None, json.dumps(credential), 'application/json'))]
+            for fp in files_paths:
+                form_data.append(('files', (os.path.basename(fp), open(fp, 'rb'), 'application/octet-stream')))
+            headers = {'Authorization': f'Bearer {self.access_token}'}
+            if api_target_host:
+                form_data.append(('api_target_host', (None, api_target_host)))
+            response = requests.post(url, files=form_data, headers=headers, verify=self.verify_ssl)
+        else:
+            data: Dict[str, Any] = {'credential': json.dumps(credential)}
+            if api_target_host:
+                data['api_target_host'] = api_target_host
+            response = requests.post(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+
+        response.raise_for_status()
+        return response.json()
 
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':

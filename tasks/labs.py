@@ -2668,3 +2668,57 @@ def create_kafka_cluster(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
+
+def create_uc_credential_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    credential_name: str = "oracle_container_sauropod",
+    credential_type: str = "JDBC Credentials",
+    username: str = "guardium",
+    password: str = "guardium",
+    description: str = "",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("CREATE UC CREDENTIAL")
+    logger.info("=" * 80)
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    try:
+        api = create_guardium_api(config, logger, cm_appliance)
+        api.get_token(username='demo', password=pwd)
+
+        logger.info(f"Credential name: {credential_name}")
+        logger.info(f"Credential type: {credential_type}")
+        logger.info(f"Username: {username}")
+
+        result = api.create_uc_credential(
+            name=credential_name,
+            credential_type=credential_type,
+            description=description,
+            parameters={"username": username, "password": password}
+        )
+
+        if debug:
+            logger.info(f"API Response: {result}")
+
+        logger.info("✓ UC credential created successfully")
+        logger.info("=" * 80)
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Failed to create UC credential: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False

@@ -456,6 +456,18 @@ groups:
           apply_cruise_control: false
           debug: true
 
+      - name: create_uc_credential_oracle_container
+        function: create_uc_credential_oracle_container
+        module: tasks.labs
+        description: "Create JDBC Credentials for Oracle container on sauropod"
+        args:
+          cm_appliance: "cm"
+          credential_name: "oracle_container_sauropod"
+          credential_type: "JDBC Credentials"
+          username: "guardium"
+          password: "guardium"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
