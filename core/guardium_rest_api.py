@@ -778,16 +778,16 @@ class GuardiumRestAPI:
     ) -> dict:
         url = f'{self.base_url}/restAPI/universal_connector_import_profiles'
         headers = {'Authorization': f'Bearer {self.access_token}'}
-        form_data = []
-        form_data.append(('path', (os.path.basename(path), open(path, 'rb'), 'application/octet-stream')))
-        form_data.append(('update_mode', (None, str(update_mode).lower())))
+        files = {}
+        files['path'] = (os.path.basename(path), open(path, 'rb'), 'text/csv')
         if jar_file:
-            form_data.append(('jarFile', (os.path.basename(jar_file), open(jar_file, 'rb'), 'application/octet-stream')))
+            files['jarFile'] = (os.path.basename(jar_file), open(jar_file, 'rb'), 'application/java-archive')
+        data = {'update_mode': str(update_mode).lower()}
         if test_connections is not None:
-            form_data.append(('TestConnections', (None, str(test_connections).lower())))
+            data['TestConnections'] = str(test_connections).lower()
         if api_target_host:
-            form_data.append(('api_target_host', (None, api_target_host)))
-        response = requests.post(url, files=form_data, headers=headers, verify=self.verify_ssl)
+            data['api_target_host'] = api_target_host
+        response = requests.post(url, files=files, data=data, headers=headers, verify=self.verify_ssl)
         if response.status_code >= 400:
             if self.logger:
                 self.logger.error(f"API error {response.status_code}: {response.text}")
