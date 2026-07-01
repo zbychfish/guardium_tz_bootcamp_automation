@@ -2750,13 +2750,11 @@ def import_uc_profile_oracle_container(
         api.get_token(username='demo', password=pwd)
 
         logger.info(f"CSV path: {csv_path}")
-        logger.info(f"JAR file: {jar_file}")
         logger.info(f"Update mode: false (creating new profile)")
 
         result = api.universal_connector_import_profiles(
             path=csv_path,
-            update_mode=False,
-            jar_file=jar_file
+            update_mode=False
         )
 
         if debug:
