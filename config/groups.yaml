@@ -422,7 +422,6 @@ groups:
         args:
           appliance_name: "cm"
           collector_name: "coll1"
-          guardium_password: "guardium"
           instantclient_rpm: "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm"
           instantclient_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle"
           debug: false
@@ -430,63 +429,22 @@ groups:
       - name: deploy_uc_for_oracle_container
         function: deploy_uc_for_oracle_container
         module: tasks.labs
-        description: "Run Universal Connector on coll1 and verify it is running"
+        description: "Deploy UC for Oracle container: run UC, setup kafka-node, create cluster, credential, import profile, bulk install"
         args:
           collector_appliance: "coll1"
-          debug: false
-
-      - name: setup_kafka_node
-        function: setup_kafka_node
-        module: tasks.labs
-        description: "Set unit type kafka-node on kafka1, wait for reboot and verify type is Managed Kafka-Node"
-        args:
-          appliance_name: "kafka1"
-          debug: false
-          retry_interval: 60
-          max_retries: 10
-
-      - name: create_kafka_cluster
-        function: create_kafka_cluster
-        module: tasks.labs
-        description: "Create Kafka cluster via REST API on CM"
-        args:
+          kafka_appliance: "kafka1"
           cm_appliance: "cm"
           cluster_name: "kafka_cluster_1"
           member_list: "kafka1.demo.guardium"
           apply_cruise_control: false
-          debug: true
-
-      - name: create_uc_credential_oracle_container
-        function: create_uc_credential_oracle_container
-        module: tasks.labs
-        description: "Create JDBC Credentials for Oracle container on sauropod"
-        args:
-          cm_appliance: "cm"
           credential_name: "oracle_container_sauropod"
           credential_type: "JDBC Credentials"
-          username: "guardium"
-          password: "guardium"
-          debug: false
-
-      - name: import_uc_profile_oracle_container
-        function: import_uc_profile_oracle_container
-        module: tasks.labs
-        description: "Import UC profile for Oracle 21 container on sauropod with JDBC driver"
-        args:
-          cm_appliance: "cm"
+          cred_username: "guardium"
           csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
           jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
           test_connections: true
-          debug: false
-
-      - name: uc_bulk_install_oracle_container
-        function: uc_bulk_install_oracle_container
-        module: tasks.labs
-        description: "Run universal_connector_bulk_install on CM for Oracle container profile"
-        args:
-          appliance_name: "cm"
-          profile_names: "test1"
-          hosts: "coll1.demo.guardium"
+          profile_names: "oracle_21_container_sauropod"
+          bulk_install_hosts: "coll1.demo.guardium"
           debug: false
 
   ltr_lab:
