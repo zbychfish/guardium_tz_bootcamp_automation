@@ -2773,3 +2773,77 @@ def import_uc_profile_oracle_container(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
+
+def uc_bulk_install_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    appliance_name: str = "cm",
+    profile_names: str = "test1",
+    hosts: str = "coll1.demo.guardium",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_client import ApplianceClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("UC BULK INSTALL")
+    logger.info("=" * 80)
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
+        return False
+
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP configured for '{appliance_name}'")
+        return False
+
+    appliance_type = appliance_config.get('type')
+    password = config.get_custom_variable('cli_pwd')
+    if not password:
+        logger.error("Password not found in custom_variables (cli_pwd)")
+        return False
+
+    prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else r">"
+
+    try:
+        client = ApplianceClient(
+            host=host,
+            user="cli",
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=300,
+            strip_ansi=True,
+            debug=debug
+        )
+
+        if not client.connect():
+            logger.error("Failed to connect to appliance")
+            return False
+
+        logger.info("✓ Connected to CM")
+
+        cmd = f"grdapi universal_connector_bulk_install profileNames={profile_names} hosts={hosts}"
+        logger.info(f"➜ Executing: {cmd}")
+        result = client.execute_command(cmd, timeout=120)
+        logger.info(f"Output: {result}")
+
+        client.disconnect()
+
+        logger.info("✓ UC bulk install completed")
+        logger.info("=" * 80)
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Failed UC bulk install: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False

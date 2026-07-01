@@ -479,6 +479,16 @@ groups:
           test_connections: true
           debug: false
 
+      - name: uc_bulk_install_oracle_container
+        function: uc_bulk_install_oracle_container
+        module: tasks.labs
+        description: "Run universal_connector_bulk_install on CM for Oracle container profile"
+        args:
+          appliance_name: "cm"
+          profile_names: "test1"
+          hosts: "coll1.demo.guardium"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
