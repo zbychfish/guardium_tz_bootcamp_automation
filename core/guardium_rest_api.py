@@ -772,14 +772,18 @@ class GuardiumRestAPI:
         self,
         csv_path: str,
         jar_file: Optional[str] = None,
-        update_mode: bool = False
+        update_mode: bool = False,
+        test_connections: bool = True
     ) -> dict:
         url = f'{self.base_url}/restAPI/importProfilesFromFile'
         headers = {'Authorization': f'Bearer {self.access_token}'}
         files = {'path': open(csv_path, 'rb')}
         if jar_file:
             files['jarFile'] = open(jar_file, 'rb')
-        data = {'updateMode': str(update_mode).lower()}
+        data = {
+            'updateMode': str(update_mode).lower(),
+            'TestConnections': str(test_connections).lower(),
+        }
         response = requests.post(url, files=files, data=data, headers=headers, verify=self.verify_ssl)
         if response.status_code >= 400:
             if self.logger:

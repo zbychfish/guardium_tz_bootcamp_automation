@@ -2731,6 +2731,7 @@ def import_uc_profile_oracle_container(
     cm_appliance: str = "cm",
     csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
     jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
+    test_connections: bool = True,
     debug: bool = False,
     **kwargs
 ) -> bool:
@@ -2755,7 +2756,8 @@ def import_uc_profile_oracle_container(
         result = api.import_profiles_from_file(
             csv_path=csv_path,
             jar_file=jar_file,
-            update_mode=False
+            update_mode=False,
+            test_connections=test_connections
         )
 
         if debug:
