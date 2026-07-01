@@ -770,25 +770,24 @@ class GuardiumRestAPI:
 
     def universal_connector_import_profiles(
         self,
-        path: str,
-        update_mode: bool = False,
-        jar_file: Optional[str] = None,
-        test_connections: Optional[bool] = None,
+        csv_path: str,
+        update: bool = False,
+        test_connections: bool = False,
         api_target_host: Optional[str] = None
     ) -> dict:
         url = f'{self.base_url}/restAPI/universal_connector_import_profiles'
         headers = {'Authorization': f'Bearer {self.access_token}'}
-        files = [
-            ('path', (os.path.basename(path), open(path, 'rb'), 'text/csv')),
-            ('update_mode', (None, str(update_mode).lower())),
-        ]
-        if jar_file:
-            files.append(('jarFile', (os.path.basename(jar_file), open(jar_file, 'rb'), 'application/java-archive')))
-        if test_connections is not None:
-            files.append(('TestConnections', (None, str(test_connections).lower())))
+        files = {
+            'uploadedfile': (os.path.basename(csv_path), open(csv_path, 'rb'), 'text/csv'),
+        }
+        data = {
+            'update_mode': str(update).lower(),
+        }
+        if test_connections:
+            data['TestConnections'] = str(test_connections).lower()
         if api_target_host:
-            files.append(('api_target_host', (None, api_target_host)))
-        response = requests.post(url, files=files, headers=headers, verify=self.verify_ssl)
+            data['api_target_host'] = api_target_host
+        response = requests.post(url, files=files, data=data, headers=headers, verify=self.verify_ssl)
         if response.status_code >= 400:
             if self.logger:
                 self.logger.error(f"API error {response.status_code}: {response.text}")

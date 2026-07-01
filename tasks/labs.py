@@ -2753,8 +2753,8 @@ def import_uc_profile_oracle_container(
         logger.info(f"Update mode: false (creating new profile)")
 
         result = api.universal_connector_import_profiles(
-            path=csv_path,
-            update_mode=False
+            csv_path=csv_path,
+            update=False
         )
 
         if debug:
