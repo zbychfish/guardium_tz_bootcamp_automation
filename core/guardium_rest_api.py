@@ -768,35 +768,11 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
-    def universal_connector_import_profile(
-        self,
-        csv_path: str,
-        update: bool = False,
-        test: bool = False,
-        use_elb: str = "0",
-        mu_count: str = "2",
-        label: str = ""
-    ) -> dict:
+    def universal_connector_get_definitions(self) -> dict:
         url = f'{self.base_url}/sqlguardrest/universalconnector/profile'
-        headers = {
-            'Authorization': f'Bearer {self.access_token}',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json',
-        }
-        files = {
-            'uploadedfile': (os.path.basename(csv_path), open(csv_path, 'rb'), 'text/csv'),
-        }
-        data = {
-            'update': '1' if update else '0',
-            'action': 'upload_csv',
-            'test': '1' if test else '0',
-            'label': label,
-            'useElb': use_elb,
-            'muCount': mu_count,
-            'elbStapGroups': '',
-            'uploadType': 'html5',
-        }
-        response = requests.post(url, files=files, data=data, headers=headers, verify=self.verify_ssl)
+        headers = self.get_headers()
+        params = {'type': 'definition'}
+        response = requests.get(url, params=params, headers=headers, verify=self.verify_ssl)
         if response.status_code >= 400:
             if self.logger:
                 self.logger.error(f"API error {response.status_code}: {response.text}")
