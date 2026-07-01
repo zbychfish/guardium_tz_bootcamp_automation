@@ -710,6 +710,27 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def create_kafka_cluster(
+        self,
+        cluster_name: str,
+        member_list: str,
+        apply_cruise_control: bool = False,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/kafka_cluster'
+        data: Dict[str, Any] = {
+            'clusterName': cluster_name,
+            'memberList': member_list,
+            'applyCruiseControl': str(apply_cruise_control).lower()
+        }
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        response = requests.post(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
+
+
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':
     """

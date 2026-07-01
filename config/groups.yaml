@@ -445,6 +445,17 @@ groups:
           retry_interval: 60
           max_retries: 10
 
+      - name: create_kafka_cluster
+        function: create_kafka_cluster
+        module: tasks.labs
+        description: "Create Kafka cluster via REST API on CM"
+        args:
+          cm_appliance: "cm"
+          cluster_name: "kafka_cluster_1"
+          member_list: "kafka1.demo.guardium"
+          apply_cruise_control: false
+          debug: true
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

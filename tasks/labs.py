@@ -2617,3 +2617,54 @@ def setup_kafka_node(
         retry_interval=kwargs.get('retry_interval', 60),
         max_retries=kwargs.get('max_retries', 10)
     )
+
+
+def create_kafka_cluster(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    cluster_name: str = "kafka_cluster_1",
+    member_list: str = "kafka1.demo.guardium",
+    apply_cruise_control: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("CREATE KAFKA CLUSTER")
+    logger.info("=" * 80)
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    try:
+        api = create_guardium_api(config, logger, cm_appliance)
+        api.get_token(username='demo', password=pwd)
+
+        logger.info(f"Cluster name: {cluster_name}")
+        logger.info(f"Member list: {member_list}")
+        logger.info(f"Apply Cruise Control: {apply_cruise_control}")
+
+        result = api.create_kafka_cluster(
+            cluster_name=cluster_name,
+            member_list=member_list,
+            apply_cruise_control=apply_cruise_control
+        )
+
+        if debug:
+            logger.info(f"API Response: {result}")
+
+        logger.info("✓ Kafka cluster created successfully")
+        logger.info("=" * 80)
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Failed to create Kafka cluster: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
