@@ -2749,15 +2749,13 @@ def import_uc_profile_oracle_container(
         api = create_guardium_api(config, logger, cm_appliance)
         api.get_token(username='demo', password=pwd)
 
-        # Test: call API without parameters to check if endpoint exists
-        logger.info("Testing endpoint availability...")
-        import requests as req
-        test_url = f"{api.base_url}/restAPI/universal_connector_import_profiles"
-        test_headers = {'Authorization': f'Bearer {api.access_token}'}
-        test_resp = req.post(test_url, headers=test_headers, verify=False)
-        logger.info(f"Endpoint response (no params): status={test_resp.status_code}")
-        logger.info(f"Response body: {test_resp.text[:500]}")
-        return False
+        logger.info(f"CSV path: {csv_path}")
+        logger.info(f"Update mode: false (creating new profile)")
+
+        result = api.universal_connector_import_profile(
+            csv_path=csv_path,
+            update=False
+        )
 
         if debug:
             logger.info(f"API Response: {result}")
