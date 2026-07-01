@@ -768,11 +768,19 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
-    def universal_connector_get_definitions(self) -> dict:
-        url = f'{self.base_url}/restAPI/universalconnector/profile'
-        headers = self.get_headers()
-        params = {'type': 'definition'}
-        response = requests.get(url, params=params, headers=headers, verify=self.verify_ssl)
+    def import_profiles_from_file(
+        self,
+        csv_path: str,
+        jar_file: Optional[str] = None,
+        update_mode: bool = False
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/importProfilesFromFile'
+        headers = {'Authorization': f'Bearer {self.access_token}'}
+        files = {'path': open(csv_path, 'rb')}
+        if jar_file:
+            files['jarFile'] = open(jar_file, 'rb')
+        data = {'updateMode': str(update_mode).lower()}
+        response = requests.post(url, files=files, data=data, headers=headers, verify=self.verify_ssl)
         if response.status_code >= 400:
             if self.logger:
                 self.logger.error(f"API error {response.status_code}: {response.text}")
