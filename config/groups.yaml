@@ -447,6 +447,15 @@ groups:
           bulk_install_hosts: "coll1.demo.guardium"
           debug: false
 
+      - name: import_oracle_dashboard
+        function: import_oracle_dashboard
+        module: tasks.labs
+        description: "Import Oracle dashboard (exp_dashboard_oracle.sql) to CM via REST API"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

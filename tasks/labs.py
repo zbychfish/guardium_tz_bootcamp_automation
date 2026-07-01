@@ -2655,3 +2655,37 @@ def deploy_uc_for_oracle_container(
     logger.info("✓ DEPLOY UC FOR ORACLE CONTAINER - ALL STEPS COMPLETED")
     logger.info("=" * 80)
     return True
+
+
+def import_oracle_dashboard(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    logger.info("=" * 80)
+    logger.info("IMPORT ORACLE DASHBOARD ON CM")
+    logger.info("=" * 80)
+
+    definition_files = ["exp_dashboard_oracle.sql"]
+
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"File to import: {definition_files[0]}")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+
+    if success:
+        logger.info("✓ Oracle dashboard imported successfully")
+
+    return success
