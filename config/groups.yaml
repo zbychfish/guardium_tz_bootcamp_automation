@@ -427,6 +427,24 @@ groups:
           instantclient_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle"
           debug: false
 
+      - name: deploy_uc_for_oracle_container
+        function: deploy_uc_for_oracle_container
+        module: tasks.labs
+        description: "Run Universal Connector on coll1 and verify it is running"
+        args:
+          collector_appliance: "coll1"
+          debug: false
+
+      - name: setup_kafka_node
+        function: setup_kafka_node
+        module: tasks.labs
+        description: "Set unit type kafka-node on kafka1, wait for reboot and verify type is Managed Kafka-Node"
+        args:
+          appliance_name: "kafka1"
+          debug: false
+          retry_interval: 60
+          max_retries: 10
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

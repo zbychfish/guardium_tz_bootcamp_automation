@@ -2499,3 +2499,121 @@ ORCLPDB1 =
     logger.info("✓ SETUP STAP WITH OUA ON SAUROPOD COMPLETED")
     logger.info("=" * 80)
     return True
+
+
+def deploy_uc_for_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    collector_appliance: str = "coll1",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_client import ApplianceClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("DEPLOY UC FOR ORACLE CONTAINER")
+    logger.info("=" * 80)
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(collector_appliance)
+
+    if not appliance_config:
+        logger.error(f"Appliance '{collector_appliance}' not found in machines_info.json")
+        return False
+
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP address configured for appliance '{collector_appliance}'")
+        return False
+
+    appliance_type = appliance_config.get('type')
+
+    user = "cli"
+    password = config.get_custom_variable('cli_pwd')
+    if not password:
+        logger.error("Password not found in custom_variables (cli_pwd)")
+        return False
+
+    prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
+    if not prompt_regex:
+        prompt_regex = r">"
+
+    logger.info(f"Collector: {collector_appliance} at {host}")
+
+    try:
+        client = ApplianceClient(
+            host=host,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            initial_pattern=None,
+            timeout=300,
+            strip_ansi=True,
+            debug=debug
+        )
+
+        if not client.connect():
+            logger.error("Failed to connect to collector")
+            return False
+
+        logger.info("✓ Connected to collector")
+
+        logger.info("\n➜ Running Universal Connector...")
+        result = client.execute_command("grdapi run_universal_connector", timeout=120)
+        if verbose:
+            logger.info(f"Output: {result}")
+        logger.info("✓ run_universal_connector executed")
+
+        logger.info("\n➜ Checking Universal Connector status...")
+        status = client.execute_command("grdapi get_universal_connector_status", timeout=60)
+        if verbose:
+            logger.info(f"Output: {status}")
+
+        if "Guardium Universal Connector is running" in status:
+            logger.info("✓ Guardium Universal Connector is running")
+        else:
+            logger.error(f"✗ Unexpected UC status: {status}")
+            client.disconnect()
+            return False
+
+        client.disconnect()
+
+        logger.info("\n" + "=" * 80)
+        logger.info("✓ UC for Oracle container deployed successfully")
+        logger.info("=" * 80)
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Failed to deploy UC: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+
+def setup_kafka_node(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_operations import setup_kafka_node as core_setup_kafka_node
+
+    if not kwargs.get('appliance_name'):
+        logger.error("appliance_name required")
+        return False
+
+    return core_setup_kafka_node(
+        config=config,
+        logger=logger,
+        appliance_name=kwargs['appliance_name'],
+        user=kwargs.get('user'),
+        password=kwargs.get('password'),
+        prompt_regex=kwargs.get('prompt_regex'),
+        debug=debug,
+        retry_interval=kwargs.get('retry_interval', 60),
+        max_retries=kwargs.get('max_retries', 10)
+    )
