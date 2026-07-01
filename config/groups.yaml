@@ -476,7 +476,7 @@ groups:
           cm_appliance: "cm"
           csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
           jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
-          debug: false
+          debug: true
 
   ltr_lab:
     name: "LTR Lab"
