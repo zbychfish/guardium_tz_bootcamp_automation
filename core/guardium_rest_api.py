@@ -768,6 +768,31 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def universal_connector_import_profiles(
+        self,
+        path: str,
+        update_mode: bool = False,
+        jar_file: Optional[str] = None,
+        test_connections: Optional[bool] = None,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/universal_connector_import_profiles'
+        headers = {'Authorization': f'Bearer {self.access_token}'}
+        form_data = []
+        form_data.append(('path', (os.path.basename(path), open(path, 'rb'), 'application/octet-stream')))
+        form_data.append(('update_mode', (None, str(update_mode).lower())))
+        if jar_file:
+            form_data.append(('jarFile', (os.path.basename(jar_file), open(jar_file, 'rb'), 'application/octet-stream')))
+        if test_connections is not None:
+            form_data.append(('TestConnections', (None, str(test_connections).lower())))
+        if api_target_host:
+            form_data.append(('api_target_host', (None, api_target_host)))
+        response = requests.post(url, files=form_data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
+
+
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':
     """

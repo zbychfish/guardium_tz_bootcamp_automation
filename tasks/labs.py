@@ -2722,3 +2722,53 @@ def create_uc_credential_oracle_container(
             import traceback
             logger.error(traceback.format_exc())
         return False
+
+
+def import_uc_profile_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
+    jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("IMPORT UC PROFILE - ORACLE CONTAINER")
+    logger.info("=" * 80)
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    try:
+        api = create_guardium_api(config, logger, cm_appliance)
+        api.get_token(username='demo', password=pwd)
+
+        logger.info(f"CSV path: {csv_path}")
+        logger.info(f"JAR file: {jar_file}")
+        logger.info(f"Update mode: false (creating new profile)")
+
+        result = api.universal_connector_import_profiles(
+            path=csv_path,
+            update_mode=False,
+            jar_file=jar_file
+        )
+
+        if debug:
+            logger.info(f"API Response: {result}")
+
+        logger.info("✓ UC profile imported successfully")
+        logger.info("=" * 80)
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Failed to import UC profile: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False

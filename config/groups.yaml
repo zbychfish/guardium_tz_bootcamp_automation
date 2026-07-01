@@ -468,6 +468,16 @@ groups:
           password: "guardium"
           debug: false
 
+      - name: import_uc_profile_oracle_container
+        function: import_uc_profile_oracle_container
+        module: tasks.labs
+        description: "Import UC profile for Oracle 21 container on sauropod with JDBC driver"
+        args:
+          cm_appliance: "cm"
+          csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
+          jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
