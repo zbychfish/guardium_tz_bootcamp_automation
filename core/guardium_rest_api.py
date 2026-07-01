@@ -788,6 +788,9 @@ class GuardiumRestAPI:
         if api_target_host:
             form_data.append(('api_target_host', (None, api_target_host)))
         response = requests.post(url, files=form_data, headers=headers, verify=self.verify_ssl)
+        if response.status_code >= 400:
+            if self.logger:
+                self.logger.error(f"API error {response.status_code}: {response.text}")
         response.raise_for_status()
         return response.json()
 
