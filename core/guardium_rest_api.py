@@ -769,7 +769,7 @@ class GuardiumRestAPI:
         return response.json()
 
     def universal_connector_get_definitions(self) -> dict:
-        url = f'{self.base_url}/sqlguardrest/universalconnector/profile'
+        url = f'{self.base_url}/restAPI/universalconnector/profile'
         headers = self.get_headers()
         params = {'type': 'definition'}
         response = requests.get(url, params=params, headers=headers, verify=self.verify_ssl)
