@@ -778,10 +778,9 @@ class GuardiumRestAPI:
     ) -> dict:
         url = f'{self.base_url}/restAPI/universal_connector_import_profiles'
         headers = {'Authorization': f'Bearer {self.access_token}'}
-        files = {}
-        files['path'] = (os.path.basename(path), open(path, 'rb'), 'text/csv')
+        files = {'path': open(path, 'rb')}
         if jar_file:
-            files['jarFile'] = (os.path.basename(jar_file), open(jar_file, 'rb'), 'application/java-archive')
+            files['jarFile'] = open(jar_file, 'rb')
         data = {'update_mode': str(update_mode).lower()}
         if test_connections is not None:
             data['TestConnections'] = str(test_connections).lower()
