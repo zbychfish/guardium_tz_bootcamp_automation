@@ -373,7 +373,7 @@ groups:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
     auto_execute: false
-    dependencies: [etap_lab]
+    dependencies: [exit_lab]
     stages:
       - name: install_stap_on_sauropod
         function: install_stap_on_sauropod
@@ -542,4 +542,3 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
-# Made with Bob
