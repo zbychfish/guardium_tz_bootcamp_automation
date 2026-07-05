@@ -373,7 +373,7 @@ groups:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
     auto_execute: false
-    dependencies: [exit_lab]
+    dependencies: [etap_lab]
     stages:
       - name: install_stap_on_sauropod
         function: install_stap_on_sauropod
