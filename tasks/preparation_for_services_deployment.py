@@ -16,23 +16,6 @@ from core.ssh_client import SSHClient
 
 
 def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    """
-    Prepare system for service deployments by:
-    1. Updating system packages (excluding kernel)
-    2. Downloading and extracting supporting files from Box
-    
-    Supporting files include:
-    - MySQL database dumps (salesDB.sql)
-    - MongoDB sample data (sampledata.archive.gz)
-    - Other environment initialization files
-    
-    Args:
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
     if verbose:
         logger.info("=" * 80)
         logger.info("Preparing system for services deployment")
@@ -66,23 +49,52 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
     if verbose:
         logger.info("✓ Directories created successfully")
     
-    # Step 3: Download and extract supporting files from Box
+    # Step 3: Download source_files from IBM COS
     if verbose:
-        logger.info("Step 3: Downloading supporting files from Box")
-    
-    box_url = "https://ibm.box.com/shared/static/v7p17jj7oa95f42otbr49a9v0vs98ea0.zip"
-    target_dir = "/opt/guardium_tz_bootcamp_automation/upload/"
-    
-    if verbose:
-        logger.info(f"Downloading from: {box_url}")
-        logger.info(f"Extracting to: {target_dir}")
-    
-    if not download_and_extract(box_url, target_dir, logger, verbose):
-        logger.error("Failed to download and extract supporting files")
+        logger.info("Step 3: Downloading source_files from IBM COS")
+
+    api_id  = config.get_custom_variable('s3_source_api_id')
+    api_key = config.get_custom_variable('s3_source_api_key')
+    endpoint = config.get_custom_variable('s3_source_endpoint')
+    bucket  = config.get_custom_variable('s3_source_bucket')
+
+    if not all([api_id, api_key, endpoint, bucket]):
+        logger.error("Missing COS credentials in custom_variables (s3_source_api_id/key/endpoint/bucket)")
         return False
-    
-    if verbose:
-        logger.info("✓ Supporting files downloaded and extracted successfully")
+
+    try:
+        import boto3
+        from botocore.client import Config
+
+        cos = boto3.client(
+            "s3",
+            aws_access_key_id=api_id,
+            aws_secret_access_key=api_key,
+            endpoint_url=endpoint,
+            config=Config(signature_version="s3v4")
+        )
+
+        prefix = "source_files/"
+        local_base = "/opt/guardium_tz_bootcamp_automation/upload/"
+
+        paginator = cos.get_paginator("list_objects_v2")
+        downloaded = 0
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                local_path = os.path.join(local_base, key)
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                if verbose:
+                    logger.info(f"  ↓ {key}")
+                cos.download_file(bucket, key, local_path)
+                downloaded += 1
+
+        if verbose:
+            logger.info(f"✓ Downloaded {downloaded} file(s) from COS to {local_base}")
+
+    except Exception as e:
+        logger.error(f"Failed to download from IBM COS: {e}")
+        return False
     
     # Step 4: Clone guardium_notes_dbtraffic repository
     if verbose:
