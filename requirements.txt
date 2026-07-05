@@ -21,3 +21,7 @@ packaging>=23.0
 # Oracle Database (thin client - no Oracle Client installation required)
 oracledb>=2.0.0
 
+
+# IBM Cloud Object Storage (S3-compatible)
+boto3>=1.34.0
+botocore>=1.34.0
