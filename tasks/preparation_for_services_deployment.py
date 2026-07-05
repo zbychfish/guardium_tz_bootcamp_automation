@@ -74,12 +74,11 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
             config=Config(signature_version="s3v4")
         )
 
-        prefix = "source_files/"
-        local_base = "/opt/guardium_tz_bootcamp_automation/upload/"
+        local_base = "/opt/guardium_tz_bootcamp_automation/upload/source_files/"
 
         paginator = cos.get_paginator("list_objects_v2")
         downloaded = 0
-        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for page in paginator.paginate(Bucket=bucket):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
                 local_path = os.path.join(local_base, key)
