@@ -5,6 +5,7 @@ Preparation for Services Deployment Task
 Handles system updates and downloading supporting files before service deployments
 """
 
+import os
 import sys
 from pathlib import Path
 
