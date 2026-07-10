@@ -1705,6 +1705,7 @@ def configure_system_settings_consolidated(
             logger.warning(f"Timeout during domain change, continuing...")
 
         # restart network is required after hostname/domain change
+        # After sending 'y' the SSH connection may drop (network restart) - that is normal
         logger.info("➜ Restarting network (up to 10 minutes)...")
         _prev_timeout = client.timeout
         client.timeout = 600
@@ -1717,8 +1718,9 @@ def configure_system_settings_consolidated(
             if debug and output:
                 logger.info(f"  Command output: {output}")
             logger.info("✓ Network restarted")
-        except TimeoutError:
-            logger.warning("Timeout during network restart, continuing...")
+        except (TimeoutError, RuntimeError):
+            # RuntimeError("Channel closed") is expected when SSH drops during network restart
+            logger.info("✓ Network restart in progress (connection dropped - normal)")
         finally:
             client.timeout = _prev_timeout
 
