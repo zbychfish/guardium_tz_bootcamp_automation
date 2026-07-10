@@ -1703,7 +1703,25 @@ def configure_system_settings_consolidated(
             logger.info(f"✓ Domain set to: {domain}")
         except TimeoutError as e:
             logger.warning(f"Timeout during domain change, continuing...")
-        
+
+        # restart network is required after hostname/domain change
+        logger.info("➜ Restarting network (up to 10 minutes)...")
+        _prev_timeout = client.timeout
+        client.timeout = 600
+        try:
+            output = client.execute_command_with_confirmation(
+                command="restart network",
+                confirmation_pattern=r"Do you really want to restart network\?\s*\(Yes/No\)",
+                response="y"
+            )
+            if debug and output:
+                logger.info(f"  Command output: {output}")
+            logger.info("✓ Network restarted")
+        except TimeoutError:
+            logger.warning("Timeout during network restart, continuing...")
+        finally:
+            client.timeout = _prev_timeout
+
         logger.info("➜ Configuring small disk and timeouts...")
         output = client.execute_command_simple_confirmation(
             command="store system small_disk",
