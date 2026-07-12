@@ -2657,6 +2657,45 @@ def deploy_uc_for_oracle_container(
     return True
 
 
+# TODO: TEMP - uc2_tests group - remove after UC2 testing is complete
+def uc2_test_register_kafka_cluster(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    cluster_name: str = "kafka_cluster_1",
+    member_list: str = "kafka1.demo.guardium",
+    apply_cruise_control: bool = False,
+    debug: bool = True,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("UC2 TEST: REGISTER KAFKA CLUSTER")
+    logger.info("=" * 80)
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    logger.info(f"Cluster: {cluster_name}, members: {member_list}, cruise_control: {apply_cruise_control}")
+    result = api.create_kafka_cluster(
+        cluster_name=cluster_name,
+        member_list=member_list,
+        apply_cruise_control=apply_cruise_control
+    )
+    if debug:
+        logger.info(f"API response: {result}")
+    logger.info("✓ Kafka cluster registered")
+    return True
+# END TODO: TEMP
+
+
 def import_oracle_dashboard(
     config,
     logger,
