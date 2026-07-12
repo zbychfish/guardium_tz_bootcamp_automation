@@ -2693,6 +2693,47 @@ def uc2_test_register_kafka_cluster(
         logger.info(f"API response: {result}")
     logger.info("✓ Kafka cluster registered")
     return True
+
+
+def uc2_test_import_uc_profile(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
+    jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
+    update_mode: bool = False,
+    test_connections: bool = True,
+    debug: bool = True,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("UC2 TEST: IMPORT UC PROFILE")
+    logger.info("=" * 80)
+    logger.info(f"CSV: {csv_path}")
+    logger.info(f"JAR: {jar_file}")
+    logger.info(f"update_mode: {update_mode}, test_connections: {test_connections}")
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    result = api.import_profiles_from_file(
+        csv_path=csv_path,
+        jar_file=jar_file,
+        update_mode=update_mode,
+        test_connections=test_connections
+    )
+    if debug:
+        logger.info(f"API response: {result}")
+    logger.info("✓ UC profile imported")
+    return True
 # END TODO: TEMP
 
 

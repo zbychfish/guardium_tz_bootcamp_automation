@@ -473,6 +473,18 @@ groups:
           member_list: "kafka1.demo.guardium"
           apply_cruise_control: false
           debug: true
+
+      - name: uc2_test_import_uc_profile
+        function: uc2_test_import_uc_profile
+        module: tasks.labs
+        description: "TEMP: Import UC profile from oracle_21_container_sauropod.csv (debug mode)"
+        args:
+          cm_appliance: "cm"
+          csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
+          jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
+          update_mode: false
+          test_connections: true
+          debug: true
   # END TODO: TEMP
 
   ltr_lab:
