@@ -485,6 +485,16 @@ groups:
           update_mode: false
           test_connections: true
           debug: true
+
+      - name: uc2_test_bulk_install_uc_profile
+        function: uc2_test_bulk_install_uc_profile
+        module: tasks.labs
+        description: "TEMP: Install UC profile on coll1 via universal_connector_bulk_install (debug mode)"
+        args:
+          cm_appliance: "cm"
+          profile_names: "oracle_21_container_sauropod"
+          bulk_install_hosts: "coll1.demo.guardium"
+          debug: true
   # END TODO: TEMP
 
   ltr_lab:
