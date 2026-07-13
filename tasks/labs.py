@@ -2764,6 +2764,61 @@ def uc2_test_register_kafka_cluster(
     return True
 
 
+def uc2_test_start_kafka_nodes(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    cluster_name: str = "kafka_cluster_1",
+    member_list: str = "kafka1.demo.guardium",
+    debug: bool = True,
+    **kwargs
+) -> bool:
+    import time
+    from core.appliance_client import ApplianceClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("UC2 TEST: START KAFKA NODES")
+    logger.info("=" * 80)
+
+    cli_pwd = config.get_custom_variable('cli_pwd')
+    if not cli_pwd:
+        logger.error("cli_pwd not found in custom_variables")
+        return False
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    cm_config = appliance_loader.get_appliance(cm_appliance)
+    if not cm_config:
+        logger.error(f"Appliance '{cm_appliance}' not found")
+        return False
+
+    cm_host = cm_config.get('ip')
+    cm_type = cm_config.get('type')
+    cm_prompt = appliance_loader.get_default_prompt(cm_type, configured=True) if cm_type else r">"
+
+    logger.info("⌛ Waiting 60s before starting kafka nodes...")
+    time.sleep(60)
+
+    client = ApplianceClient(host=cm_host, user="cli", password=cli_pwd, prompt_regex=cm_prompt,
+                             initial_pattern=None, timeout=60, strip_ansi=True, debug=debug)
+    if not client.connect():
+        logger.error("Failed to connect to CM")
+        return False
+
+    cmd = f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}"
+    logger.info(f"➜ {cmd}")
+    result = client.execute_command(cmd, timeout=30)
+    logger.info(f"Output: {result}")
+    client.disconnect()
+    logger.info("✓ start_kafka_nodes executed")
+
+    logger.info("⌛ Waiting 5 minutes for kafka node to start (async)...")
+    time.sleep(300)
+    logger.info("✓ Wait completed")
+    return True
+
+
 def uc2_test_import_uc_profile(
     config,
     logger,
