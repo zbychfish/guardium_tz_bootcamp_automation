@@ -213,3 +213,90 @@ def copy_and_extract_informix_on_sauropod(
         logger.info("✓ INFORMIX INSTALLER COPIED AND EXTRACTED ON SAUROPOD")
         logger.info("=" * 80)
     return True
+
+
+def install_informix_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    install_dir: str = "/opt/informix",
+    install_tmp_dir: str = "/opt/informix_install",
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("INSTALL INFORMIX ON SAUROPOD")
+        logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    response_file = f"{install_tmp_dir}/response.properties"
+    response_content = (
+        "# Silent (unattended) installation mode\n"
+        "INSTALLER_UI=SILENT\n"
+        "\n"
+        "# Installation directory\n"
+        f"USER_INSTALL_DIR={install_dir}\n"
+        "\n"
+        "# Installation type: TYPICAL includes server, client tools and JDBC\n"
+        "CHOSEN_INSTALL_FEATURE_LIST=TYPICAL\n"
+        "\n"
+        "# License acceptance — must be TRUE to proceed\n"
+        "LICENSE_ACCEPTED=TRUE\n"
+        "\n"
+        "# Edition: DEVELOPER (no data limits, for development/test use)\n"
+        "IDS_LICENSE_TYPE=DEVELOPER\n"
+        "\n"
+        "# Do not create the informix OS user automatically (already created above)\n"
+        "CREATE_INFORMIX_USER=NO\n"
+        "INFORMIX_USER=informix\n"
+        "INFORMIX_GROUP=informix\n"
+    )
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                    port=ssh_port, timeout=60)
+
+    if not ssh.connect():
+        logger.error(f"Failed to connect to sauropod ({sauropod_ip}:{ssh_port})")
+        return False
+
+    try:
+        logger.info(f"➜ Writing response file {response_file}...")
+        write_cmd = f"cat > {response_file} << 'EOF'\n{response_content}EOF"
+        result = ssh.execute_command(write_cmd, timeout=30, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to write response file: {result['stderr']}")
+            return False
+        logger.info("✓ Response file written")
+
+        logger.info(f"➜ Running Informix silent installer (target: {install_dir})...")
+        install_cmd = f"{install_tmp_dir}/ids_install -i silent -f {response_file}"
+        result = ssh.execute_command(install_cmd, timeout=600, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to install Informix: {result['stderr']}")
+            return False
+        logger.info("✓ Informix installed")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        return False
+    finally:
+        ssh.disconnect()
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX INSTALLATION COMPLETED")
+        logger.info("=" * 80)
+    return True

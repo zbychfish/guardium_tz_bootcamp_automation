@@ -617,3 +617,11 @@ groups:
           installer_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix"
           remote_target_dir: "/opt/informix_install"
 
+      - name: install_informix_on_sauropod
+        function: install_informix_on_sauropod
+        module: tasks.deploy_informix
+        description: "Write response.properties and run Informix silent installer on sauropod"
+        args:
+          install_dir: "/opt/informix"
+          install_tmp_dir: "/opt/informix_install"
+
