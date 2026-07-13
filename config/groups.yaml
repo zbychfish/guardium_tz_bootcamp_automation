@@ -606,5 +606,14 @@ groups:
       - name: informix_installation_preparation
         function: informix_installation_preparation
         module: tasks.deploy_informix
-        description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters and add informix user limits on sauropod"
+        description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters, add informix user limits, create group/user on sauropod"
+
+      - name: copy_and_extract_informix_on_sauropod
+        function: copy_and_extract_informix_on_sauropod
+        module: tasks.deploy_informix
+        description: "Copy Informix installer from raptor to sauropod and extract"
+        args:
+          installer_filename: "ibm.server.15.0.1.0.Linux.64.x86_64.tar"
+          installer_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix"
+          remote_target_dir: "/opt/informix_install"
 

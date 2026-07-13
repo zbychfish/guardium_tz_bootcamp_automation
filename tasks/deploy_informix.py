@@ -122,3 +122,82 @@ def informix_installation_preparation(config, logger, verbose: bool = True) -> b
         logger.info("✓ INFORMIX INSTALLATION PREPARATION COMPLETED")
         logger.info("=" * 80)
     return True
+
+
+def copy_and_extract_informix_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    installer_filename: str = "ibm.server.15.0.1.0.Linux.64.x86_64.tar",
+    installer_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix",
+    remote_target_dir: str = "/opt/informix_install",
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("COPY AND EXTRACT INFORMIX INSTALLER ON SAUROPOD")
+        logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    import os
+    local_path = os.path.join(installer_source_dir, installer_filename)
+    remote_path = f"{remote_target_dir}/{installer_filename}"
+
+    if not os.path.exists(local_path):
+        logger.error(f"Installer not found: {local_path}")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                    port=ssh_port, timeout=60)
+
+    if not ssh.connect():
+        logger.error(f"Failed to connect to sauropod ({sauropod_ip}:{ssh_port})")
+        return False
+
+    try:
+        logger.info(f"➜ Creating target directory {remote_target_dir}...")
+        result = ssh.execute_command(f"mkdir -p {remote_target_dir}", timeout=15, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to create directory: {result['stderr']}")
+            return False
+
+        logger.info(f"➜ Uploading {installer_filename} to sauropod...")
+        if not ssh.upload_file(local_path, remote_path):
+            logger.error(f"Failed to upload {installer_filename}")
+            return False
+        logger.info("✓ Installer uploaded")
+
+        logger.info(f"➜ Extracting {installer_filename} in {remote_target_dir}...")
+        result = ssh.execute_command(
+            f"tar -xf {remote_path} -C {remote_target_dir}",
+            timeout=300, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Failed to extract installer: {result['stderr']}")
+            return False
+        logger.info("✓ Installer extracted")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        return False
+    finally:
+        ssh.disconnect()
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX INSTALLER COPIED AND EXTRACTED ON SAUROPOD")
+        logger.info("=" * 80)
+    return True
