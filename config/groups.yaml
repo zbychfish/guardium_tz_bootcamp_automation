@@ -446,7 +446,7 @@ groups:
     name: "Oracle Lab UC2"
     description: "Deploy Universal Connector 2.0 for Oracle container on sauropod"
     auto_execute: false
-    dependencies: []
+    dependencies: [oracle_lab]
     stages:
       - name: run_uc_and_setup_kafka_node
         function: run_uc_and_setup_kafka_node

@@ -2751,8 +2751,8 @@ def start_kafka_nodes(
     cm_type = cm_config.get('type')
     cm_prompt = appliance_loader.get_default_prompt(cm_type, configured=True) if cm_type else r">"
 
-    logger.info("⌛ Waiting 60s before starting kafka nodes...")
-    time.sleep(60)
+    logger.info("⌛ Waiting 10s before starting kafka nodes...")
+    time.sleep(10)
 
     client = ApplianceClient(host=cm_host, user="cli", password=cli_pwd, prompt_regex=cm_prompt,
                              initial_pattern=None, timeout=60, strip_ansi=True, debug=debug)
