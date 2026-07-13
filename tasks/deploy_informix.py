@@ -98,6 +98,32 @@ def informix_installation_preparation(config, logger, verbose: bool = True) -> b
                 return False
             logger.info("✓ Resource limits for 'informix' added to /etc/security/limits.conf")
 
+        # Step 3: Create group and user 'informix' (idempotent)
+        logger.info("➜ Creating informix group and user...")
+        for cmd, desc in [
+            ("getent group informix > /dev/null 2>&1 || groupadd -g 200 informix", "group informix"),
+            ("id informix > /dev/null 2>&1 || useradd -u 200 -g informix -m -d /home/informix -s /bin/bash informix", "user informix"),
+            (f"echo 'informix:{root_password}' | chpasswd", "informix password"),
+        ]:
+            result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"Failed to configure {desc}: {result['stderr']}")
+                return False
+        logger.info("✓ Group and user 'informix' configured")
+
+        # Step 4: Open firewall ports for Informix (9088/tcp and 9089/tcp)
+        logger.info("➜ Opening firewall ports 9088 and 9089...")
+        for cmd, desc in [
+            ("firewall-cmd --permanent --add-port=9088/tcp > /dev/null", "port 9088"),
+            ("firewall-cmd --permanent --add-port=9089/tcp > /dev/null", "port 9089"),
+            ("firewall-cmd --reload > /dev/null", "firewall reload"),
+        ]:
+            result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"Failed to open {desc}: {result['stderr']}")
+                return False
+        logger.info("✓ Firewall ports 9088/tcp and 9089/tcp opened")
+
     except Exception as e:
         logger.error(f"✗ SSH operation failed: {e}")
         return False
