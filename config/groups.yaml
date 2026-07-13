@@ -22,7 +22,7 @@ groups:
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
-    auto_execute: false
+    auto_execute: true
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
@@ -66,7 +66,7 @@ groups:
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
-    auto_execute: false  # Executed on demand
+    auto_execute: true  # Executed on demand
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: reset_cli_password_all
@@ -204,7 +204,7 @@ groups:
   gim_lab:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"
-    auto_execute: false  # Executed on demand
+    auto_execute: true  # Executed on demand
     dependencies: [initial_preparation, setup_appliances, other_preparations]  # Requires initial_preparation and setup_appliances
     stages:
      
