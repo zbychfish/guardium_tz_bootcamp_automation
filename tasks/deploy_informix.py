@@ -539,3 +539,90 @@ def prepare_informix_storage_on_sauropod(
         logger.info("✓ INFORMIX STORAGE PREPARATION COMPLETED")
         logger.info("=" * 80)
     return True
+
+
+def initialize_informix_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    install_dir: str = "/opt/informix",
+    informix_server: str = "ifxserver",
+    timeout: int = 120,
+    **kwargs
+) -> bool:
+    import time
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("INITIALIZE INFORMIX DATABASE ON SAUROPOD")
+        logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    env_exports = (
+        f"export INFORMIXDIR={install_dir}; "
+        f"export INFORMIXSERVER={informix_server}; "
+        f"export ONCONFIG=onconfig.{informix_server}; "
+        f"export INFORMIXSQLHOSTS={install_dir}/etc/sqlhosts; "
+        f"export PATH={install_dir}/bin:$PATH; "
+        f"export LD_LIBRARY_PATH={install_dir}/lib:{install_dir}/lib/esql"
+    )
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                    port=ssh_port, timeout=60)
+    if not ssh.connect():
+        logger.error(f"Failed to connect to sauropod ({sauropod_ip}:{ssh_port})")
+        return False
+
+    try:
+        # Step 1: oninit -i (destructive — initialises root chunk)
+        logger.info("➜ Running oninit -i to initialise Informix database...")
+        result = ssh.execute_command(
+            f'su - informix -c "{env_exports}; oninit -i"',
+            timeout=120, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"oninit -i failed: {result['stderr']}")
+            return False
+        logger.info("✓ oninit -i completed")
+
+        # Step 2: Poll until On-Line (timeout seconds, 5s interval)
+        logger.info(f"➜ Waiting for Informix to come On-Line (timeout: {timeout}s)...")
+        elapsed = 0
+        online_check = f'su - informix -c "{env_exports}; onstat - 2>/dev/null | grep -q \'On-Line\'"'
+        while elapsed < timeout:
+            result = ssh.execute_command(online_check, timeout=15, print_output=False)
+            if result['rc'] == 0:
+                logger.info(f"✓ Informix is On-Line (after {elapsed}s)")
+                break
+            logger.info(f"  Still waiting... ({elapsed}s)")
+            time.sleep(5)
+            elapsed += 5
+        else:
+            logger.error(f"Timeout ({timeout}s) waiting for Informix to come On-Line")
+            logger.error(f"Check {install_dir}/tmp/online.log on sauropod")
+            return False
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        return False
+    finally:
+        ssh.disconnect()
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX DATABASE INITIALIZED AND ON-LINE")
+        logger.info("=" * 80)
+    return True

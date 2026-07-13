@@ -644,3 +644,12 @@ groups:
           informix_port: 9088
           rootdbs_size_kb: 200000
 
+      - name: initialize_informix_on_sauropod
+        function: initialize_informix_on_sauropod
+        module: tasks.deploy_informix
+        description: "Run oninit -i and wait for Informix to come On-Line on sauropod"
+        args:
+          install_dir: "/opt/informix"
+          informix_server: "ifxserver"
+          timeout: 120
+
