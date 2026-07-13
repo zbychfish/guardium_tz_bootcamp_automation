@@ -111,19 +111,6 @@ def informix_installation_preparation(config, logger, verbose: bool = True) -> b
                 return False
         logger.info("✓ Group and user 'informix' configured")
 
-        # Step 4: Open firewall ports for Informix (9088/tcp and 9089/tcp)
-        logger.info("➜ Opening firewall ports 9088 and 9089...")
-        for cmd, desc in [
-            ("firewall-cmd --permanent --add-port=9088/tcp > /dev/null", "port 9088"),
-            ("firewall-cmd --permanent --add-port=9089/tcp > /dev/null", "port 9089"),
-            ("firewall-cmd --reload > /dev/null", "firewall reload"),
-        ]:
-            result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"Failed to open {desc}: {result['stderr']}")
-                return False
-        logger.info("✓ Firewall ports 9088/tcp and 9089/tcp opened")
-
     except Exception as e:
         logger.error(f"✗ SSH operation failed: {e}")
         return False
