@@ -634,3 +634,13 @@ groups:
           informix_server: "ifxserver"
           rootdbs_size_kb: 200000
 
+      - name: prepare_informix_storage_on_sauropod
+        function: prepare_informix_storage_on_sauropod
+        module: tasks.deploy_informix
+        description: "Pre-allocate rootdbs chunk, create tmp dir, configure sqlhosts and /etc/services on sauropod"
+        args:
+          install_dir: "/opt/informix"
+          informix_server: "ifxserver"
+          informix_port: 9088
+          rootdbs_size_kb: 200000
+

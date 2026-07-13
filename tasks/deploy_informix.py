@@ -426,3 +426,116 @@ def configure_informix_on_sauropod(
         logger.info("✓ INFORMIX CONFIGURATION COMPLETED")
         logger.info("=" * 80)
     return True
+
+
+def prepare_informix_storage_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    install_dir: str = "/opt/informix",
+    informix_server: str = "ifxserver",
+    informix_port: int = 9088,
+    rootdbs_size_kb: int = 200000,
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("PREPARE INFORMIX STORAGE ON SAUROPOD")
+        logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                    port=ssh_port, timeout=60)
+    if not ssh.connect():
+        logger.error(f"Failed to connect to sauropod ({sauropod_ip}:{ssh_port})")
+        return False
+
+    try:
+        # Step 1: Pre-allocate root chunk file
+        logger.info(f"➜ Pre-allocating root chunk ({rootdbs_size_kb} KB)...")
+        for cmd, desc in [
+            (f"touch {install_dir}/rootdbs",                                                         "touch rootdbs"),
+            (f"chown informix:informix {install_dir}/rootdbs",                                       "chown rootdbs"),
+            (f"chmod 660 {install_dir}/rootdbs",                                                     "chmod rootdbs"),
+            (f"dd if=/dev/zero of={install_dir}/rootdbs bs=1024 count={rootdbs_size_kb} status=none","dd rootdbs"),
+        ]:
+            result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"Failed to {desc}: {result['stderr']}")
+                return False
+        logger.info(f"✓ Root chunk created: {install_dir}/rootdbs")
+
+        # Step 2: Create message log directory
+        logger.info(f"➜ Creating message log directory {install_dir}/tmp...")
+        for cmd, desc in [
+            (f"mkdir -p {install_dir}/tmp",                  "mkdir tmp"),
+            (f"chown informix:informix {install_dir}/tmp",   "chown tmp"),
+            (f"chmod 770 {install_dir}/tmp",                 "chmod tmp"),
+        ]:
+            result = ssh.execute_command(cmd, timeout=15, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"Failed to {desc}: {result['stderr']}")
+                return False
+        logger.info(f"✓ Message log directory created: {install_dir}/tmp")
+
+        # Step 3: Configure sqlhosts (idempotent)
+        sqlhosts = f"{install_dir}/etc/sqlhosts"
+        logger.info(f"➜ Configuring {sqlhosts}...")
+        check = ssh.execute_command(
+            f"grep -q '^{informix_server}' {sqlhosts} 2>/dev/null",
+            timeout=10, print_output=False
+        )
+        if check['rc'] == 0:
+            logger.info(f"⊘ sqlhosts entry for '{informix_server}' already present — skipping")
+        else:
+            result = ssh.execute_command(
+                f"echo '{informix_server}  onsoctcp  localhost  {informix_port}' >> {sqlhosts}",
+                timeout=15, print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to add sqlhosts entry: {result['stderr']}")
+                return False
+            logger.info(f"✓ sqlhosts entry added: {informix_server} -> localhost:{informix_port}")
+
+        # Step 4: Register port in /etc/services (idempotent)
+        logger.info(f"➜ Registering port in /etc/services...")
+        check = ssh.execute_command(
+            f"grep -q '^{informix_server}' /etc/services",
+            timeout=10, print_output=False
+        )
+        if check['rc'] == 0:
+            logger.info(f"⊘ /etc/services entry for '{informix_server}' already present — skipping")
+        else:
+            result = ssh.execute_command(
+                f"echo '{informix_server}  {informix_port}/tcp' >> /etc/services",
+                timeout=15, print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"Failed to add /etc/services entry: {result['stderr']}")
+                return False
+            logger.info(f"✓ /etc/services entry added for {informix_server}")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        return False
+    finally:
+        ssh.disconnect()
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX STORAGE PREPARATION COMPLETED")
+        logger.info("=" * 80)
+    return True
