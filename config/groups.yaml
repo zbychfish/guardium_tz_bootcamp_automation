@@ -433,27 +433,6 @@ groups:
         args:
           debug: false
 
-      - name: deploy_uc_for_oracle_container
-        function: deploy_uc_for_oracle_container
-        module: tasks.labs
-        description: "Deploy UC for Oracle container: create kafka cluster, credential, import profile, bulk install"
-        args:
-          collector_appliance: "coll1"
-          kafka_appliance: "kafka1"
-          cm_appliance: "cm"
-          cluster_name: "kafka_cluster_1"
-          member_list: "kafka1.demo.guardium"
-          apply_cruise_control: false
-          credential_name: "oracle_container_sauropod"
-          credential_type: "JDBC Credentials"
-          cred_username: "guardium"
-          csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
-          jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
-          test_connections: true
-          profile_names: "oracle_21_container_sauropod"
-          bulk_install_hosts: "coll1.demo.guardium"
-          debug: false
-
       - name: import_oracle_dashboard
         function: import_oracle_dashboard
         module: tasks.labs
@@ -463,26 +442,25 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
-  # TODO: TEMP - temporary group for UC2 testing - remove after testing is complete
-  uc2_tests:
-    name: "UC2 Tests (TEMP)"
-    description: "Temporary group for UC2 testing - remove after testing is complete"
+  oracle_lab_uc2:
+    name: "Oracle Lab UC2"
+    description: "Deploy Universal Connector 2.0 for Oracle container on sauropod"
     auto_execute: false
     dependencies: []
     stages:
-      - name: uc2_test_run_uc_and_setup_kafka_node
+      - name: run_uc_and_setup_kafka_node
         function: run_uc_and_setup_kafka_node
         module: tasks.labs
-        description: "TEMP: Run Universal Connector on coll1 and setup kafka-node on kafka1 (debug mode)"
+        description: "Run Universal Connector on coll1 and setup kafka-node on kafka1"
         args:
           collector_appliance: "coll1"
           kafka_appliance: "kafka1"
           debug: true
 
-      - name: uc2_test_register_kafka_cluster
-        function: uc2_test_register_kafka_cluster
+      - name: register_kafka_cluster
+        function: register_kafka_cluster
         module: tasks.labs
-        description: "TEMP: Register Kafka cluster via REST API (debug mode)"
+        description: "Register Kafka cluster via REST API"
         args:
           cm_appliance: "cm"
           cluster_name: "kafka_cluster_1"
@@ -490,20 +468,20 @@ groups:
           apply_cruise_control: false
           debug: true
 
-      - name: uc2_test_start_kafka_nodes
-        function: uc2_test_start_kafka_nodes
+      - name: start_kafka_nodes
+        function: start_kafka_nodes
         module: tasks.labs
-        description: "TEMP: Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
+        description: "Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
         args:
           cm_appliance: "cm"
           cluster_name: "kafka_cluster_1"
           member_list: "kafka1.demo.guardium"
           debug: true
 
-      - name: uc2_test_create_uc_credential
+      - name: create_uc_credential
         function: create_uc_credential_for_oracle_container
         module: tasks.labs
-        description: "TEMP: Create UC credential oracle_container_sauropod (debug mode)"
+        description: "Create UC credential oracle_container_sauropod"
         args:
           cm_appliance: "cm"
           credential_name: "oracle_container_sauropod"
@@ -511,10 +489,10 @@ groups:
           cred_username: "guardium"
           debug: true
 
-      - name: uc2_test_import_uc_profile
-        function: uc2_test_import_uc_profile
+      - name: import_uc_profile
+        function: import_uc_profile_oracle_container
         module: tasks.labs
-        description: "TEMP: Import UC profile from oracle_21_container_sauropod.csv (debug mode)"
+        description: "Import UC profile from oracle_21_container_sauropod.csv"
         args:
           cm_appliance: "cm"
           csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
@@ -523,16 +501,15 @@ groups:
           test_connections: true
           debug: true
 
-      - name: uc2_test_bulk_install_uc_profile
-        function: uc2_test_bulk_install_uc_profile
+      - name: bulk_install_uc_profile
+        function: bulk_install_uc_profile
         module: tasks.labs
-        description: "TEMP: Install UC profile on coll1 via universal_connector_bulk_install (debug mode)"
+        description: "Install UC profile on coll1 via universal_connector_bulk_install"
         args:
           cm_appliance: "cm"
           profile_names: "oracle_21_container_sauropod"
           bulk_install_hosts: "coll1.demo.guardium"
           debug: true
-  # END TODO: TEMP
 
   ltr_lab:
     name: "LTR Lab"

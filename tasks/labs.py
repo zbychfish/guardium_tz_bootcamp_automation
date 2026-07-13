@@ -2681,113 +2681,7 @@ def create_uc_credential_for_oracle_container(
     return True
 
 
-def deploy_uc_for_oracle_container(
-    config,
-    logger,
-    verbose: bool = False,
-    collector_appliance: str = "coll1",
-    kafka_appliance: str = "kafka1",
-    cm_appliance: str = "cm",
-    cluster_name: str = "kafka_cluster_1",
-    member_list: str = "kafka1.demo.guardium",
-    apply_cruise_control: bool = False,
-    credential_name: str = "oracle_container_sauropod",
-    credential_type: str = "JDBC Credentials",
-    cred_username: str = "guardium",
-    cred_password: Optional[str] = None,
-    csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
-    jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
-    test_connections: bool = True,
-    profile_names: str = "test1",
-    bulk_install_hosts: str = "coll1.demo.guardium",
-    debug: bool = False,
-    **kwargs
-) -> bool:
-    from core.appliance_client import ApplianceClient
-    from core.appliance_config_loader import ApplianceConfigLoader
-    from core.guardium_rest_api import create_guardium_api
-
-    if not cred_password:
-        cred_password = config.get_custom_variable('simple_pwd')
-    if not cred_password:
-        logger.error("cred_password not provided and 'simple_pwd' not found in custom_variables")
-        return False
-
-    logger.info("=" * 80)
-    logger.info("DEPLOY UC FOR ORACLE CONTAINER")
-    logger.info("=" * 80)
-
-    # Step 3: Create Kafka cluster
-    logger.info("\n" + "=" * 80)
-    logger.info("STEP 3: Create Kafka cluster")
-    logger.info("=" * 80)
-
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("Password 'pwd' not found in custom_variables")
-        return False
-
-    api = create_guardium_api(config, logger, cm_appliance)
-    api.get_token(username='demo', password=pwd)
-
-    logger.info(f"Cluster: {cluster_name}, members: {member_list}")
-    api.create_kafka_cluster(cluster_name=cluster_name, member_list=member_list, apply_cruise_control=apply_cruise_control)
-    logger.info("✓ Kafka cluster created")
-
-    # Step 4: Create UC credential
-    logger.info("\n" + "=" * 80)
-    logger.info("STEP 4: Create UC credential")
-    logger.info("=" * 80)
-
-    if not create_uc_credential_for_oracle_container(
-        config=config, logger=logger, verbose=verbose,
-        cm_appliance=cm_appliance, credential_name=credential_name,
-        credential_type=credential_type, cred_username=cred_username,
-        cred_password=cred_password, debug=debug
-    ):
-        return False
-
-    # Step 5: Import UC profile
-    logger.info("\n" + "=" * 80)
-    logger.info("STEP 5: Import UC profile")
-    logger.info("=" * 80)
-
-    logger.info(f"CSV: {csv_path}")
-    logger.info(f"JAR: {jar_file}")
-    api.import_profiles_from_file(csv_path=csv_path, jar_file=jar_file, update_mode=False, test_connections=test_connections)
-    logger.info("✓ UC profile imported")
-
-    # Step 6: UC bulk install
-    logger.info("\n" + "=" * 80)
-    logger.info("STEP 6: UC bulk install")
-    logger.info("=" * 80)
-
-    cm_config = appliance_loader.get_appliance(cm_appliance)
-    cm_host = cm_config.get('ip')
-    cm_type = cm_config.get('type')
-    cm_prompt = appliance_loader.get_default_prompt(cm_type, configured=True) if cm_type else r">"
-
-    client = ApplianceClient(host=cm_host, user="cli", password=cli_pwd, prompt_regex=cm_prompt,
-                             initial_pattern=None, timeout=300, strip_ansi=True, debug=debug)
-    if not client.connect():
-        logger.error("Failed to connect to CM")
-        return False
-
-    cmd = f"grdapi universal_connector_bulk_install profileNames={profile_names} hosts={bulk_install_hosts}"
-    logger.info(f"➜ {cmd}")
-    result = client.execute_command(cmd, timeout=120)
-    logger.info(f"Output: {result}")
-    client.disconnect()
-    logger.info("✓ UC bulk install completed")
-
-    logger.info("\n" + "=" * 80)
-    logger.info("✓ DEPLOY UC FOR ORACLE CONTAINER - ALL STEPS COMPLETED")
-    logger.info("=" * 80)
-    return True
-
-
-# TODO: TEMP - uc2_tests group - remove after UC2 testing is complete
-def uc2_test_register_kafka_cluster(
+def register_kafka_cluster(
     config,
     logger,
     verbose: bool = False,
@@ -2801,7 +2695,7 @@ def uc2_test_register_kafka_cluster(
     from core.guardium_rest_api import create_guardium_api
 
     logger.info("=" * 80)
-    logger.info("UC2 TEST: REGISTER KAFKA CLUSTER")
+    logger.info("REGISTER KAFKA CLUSTER")
     logger.info("=" * 80)
 
     pwd = config.get_custom_variable('pwd')
@@ -2824,7 +2718,7 @@ def uc2_test_register_kafka_cluster(
     return True
 
 
-def uc2_test_start_kafka_nodes(
+def start_kafka_nodes(
     config,
     logger,
     verbose: bool = False,
@@ -2839,7 +2733,7 @@ def uc2_test_start_kafka_nodes(
     from core.appliance_config_loader import ApplianceConfigLoader
 
     logger.info("=" * 80)
-    logger.info("UC2 TEST: START KAFKA NODES")
+    logger.info("START KAFKA NODES")
     logger.info("=" * 80)
 
     cli_pwd = config.get_custom_variable('cli_pwd')
@@ -2879,7 +2773,7 @@ def uc2_test_start_kafka_nodes(
     return True
 
 
-def uc2_test_import_uc_profile(
+def import_uc_profile_oracle_container(
     config,
     logger,
     verbose: bool = False,
@@ -2894,7 +2788,7 @@ def uc2_test_import_uc_profile(
     from core.guardium_rest_api import create_guardium_api
 
     logger.info("=" * 80)
-    logger.info("UC2 TEST: IMPORT UC PROFILE")
+    logger.info("IMPORT UC PROFILE")
     logger.info("=" * 80)
     logger.info(f"CSV: {csv_path}")
     logger.info(f"JAR: {jar_file}")
@@ -2920,7 +2814,7 @@ def uc2_test_import_uc_profile(
     return True
 
 
-def uc2_test_bulk_install_uc_profile(
+def bulk_install_uc_profile(
     config,
     logger,
     verbose: bool = False,
@@ -2934,7 +2828,7 @@ def uc2_test_bulk_install_uc_profile(
     from core.appliance_config_loader import ApplianceConfigLoader
 
     logger.info("=" * 80)
-    logger.info("UC2 TEST: BULK INSTALL UC PROFILE")
+    logger.info("BULK INSTALL UC PROFILE")
     logger.info("=" * 80)
     logger.info(f"profileNames: {profile_names}, hosts: {bulk_install_hosts}")
 
@@ -2966,7 +2860,6 @@ def uc2_test_bulk_install_uc_profile(
     client.disconnect()
     logger.info("✓ UC bulk install completed")
     return True
-# END TODO: TEMP
 
 
 def import_oracle_dashboard(
