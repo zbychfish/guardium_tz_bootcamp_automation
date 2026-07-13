@@ -625,3 +625,12 @@ groups:
           install_dir: "/opt/informix"
           install_tmp_dir: "/opt/informix_install"
 
+      - name: configure_informix_on_sauropod
+        function: configure_informix_on_sauropod
+        module: tasks.deploy_informix
+        description: "Create .bash_profile env vars and onconfig for Informix on sauropod"
+        args:
+          install_dir: "/opt/informix"
+          informix_server: "ifxserver"
+          rootdbs_size_kb: 200000
+

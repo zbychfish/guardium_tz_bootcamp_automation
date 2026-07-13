@@ -300,3 +300,129 @@ def install_informix_on_sauropod(
         logger.info("✓ INFORMIX INSTALLATION COMPLETED")
         logger.info("=" * 80)
     return True
+
+
+def configure_informix_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    install_dir: str = "/opt/informix",
+    informix_server: str = "ifxserver",
+    rootdbs_size_kb: int = 200000,
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("CONFIGURE INFORMIX ON SAUROPOD")
+        logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    bash_profile = "/home/informix/.bash_profile"
+    onconfig_file = f"{install_dir}/etc/onconfig.{informix_server}"
+
+    bash_profile_block = (
+        "\n# Informix environment variables (added by install_informix.sh)\n"
+        f"export INFORMIXDIR={install_dir}\n"
+        f"export INFORMIXSERVER={informix_server}\n"
+        f"export ONCONFIG=onconfig.{informix_server}\n"
+        f"export INFORMIXSQLHOSTS=${{INFORMIXDIR}}/etc/sqlhosts\n"
+        f"export PATH=${{INFORMIXDIR}}/bin:${{PATH}}\n"
+        f"export LD_LIBRARY_PATH=${{INFORMIXDIR}}/lib:${{INFORMIXDIR}}/lib/esql:${{LD_LIBRARY_PATH:-}}\n"
+        "export DB_LOCALE=en_US.819\n"
+        "export CLIENT_LOCALE=en_US.819\n"
+    )
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                    port=ssh_port, timeout=60)
+
+    if not ssh.connect():
+        logger.error(f"Failed to connect to sauropod ({sauropod_ip}:{ssh_port})")
+        return False
+
+    try:
+        # Step 1: Create .bash_profile (idempotent)
+        logger.info(f"➜ Configuring {bash_profile}...")
+        check = ssh.execute_command(
+            f"grep -q 'INFORMIXDIR' {bash_profile} 2>/dev/null",
+            timeout=10, print_output=False
+        )
+        if check['rc'] == 0:
+            logger.info("⊘ INFORMIXDIR already present in .bash_profile — skipping")
+        else:
+            append_cmd = f"cat >> {bash_profile} << 'EOF'\n{bash_profile_block}EOF"
+            result = ssh.execute_command(append_cmd, timeout=30, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"Failed to write .bash_profile: {result['stderr']}")
+                return False
+            result = ssh.execute_command(
+                f"chown informix:informix {bash_profile}", timeout=15, print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.warning(f"Failed to chown .bash_profile: {result['stderr']}")
+            logger.info("✓ .bash_profile configured")
+
+        # Step 2: Create onconfig from template
+        logger.info(f"➜ Creating {onconfig_file} from onconfig.std...")
+        result = ssh.execute_command(
+            f"cp {install_dir}/etc/onconfig.std {onconfig_file}",
+            timeout=15, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Failed to copy onconfig.std: {result['stderr']}")
+            return False
+
+        sed_cmd = (
+            f"sed -i"
+            f" -e 's/^DBSERVERNAME.*/DBSERVERNAME  {informix_server}/'"
+            f" -e 's/^SERVERNUM.*/SERVERNUM      1/'"
+            f" -e 's|^ROOTPATH.*|ROOTPATH       {install_dir}/rootdbs|'"
+            f" -e 's/^ROOTSIZE.*/ROOTSIZE       {rootdbs_size_kb}/'"
+            f" -e 's/^ROOTNAME.*/ROOTNAME       rootdbs/'"
+            f" -e 's|^MSGPATH.*|MSGPATH        {install_dir}/tmp/online.log|'"
+            f" -e 's|^LTAPEDEV.*|LTAPEDEV       /dev/null|'"
+            f" -e 's|^TAPEDEV.*|TAPEDEV        /dev/null|'"
+            f" -e 's/^LOGFILES.*/LOGFILES       6/'"
+            f" -e 's/^LOGSIZE.*/LOGSIZE        5000/'"
+            f" -e 's/^BUFFERS.*/BUFFERS        5000/'"
+            f" -e 's/^PAGESIZE.*/PAGESIZE       2/'"
+            f" -e 's/^GL_USEGLU.*/GL_USEGLU      1/'"
+            f" -e 's/^NUMCPUVPS.*/NUMCPUVPS      1/'"
+            f" {onconfig_file}"
+        )
+        result = ssh.execute_command(sed_cmd, timeout=30, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to configure onconfig: {result['stderr']}")
+            return False
+
+        result = ssh.execute_command(
+            f"chown informix:informix {onconfig_file}", timeout=15, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.warning(f"Failed to chown onconfig: {result['stderr']}")
+
+        logger.info(f"✓ ONCONFIG written: {onconfig_file}")
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        return False
+    finally:
+        ssh.disconnect()
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX CONFIGURATION COMPLETED")
+        logger.info("=" * 80)
+    return True
