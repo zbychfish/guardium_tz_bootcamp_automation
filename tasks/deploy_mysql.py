@@ -207,6 +207,10 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
     commands = [
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
         "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
+        "dnf config-manager --disable mysql-9.7-lts-community",
+        "dnf config-manager --disable mysql-tools-9.7-lts-community",
+        "dnf config-manager --enable mysql-8.4-lts-community",
+        "dnf config-manager --enable mysql-tools-8.4-lts-community",
         "dnf install -y mysql-community-server",
         "systemctl start mysqld",
         "systemctl enable mysqld"
