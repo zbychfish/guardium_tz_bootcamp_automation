@@ -495,10 +495,10 @@ def prepare_informix_storage_on_sauropod(
         sqlhosts = f"{install_dir}/etc/sqlhosts"
         logger.info(f"➜ Configuring {sqlhosts}...")
         check = ssh.execute_command(
-            f"grep -q '^{informix_server}' {sqlhosts} 2>/dev/null",
+            f"grep '^{informix_server}' {sqlhosts} 2>/dev/null || true",
             timeout=10, print_output=False
         )
-        if check['rc'] == 0:
+        if check['stdout'].strip():
             logger.info(f"⊘ sqlhosts entry for '{informix_server}' already present — skipping")
         else:
             result = ssh.execute_command(
@@ -513,10 +513,10 @@ def prepare_informix_storage_on_sauropod(
         # Step 4: Register port in /etc/services (idempotent)
         logger.info(f"➜ Registering port in /etc/services...")
         check = ssh.execute_command(
-            f"grep -q '^{informix_server}' /etc/services",
+            f"grep '^{informix_server}' /etc/services 2>/dev/null || true",
             timeout=10, print_output=False
         )
-        if check['rc'] == 0:
+        if check['stdout'].strip():
             logger.info(f"⊘ /etc/services entry for '{informix_server}' already present — skipping")
         else:
             result = ssh.execute_command(
