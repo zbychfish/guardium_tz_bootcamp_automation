@@ -2521,17 +2521,36 @@ def setup_oua_audit_policy_on_sauropod(
 
         logger.info("➜ Creating audit policy GAME_APP and scheduler job as secadmin...")
         conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
+        cur = conn.cursor()
+
+        # cleanup — ignore errors if objects don't exist
+        for ddl in [
+            "NOAUDIT POLICY GAME_APP",
+            "DROP AUDIT POLICY GAME_APP",
+        ]:
+            try:
+                cur.execute(ddl)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+        # drop scheduler job if exists
+        try:
+            cur.execute("BEGIN DBMS_SCHEDULER.drop_job(job_name=>'ENSURE_GAME_APP_AUDIT', force=>TRUE); END;")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+        # create fresh
         for sql in [
-            r"BEGIN NOAUDIT POLICY GAME_APP; EXCEPTION WHEN OTHERS THEN NULL; END;",
-            r"BEGIN EXECUTE IMMEDIATE 'DROP AUDIT POLICY GAME_APP'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-            r"BEGIN DBMS_SCHEDULER.drop_job(job_name=>'ENSURE_GAME_APP_AUDIT', force=>TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;",
             r"CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features",
             r"AUDIT POLICY GAME_APP",
             r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
         ]:
-            with conn.cursor() as cur:
-                cur.execute(sql)
+            cur.execute(sql)
             conn.commit()
+
+        cur.close()
         conn.close()
         logger.info("✓ Audit policy GAME_APP created and enabled")
 
