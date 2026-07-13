@@ -597,3 +597,14 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+  informix_lab:
+    name: "Informix Lab"
+    description: "Configure sauropod for IBM Informix monitoring"
+    auto_execute: false
+    dependencies: [setup_appliances]
+    stages:
+      - name: informix_installation_preparation
+        function: informix_installation_preparation
+        module: tasks.deploy_informix
+        description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters and add informix user limits on sauropod"
+
