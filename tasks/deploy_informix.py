@@ -186,9 +186,21 @@ def copy_and_extract_informix_on_sauropod(
             timeout=300, print_output=verbose
         )
         if result['rc'] != 0:
-            logger.error(f"Failed to extract installer: {result['stderr']}")
+            logger.error(f"Failed to extract outer tar: {result['stderr']}")
             return False
-        logger.info("✓ Installer extracted")
+        logger.info("✓ Outer tar extracted")
+
+        # The outer tar contains an inner tar with the same name — extract it in-place
+        inner_tar = f"{remote_target_dir}/{installer_filename}"
+        logger.info(f"➜ Extracting inner tar {installer_filename} in {remote_target_dir}...")
+        result = ssh.execute_command(
+            f"cd {remote_target_dir} && tar -xf {inner_tar}",
+            timeout=300, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Failed to extract inner tar: {result['stderr']}")
+            return False
+        logger.info("✓ Inner tar extracted")
 
     except Exception as e:
         logger.error(f"✗ SSH operation failed: {e}")
