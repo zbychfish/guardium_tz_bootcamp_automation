@@ -429,7 +429,7 @@ groups:
       - name: deploy_uc_for_oracle_container
         function: deploy_uc_for_oracle_container
         module: tasks.labs
-        description: "Deploy UC for Oracle container: run UC, setup kafka-node, create cluster, credential, import profile, bulk install"
+        description: "Deploy UC for Oracle container: create kafka cluster, credential, import profile, bulk install"
         args:
           collector_appliance: "coll1"
           kafka_appliance: "kafka1"
@@ -463,6 +463,15 @@ groups:
     auto_execute: false
     dependencies: []
     stages:
+      - name: uc2_test_run_uc_and_setup_kafka_node
+        function: run_uc_and_setup_kafka_node
+        module: tasks.labs
+        description: "TEMP: Run Universal Connector on coll1 and setup kafka-node on kafka1 (debug mode)"
+        args:
+          collector_appliance: "coll1"
+          kafka_appliance: "kafka1"
+          debug: true
+
       - name: uc2_test_register_kafka_cluster
         function: uc2_test_register_kafka_cluster
         module: tasks.labs

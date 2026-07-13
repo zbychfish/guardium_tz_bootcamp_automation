@@ -2507,41 +2507,21 @@ ORCLPDB1 =
     return True
 
 
-def deploy_uc_for_oracle_container(
+def run_uc_and_setup_kafka_node(
     config,
     logger,
     verbose: bool = False,
     collector_appliance: str = "coll1",
     kafka_appliance: str = "kafka1",
-    cm_appliance: str = "cm",
-    cluster_name: str = "kafka_cluster_1",
-    member_list: str = "kafka1.demo.guardium",
-    apply_cruise_control: bool = False,
-    credential_name: str = "oracle_container_sauropod",
-    credential_type: str = "JDBC Credentials",
-    cred_username: str = "guardium",
-    cred_password: Optional[str] = None,
-    csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
-    jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
-    test_connections: bool = True,
-    profile_names: str = "test1",
-    bulk_install_hosts: str = "coll1.demo.guardium",
     debug: bool = False,
     **kwargs
 ) -> bool:
     from core.appliance_client import ApplianceClient
     from core.appliance_config_loader import ApplianceConfigLoader
     from core.appliance_operations import setup_kafka_node as core_setup_kafka_node
-    from core.guardium_rest_api import create_guardium_api
-
-    if not cred_password:
-        cred_password = config.get_custom_variable('simple_pwd')
-    if not cred_password:
-        logger.error("cred_password not provided and 'simple_pwd' not found in custom_variables")
-        return False
 
     logger.info("=" * 80)
-    logger.info("DEPLOY UC FOR ORACLE CONTAINER")
+    logger.info("RUN UC AND SETUP KAFKA NODE")
     logger.info("=" * 80)
 
     # Step 1: Run UC on collector
@@ -2590,6 +2570,48 @@ def deploy_uc_for_oracle_container(
 
     if not core_setup_kafka_node(config=config, logger=logger, appliance_name=kafka_appliance, debug=debug):
         return False
+
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ RUN UC AND SETUP KAFKA NODE - COMPLETED")
+    logger.info("=" * 80)
+    return True
+
+
+def deploy_uc_for_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    collector_appliance: str = "coll1",
+    kafka_appliance: str = "kafka1",
+    cm_appliance: str = "cm",
+    cluster_name: str = "kafka_cluster_1",
+    member_list: str = "kafka1.demo.guardium",
+    apply_cruise_control: bool = False,
+    credential_name: str = "oracle_container_sauropod",
+    credential_type: str = "JDBC Credentials",
+    cred_username: str = "guardium",
+    cred_password: Optional[str] = None,
+    csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
+    jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
+    test_connections: bool = True,
+    profile_names: str = "test1",
+    bulk_install_hosts: str = "coll1.demo.guardium",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_client import ApplianceClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+    from core.guardium_rest_api import create_guardium_api
+
+    if not cred_password:
+        cred_password = config.get_custom_variable('simple_pwd')
+    if not cred_password:
+        logger.error("cred_password not provided and 'simple_pwd' not found in custom_variables")
+        return False
+
+    logger.info("=" * 80)
+    logger.info("DEPLOY UC FOR ORACLE CONTAINER")
+    logger.info("=" * 80)
 
     # Step 3: Create Kafka cluster
     logger.info("\n" + "=" * 80)
