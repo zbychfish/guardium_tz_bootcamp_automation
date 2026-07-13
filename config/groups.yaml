@@ -483,6 +483,17 @@ groups:
           apply_cruise_control: false
           debug: true
 
+      - name: uc2_test_create_uc_credential
+        function: create_uc_credential_for_oracle_container
+        module: tasks.labs
+        description: "TEMP: Create UC credential oracle_container_sauropod (debug mode)"
+        args:
+          cm_appliance: "cm"
+          credential_name: "oracle_container_sauropod"
+          credential_type: "JDBC Credentials"
+          cred_username: "guardium"
+          debug: true
+
       - name: uc2_test_import_uc_profile
         function: uc2_test_import_uc_profile
         module: tasks.labs

@@ -2577,6 +2577,50 @@ def run_uc_and_setup_kafka_node(
     return True
 
 
+def create_uc_credential_for_oracle_container(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    credential_name: str = "oracle_container_sauropod",
+    credential_type: str = "JDBC Credentials",
+    cred_username: str = "guardium",
+    cred_password: Optional[str] = None,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import create_guardium_api
+
+    if not cred_password:
+        cred_password = config.get_custom_variable('simple_pwd')
+    if not cred_password:
+        logger.error("cred_password not provided and 'simple_pwd' not found in custom_variables")
+        return False
+
+    logger.info("=" * 80)
+    logger.info("CREATE UC CREDENTIAL FOR ORACLE CONTAINER")
+    logger.info("=" * 80)
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    logger.info(f"Credential: {credential_name} ({credential_type}), username: {cred_username}")
+    result = api.create_uc_credential(
+        name=credential_name,
+        credential_type=credential_type,
+        parameters={"username": cred_username, "password": cred_password}
+    )
+    if debug:
+        logger.info(f"API response: {result}")
+    logger.info("✓ UC credential created")
+    return True
+
+
 def deploy_uc_for_oracle_container(
     config,
     logger,
@@ -2635,10 +2679,13 @@ def deploy_uc_for_oracle_container(
     logger.info("STEP 4: Create UC credential")
     logger.info("=" * 80)
 
-    logger.info(f"Credential: {credential_name} ({credential_type})")
-    api.create_uc_credential(name=credential_name, credential_type=credential_type,
-                             parameters={"username": cred_username, "password": cred_password})
-    logger.info("✓ UC credential created")
+    if not create_uc_credential_for_oracle_container(
+        config=config, logger=logger, verbose=verbose,
+        cm_appliance=cm_appliance, credential_name=credential_name,
+        credential_type=credential_type, cred_username=cred_username,
+        cred_password=cred_password, debug=debug
+    ):
+        return False
 
     # Step 5: Import UC profile
     logger.info("\n" + "=" * 80)
