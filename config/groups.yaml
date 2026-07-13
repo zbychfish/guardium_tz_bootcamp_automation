@@ -418,12 +418,19 @@ groups:
       - name: setup_stap_with_oua_on_sauropod
         function: setup_stap_with_oua_on_sauropod
         module: tasks.labs
-        description: "Configure Oracle OUA: create secadmin/guardium users, GAME_APP audit policy, guard_tap.ini, store SQL credentials and SQL configuration on collector"
+        description: "Configure Oracle OUA: create secadmin/guardium users, guard_tap.ini, store SQL credentials and SQL configuration on collector"
         args:
           appliance_name: "cm"
           collector_name: "coll1"
           instantclient_rpm: "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm"
           instantclient_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle"
+          debug: false
+
+      - name: setup_oua_audit_policy_on_sauropod
+        function: setup_oua_audit_policy_on_sauropod
+        module: tasks.labs
+        description: "Create GAME_APP audit policy and scheduler job as secadmin in Oracle on sauropod"
+        args:
           debug: false
 
       - name: deploy_uc_for_oracle_container

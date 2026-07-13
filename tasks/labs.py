@@ -2410,19 +2410,6 @@ ORCLPDB1 =
         conn.close()
         logger.info("✓ secadmin and guardium users created")
 
-        # Step 4: Create audit policy GAME_APP and scheduler job as secadmin
-        logger.info("\n➜ Step 4: Setup OUA audit policy GAME_APP as secadmin")
-        conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
-        for sql in [
-            r"BEGIN DECLARE v_cnt NUMBER; BEGIN SELECT COUNT(*) INTO v_cnt FROM audit_unified_policies WHERE policy_name='GAME_APP'; IF v_cnt=0 THEN EXECUTE IMMEDIATE 'CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features'; END IF; EXECUTE IMMEDIATE 'AUDIT POLICY GAME_APP'; END; END;",
-            r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
-        ]:
-            with conn.cursor() as cur:
-                cur.execute(sql)
-            conn.commit()
-        conn.close()
-        logger.info("✓ Audit policy GAME_APP created and enabled")
-
     except Exception as e:
         logger.error(f"✗ Oracle connection failed: {e}")
         if debug:
@@ -2503,6 +2490,56 @@ ORCLPDB1 =
 
     logger.info("\n" + "=" * 80)
     logger.info("✓ SETUP STAP WITH OUA ON SAUROPOD COMPLETED")
+    logger.info("=" * 80)
+    return True
+
+
+def setup_oua_audit_policy_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    logger.info("=" * 80)
+    logger.info("SETUP OUA AUDIT POLICY GAME_APP ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    try:
+        import oracledb
+        dsn = f"{sauropod_ip}:1522/ORCLPDB1"
+
+        logger.info("➜ Creating audit policy GAME_APP and scheduler job as secadmin...")
+        conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
+        for sql in [
+            r"BEGIN DECLARE v_cnt NUMBER; BEGIN SELECT COUNT(*) INTO v_cnt FROM audit_unified_policies WHERE policy_name='GAME_APP'; IF v_cnt=0 THEN EXECUTE IMMEDIATE 'CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features'; END IF; EXECUTE IMMEDIATE 'AUDIT POLICY GAME_APP'; END; END;",
+            r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
+        ]:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+            conn.commit()
+        conn.close()
+        logger.info("✓ Audit policy GAME_APP created and enabled")
+
+    except Exception as e:
+        logger.error(f"✗ Oracle connection failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info("=" * 80)
+    logger.info("✓ SETUP OUA AUDIT POLICY COMPLETED")
     logger.info("=" * 80)
     return True
 
