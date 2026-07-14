@@ -608,3 +608,26 @@ groups:
         module: tasks.deploy_informix_new
         description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters, add informix user limits on sauropod"
 
+      - name: create_informix_user
+        function: create_informix_user
+        module: tasks.deploy_informix_new
+        description: "Create informix group (gid 200), user (uid 200) and set password on sauropod"
+
+      - name: install_informix_binaries
+        function: install_informix_binaries
+        module: tasks.deploy_informix_new
+        description: "Upload installer, extract, write response.properties and run silent installer on sauropod"
+        args:
+          installer_filename: "ibm.server.15.0.1.0.Linux.64.x86_64.tar"
+          installer_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix"
+          install_tmp_dir: "/opt/informix_tmp"
+          install_dir: "/opt/ibm/informix"
+
+      - name: open_informix_firewall_ports
+        function: open_informix_firewall_ports
+        module: tasks.deploy_informix_new
+        description: "Open Informix TCP ports 9088 and 9089 on sauropod firewall"
+        args:
+          informix_port: 9088
+          informix_admin_port: 9089
+

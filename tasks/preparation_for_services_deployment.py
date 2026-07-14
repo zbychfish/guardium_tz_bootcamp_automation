@@ -115,7 +115,7 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
         logger.info("Step 5: Installing required packages on raptor")
 
     commands = [
-        "dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git"
+        "dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11"
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Package installation failed")
