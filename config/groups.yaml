@@ -613,6 +613,14 @@ groups:
         module: tasks.deploy_informix_new
         description: "Create informix group (gid 200), user (uid 200) and set password on sauropod"
 
+      - name: configure_informix_bash_profile
+        function: configure_informix_bash_profile
+        module: tasks.deploy_informix_new
+        description: "Configure /home/informix/.bash_profile with Informix environment variables"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+
       - name: install_informix_binaries
         function: install_informix_binaries
         module: tasks.deploy_informix_new

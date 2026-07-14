@@ -137,6 +137,57 @@ def create_informix_user(config, logger, verbose: bool = True, **kwargs) -> bool
     return True
 
 
+def configure_informix_bash_profile(
+    config, logger, verbose: bool = True,
+    install_dir: str = "/opt/ibm/informix",
+    informix_server: str = "ifxserver",
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("CONFIGURE INFORMIX BASH_PROFILE")
+        logger.info("=" * 80)
+
+    bash_profile = "/home/informix/.bash_profile"
+    bash_profile_block = (
+        "\n# Informix environment variables\n"
+        f"export INFORMIXDIR={install_dir}\n"
+        f"export INFORMIXSERVER={informix_server}\n"
+        f"export ONCONFIG=onconfig.{informix_server}\n"
+        f"export INFORMIXSQLHOSTS=${{INFORMIXDIR}}/etc/sqlhosts\n"
+        f"export PATH=${{INFORMIXDIR}}/bin:${{PATH}}\n"
+        f"export LD_LIBRARY_PATH=${{INFORMIXDIR}}/lib:${{INFORMIXDIR}}/lib/esql:${{LD_LIBRARY_PATH:-}}\n"
+        "export DB_LOCALE=en_US.819\n"
+        "export CLIENT_LOCALE=en_US.819\n"
+    )
+
+    logger.info(f"➜ Checking {bash_profile}...")
+    check = execute_local_command(
+        f"grep -c 'INFORMIXDIR' {bash_profile} 2>/dev/null || true",
+        logger, False
+    )
+    if check['stdout'].strip() not in ('', '0'):
+        logger.info("⊘ INFORMIXDIR already present in .bash_profile — skipping")
+    else:
+        result = execute_local_command(
+            f"cat >> {bash_profile} << 'EOF'\n{bash_profile_block}EOF",
+            logger, verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Failed to write .bash_profile: {result['stderr']}")
+            return False
+        result = execute_local_command(f"chown informix:informix {bash_profile}", logger, verbose)
+        if result['rc'] != 0:
+            logger.warning(f"Failed to chown .bash_profile: {result['stderr']}")
+        logger.info("✓ .bash_profile configured")
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX BASH_PROFILE CONFIGURED")
+        logger.info("=" * 80)
+    return True
+
+
 def install_informix_binaries(
     config, logger, verbose: bool = True,
     installer_filename: str = "ibm.server.15.0.1.0.Linux.64.x86_64.tar",
