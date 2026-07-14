@@ -179,9 +179,9 @@ database:
 
 {common_scenario}
 EOF""",
-        f"cd {dbtraffic_dir} && pip3.9 install --upgrade pip",
-        f"cd {dbtraffic_dir} && pip3.9 install -e .",
-        f"cd {dbtraffic_dir} && pip3.9 install -r requirements.txt",
+        f"cd {dbtraffic_dir} && /usr/bin/pip3.9 install --upgrade pip",
+        f"cd {dbtraffic_dir} && /usr/bin/pip3.9 install -e .",
+        f"cd {dbtraffic_dir} && /usr/bin/pip3.9 install -r requirements.txt",
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Failed to configure guardium_notes_dbtraffic")
