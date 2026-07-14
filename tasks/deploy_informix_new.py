@@ -322,6 +322,10 @@ def configure_informix_network(
         return False
     logger.info(f"✓ sqlhosts written: {sqlhosts_entry}")
 
+    result = execute_local_command(f"chown informix:informix {sqlhosts}", logger, verbose)
+    if result['rc'] != 0:
+        logger.warning(f"Failed to chown sqlhosts: {result['stderr']}")
+
     logger.info("➜ Checking /etc/services for existing entry...")
     check = execute_local_command(
         f"grep -c '^{informix_server}' /etc/services || true",
@@ -541,7 +545,7 @@ def initialize_informix(
 
     logger.info("➜ Running oninit -i as informix user...")
     result = execute_local_command(
-        f"su - informix -c 'export {env}; oninit -i'",
+        f"su - informix -c 'export {env}; echo y | oninit -i'",
         logger, verbose
     )
     if result['rc'] != 0:
