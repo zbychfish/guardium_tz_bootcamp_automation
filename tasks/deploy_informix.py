@@ -177,8 +177,8 @@ def deploy_informix(
         f"export INFORMIXSQLHOSTS=${{INFORMIXDIR}}/etc/sqlhosts\n"
         f"export PATH=${{INFORMIXDIR}}/bin:${{PATH}}\n"
         f"export LD_LIBRARY_PATH=${{INFORMIXDIR}}/lib:${{INFORMIXDIR}}/lib/esql:${{LD_LIBRARY_PATH:-}}\n"
-        "export DB_LOCALE=en_US.819\n"
-        "export CLIENT_LOCALE=en_US.819\n"
+        "export DB_LOCALE=en_US.utf8\n"
+        "export CLIENT_LOCALE=en_US.utf8\n"
     )
     check = execute_local_command(f"grep -c 'INFORMIXDIR' {bash_profile} 2>/dev/null || true", logger, False)
     if check['stdout'].strip() in ('', '0'):
