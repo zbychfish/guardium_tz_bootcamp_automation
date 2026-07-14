@@ -665,3 +665,19 @@ groups:
           informix_server: "ifxserver"
           informix_host: "raptor.demo.guardium"
           informix_port: 9088
+
+      - name: initialize_informix
+        function: initialize_informix
+        module: tasks.deploy_informix_new
+        description: "Run oninit -i as informix user to initialize the Informix instance"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          
+      - name: create_informix_service
+        function: create_informix_service
+        module: tasks.deploy_informix_new
+        description: "Create /etc/systemd/system/informix-ifxserver.service and reload daemon"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"

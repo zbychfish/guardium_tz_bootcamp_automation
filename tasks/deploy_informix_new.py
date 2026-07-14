@@ -10,8 +10,8 @@ from core import execute_local_command, execute_commands, ConfigLoader
 
 SYSCTL_CONTENT = (
     "# Informix shared memory settings\n"
-    "kernel.shmmax = 536870912\n"
-    "kernel.shmall = 131072\n"
+    "kernel.shmmax = 8589934592\n"
+    "kernel.shmall = 2097152\n"
     "kernel.shmmni = 4096\n"
     "\n"
     "# Semaphores: semmsl semmns semopm semmni\n"
@@ -437,6 +437,121 @@ def open_informix_firewall_ports(
     if verbose:
         logger.info("=" * 80)
         logger.info("✓ INFORMIX FIREWALL PORTS OPENED")
+        logger.info("=" * 80)
+    return True
+
+
+def create_informix_service(
+    config, logger, verbose: bool = True,
+    install_dir: str = "/opt/ibm/informix",
+    informix_server: str = "ifxserver",
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("CREATE INFORMIX SYSTEMD SERVICE")
+        logger.info("=" * 80)
+
+    service_file = f"/etc/systemd/system/informix-{informix_server}.service"
+    service_content = (
+        "[Unit]\n"
+        f"Description=IBM Informix Database Server ({informix_server})\n"
+        "After=network.target remote-fs.target\n"
+        "Wants=network.target\n"
+        "\n"
+        "[Service]\n"
+        "Type=forking\n"
+        "User=informix\n"
+        "Group=informix\n"
+        f"Environment=\"INFORMIXDIR={install_dir}\"\n"
+        f"Environment=\"INFORMIXSERVER={informix_server}\"\n"
+        f"Environment=\"ONCONFIG=onconfig.{informix_server}\"\n"
+        f"Environment=\"INFORMIXSQLHOSTS={install_dir}/etc/sqlhosts\"\n"
+        f"Environment=\"PATH={install_dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\"\n"
+        f"Environment=\"LD_LIBRARY_PATH={install_dir}/lib:{install_dir}/lib/esql\"\n"
+        "\n"
+        f"ExecStart={install_dir}/bin/oninit\n"
+        f"ExecStop={install_dir}/bin/onmode -ky\n"
+        "\n"
+        "TimeoutStartSec=120\n"
+        "TimeoutStopSec=120\n"
+        "\n"
+        "Restart=on-failure\n"
+        "RestartSec=10\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=multi-user.target\n"
+    )
+
+    logger.info(f"➜ Writing {service_file}...")
+    result = execute_local_command(
+        f"cat > {service_file} << 'EOF'\n{service_content}EOF",
+        logger, verbose
+    )
+    if result['rc'] != 0:
+        logger.error(f"Failed to write service file: {result['stderr']}")
+        return False
+    logger.info(f"✓ {service_file} written")
+
+    logger.info("➜ Reloading systemd daemon...")
+    result = execute_local_command("systemctl daemon-reload", logger, verbose)
+    if result['rc'] != 0:
+        logger.error(f"Failed to reload systemd: {result['stderr']}")
+        return False
+    logger.info("✓ systemd daemon reloaded")
+
+    service_name = f"informix-{informix_server}.service"
+    for cmd, desc in [
+        (f"systemctl enable {service_name}", f"enable {service_name}"),
+        (f"systemctl start {service_name}",  f"start {service_name}"),
+    ]:
+        logger.info(f"➜ {desc}...")
+        result = execute_local_command(cmd, logger, verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to {desc}: {result['stderr']}")
+            return False
+        logger.info(f"✓ {desc}")
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX SYSTEMD SERVICE CREATED")
+        logger.info("=" * 80)
+    return True
+
+
+def initialize_informix(
+    config, logger, verbose: bool = True,
+    install_dir: str = "/opt/ibm/informix",
+    informix_server: str = "ifxserver",
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("INITIALIZE INFORMIX INSTANCE")
+        logger.info("=" * 80)
+
+    env = (
+        f"INFORMIXDIR={install_dir} "
+        f"INFORMIXSERVER={informix_server} "
+        f"ONCONFIG=onconfig.{informix_server} "
+        f"INFORMIXSQLHOSTS={install_dir}/etc/sqlhosts "
+        f"PATH={install_dir}/bin:$PATH "
+        f"LD_LIBRARY_PATH={install_dir}/lib:{install_dir}/lib/esql"
+    )
+
+    logger.info("➜ Running oninit -i as informix user...")
+    result = execute_local_command(
+        f"su - informix -c 'export {env}; oninit -i'",
+        logger, verbose
+    )
+    if result['rc'] != 0:
+        logger.error(f"oninit -i failed: {result['stderr']}")
+        return False
+    logger.info("✓ Informix instance initialized")
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX INSTANCE INITIALIZED")
         logger.info("=" * 80)
     return True
 
