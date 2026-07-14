@@ -188,6 +188,103 @@ def configure_informix_bash_profile(
     return True
 
 
+def configure_informix_onconfig(
+    config, logger, verbose: bool = True,
+    install_dir: str = "/opt/ibm/informix",
+    informix_server: str = "ifxserver",
+    rootdbs_size_kb: int = 200000,
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("CONFIGURE INFORMIX ONCONFIG")
+        logger.info("=" * 80)
+
+    onconfig_std = f"{install_dir}/etc/onconfig.std"
+    onconfig_file = f"{install_dir}/etc/onconfig.{informix_server}"
+
+    logger.info(f"➜ Copying {onconfig_std} → {onconfig_file}...")
+    result = execute_local_command(f"cp {onconfig_std} {onconfig_file}", logger, verbose)
+    if result['rc'] != 0:
+        logger.error(f"Failed to copy onconfig.std: {result['stderr']}")
+        return False
+    logger.info("✓ onconfig.std copied")
+
+    sed_cmd = (
+        f"sed -i"
+        f" -e 's/^DBSERVERNAME.*/DBSERVERNAME  {informix_server}/'"
+        f" -e 's/^SERVERNUM.*/SERVERNUM      1/'"
+        f" -e 's|^ROOTPATH.*|ROOTPATH       {install_dir}/rootdbs|'"
+        f" -e 's/^ROOTSIZE.*/ROOTSIZE       {rootdbs_size_kb}/'"
+        f" -e 's/^ROOTNAME.*/ROOTNAME       rootdbs/'"
+        f" -e 's|^MSGPATH.*|MSGPATH        {install_dir}/tmp/online.log|'"
+        f" -e 's|^LTAPEDEV.*|LTAPEDEV       /dev/null|'"
+        f" -e 's|^TAPEDEV.*|TAPEDEV        /dev/null|'"
+        f" -e 's/^LOGFILES.*/LOGFILES       6/'"
+        f" -e 's/^LOGSIZE.*/LOGSIZE        5000/'"
+        f" -e 's/^BUFFERS.*/BUFFERS        5000/'"
+        f" -e 's/^PAGESIZE.*/PAGESIZE       2/'"
+        f" -e 's/^GL_USEGLU.*/GL_USEGLU      1/'"
+        f" -e 's/^NUMCPUVPS.*/NUMCPUVPS      1/'"
+        f" {onconfig_file}"
+    )
+
+    logger.info(f"➜ Applying sed substitutions to {onconfig_file}...")
+    result = execute_local_command(sed_cmd, logger, verbose)
+    if result['rc'] != 0:
+        logger.error(f"Failed to configure onconfig: {result['stderr']}")
+        return False
+
+    result = execute_local_command(f"chown informix:informix {onconfig_file}", logger, verbose)
+    if result['rc'] != 0:
+        logger.warning(f"Failed to chown onconfig: {result['stderr']}")
+
+    logger.info(f"✓ {onconfig_file} configured")
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX ONCONFIG CONFIGURED")
+        logger.info("=" * 80)
+    return True
+
+
+def prepare_informix_storage(
+    config, logger, verbose: bool = True,
+    install_dir: str = "/opt/ibm/informix",
+    rootdbs_size_kb: int = 200000,
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("PREPARE INFORMIX STORAGE")
+        logger.info("=" * 80)
+
+    rootdbs = f"{install_dir}/rootdbs"
+    tmp_dir = f"{install_dir}/tmp"
+
+    for cmd, desc in [
+        (f"touch {rootdbs}",                                                        "touch rootdbs"),
+        (f"chmod 660 {rootdbs}",                                                    "chmod rootdbs"),
+        (f"chown informix:informix {rootdbs}",                                      "chown rootdbs"),
+        (f"dd if=/dev/zero of={rootdbs} bs=1024 count={rootdbs_size_kb} status=none", "pre-allocate rootdbs"),
+        (f"mkdir -p {tmp_dir}",                                                     "mkdir tmp"),
+        (f"chown informix:informix {tmp_dir}",                                      "chown tmp"),
+        (f"chmod 770 {tmp_dir}",                                                    "chmod tmp"),
+    ]:
+        logger.info(f"➜ {desc}...")
+        result = execute_local_command(cmd, logger, verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to {desc}: {result['stderr']}")
+            return False
+    logger.info(f"✓ rootdbs ({rootdbs_size_kb} KB) and tmp directory prepared")
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX STORAGE PREPARED")
+        logger.info("=" * 80)
+    return True
+
+
 def install_informix_binaries(
     config, logger, verbose: bool = True,
     installer_filename: str = "ibm.server.15.0.1.0.Linux.64.x86_64.tar",
