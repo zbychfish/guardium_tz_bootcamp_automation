@@ -547,11 +547,33 @@ def initialize_informix(
     if result['rc'] != 0:
         logger.error(f"oninit -i failed: {result['stderr']}")
         return False
-    logger.info("✓ Informix instance initialized")
+    logger.info("✓ oninit -i completed")
+
+    logger.info("➜ Verifying Informix is On-Line...")
+    result = execute_local_command(
+        f"su - informix -c 'export {env}; onstat'",
+        logger, verbose
+    )
+    if result['rc'] != 0 or 'On-Line' not in result['stdout']:
+        logger.error("Informix is not On-Line after oninit -i")
+        if result['stdout']:
+            logger.error(f"onstat output: {result['stdout'].strip()}")
+        return False
+    logger.info("✓ Informix is On-Line")
+
+    logger.info("➜ Stopping Informix instance (onmode -ky)...")
+    result = execute_local_command(
+        f"su - informix -c 'export {env}; onmode -ky'",
+        logger, verbose
+    )
+    if result['rc'] != 0:
+        logger.error(f"onmode -ky failed: {result['stderr']}")
+        return False
+    logger.info("✓ Informix instance stopped")
 
     if verbose:
         logger.info("=" * 80)
-        logger.info("✓ INFORMIX INSTANCE INITIALIZED")
+        logger.info("✓ INFORMIX INSTANCE INITIALIZED AND STOPPED")
         logger.info("=" * 80)
     return True
 
