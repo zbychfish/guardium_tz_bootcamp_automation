@@ -621,23 +621,6 @@ groups:
           install_dir: "/opt/ibm/informix"
           informix_server: "ifxserver"
 
-      - name: configure_informix_onconfig
-        function: configure_informix_onconfig
-        module: tasks.deploy_informix_new
-        description: "Copy onconfig.std and apply sed substitutions for ifxserver instance"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-          rootdbs_size_kb: 200000
-
-      - name: prepare_informix_storage
-        function: prepare_informix_storage
-        module: tasks.deploy_informix_new
-        description: "Pre-allocate rootdbs chunk and create tmp directory for Informix"
-        args:
-          install_dir: "/opt/ibm/informix"
-          rootdbs_size_kb: 200000
-
       - name: install_informix_binaries
         function: install_informix_binaries
         module: tasks.deploy_informix_new
@@ -656,3 +639,19 @@ groups:
           informix_port: 9088
           informix_admin_port: 9089
 
+      - name: configure_informix_onconfig
+        function: configure_informix_onconfig
+        module: tasks.deploy_informix_new
+        description: "Copy onconfig.std and apply sed substitutions for ifxserver instance"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          rootdbs_size_kb: 200000
+
+      - name: prepare_informix_storage
+        function: prepare_informix_storage
+        module: tasks.deploy_informix_new
+        description: "Pre-allocate rootdbs chunk and create tmp directory for Informix"
+        args:
+          install_dir: "/opt/ibm/informix"
+          rootdbs_size_kb: 200000
