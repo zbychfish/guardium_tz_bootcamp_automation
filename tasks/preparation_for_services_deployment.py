@@ -134,8 +134,6 @@ def preparation_for_services_deployment(config: ConfigLoader, logger, verbose: b
         return False
 
     dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
-    venv_python = f"{dbtraffic_dir}/venv/bin/python"
-    venv_pip = f"{dbtraffic_dir}/venv/bin/pip"
 
     common_scenario = """\
 workload:
@@ -181,10 +179,9 @@ database:
 
 {common_scenario}
 EOF""",
-        f"cd {dbtraffic_dir} && rm -rf venv && python3.9 -m venv venv",
-        f"cd {dbtraffic_dir} && {venv_python} -m pip install --upgrade pip",
-        f"cd {dbtraffic_dir} && {venv_pip} install -e .",
-        f"cd {dbtraffic_dir} && {venv_pip} install -r requirements.txt",
+        f"cd {dbtraffic_dir} && pip3.9 install --upgrade pip",
+        f"cd {dbtraffic_dir} && pip3.9 install -e .",
+        f"cd {dbtraffic_dir} && pip3.9 install -r requirements.txt",
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("Failed to configure guardium_notes_dbtraffic")
