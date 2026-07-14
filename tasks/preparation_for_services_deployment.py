@@ -181,7 +181,7 @@ database:
 
 {common_scenario}
 EOF""",
-        f"cd {dbtraffic_dir} && rm -rf venv && python3.12 -m venv venv",
+        f"cd {dbtraffic_dir} && rm -rf venv && python3.9 -m venv venv",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install --upgrade pip",
         f"cd {dbtraffic_dir} && {venv_pip} install -e .",
         f"cd {dbtraffic_dir} && {venv_pip} install -r requirements.txt",
