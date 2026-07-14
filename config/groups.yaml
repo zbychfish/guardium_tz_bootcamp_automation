@@ -613,24 +613,6 @@ groups:
         module: tasks.deploy_informix_new
         description: "Create informix group (gid 200), user (uid 200) and set password on sauropod"
 
-      - name: configure_informix_bash_profile
-        function: configure_informix_bash_profile
-        module: tasks.deploy_informix_new
-        description: "Configure /home/informix/.bash_profile with Informix environment variables"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-
-      - name: configure_informix_network
-        function: configure_informix_network
-        module: tasks.deploy_informix_new
-        description: "Write sqlhosts file and add /etc/services entry for Informix"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-          informix_host: "raptor.demo.guardium"
-          informix_port: 9088
-
       - name: install_informix_binaries
         function: install_informix_binaries
         module: tasks.deploy_informix_new
@@ -641,13 +623,13 @@ groups:
           install_tmp_dir: "/opt/informix_tmp"
           install_dir: "/opt/ibm/informix"
 
-      - name: open_informix_firewall_ports
-        function: open_informix_firewall_ports
+      - name: configure_informix_bash_profile
+        function: configure_informix_bash_profile
         module: tasks.deploy_informix_new
-        description: "Open Informix TCP ports 9088 and 9089 on sauropod firewall"
+        description: "Configure /home/informix/.bash_profile with Informix environment variables"
         args:
-          informix_port: 9088
-          informix_admin_port: 9089
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
 
       - name: configure_informix_onconfig
         function: configure_informix_onconfig
@@ -665,3 +647,21 @@ groups:
         args:
           install_dir: "/opt/ibm/informix"
           rootdbs_size_kb: 200000
+
+      - name: open_informix_firewall_ports
+        function: open_informix_firewall_ports
+        module: tasks.deploy_informix_new
+        description: "Open Informix TCP ports 9088 and 9089 on sauropod firewall"
+        args:
+          informix_port: 9088
+          informix_admin_port: 9089
+
+      - name: configure_informix_network
+        function: configure_informix_network
+        module: tasks.deploy_informix_new
+        description: "Write sqlhosts file and add /etc/services entry for Informix"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          informix_host: "raptor.demo.guardium"
+          informix_port: 9088
