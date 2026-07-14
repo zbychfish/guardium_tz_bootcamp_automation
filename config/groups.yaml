@@ -603,53 +603,8 @@ groups:
     auto_execute: false
     dependencies: [setup_appliances]
     stages:
-      - name: informix_installation_preparation
-        function: informix_installation_preparation
-        module: tasks.deploy_informix
-        description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters, add informix user limits, create group/user on sauropod"
-
-      - name: copy_and_extract_informix_on_sauropod
-        function: copy_and_extract_informix_on_sauropod
-        module: tasks.deploy_informix
-        description: "Copy Informix installer from raptor to sauropod and extract"
-        args:
-          installer_filename: "ibm.server.15.0.1.0.Linux.64.x86_64.tar"
-          installer_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix"
-          remote_target_dir: "/opt/informix_install"
-
-      - name: install_informix_on_sauropod
-        function: install_informix_on_sauropod
-        module: tasks.deploy_informix
-        description: "Write response.properties and run Informix silent installer on sauropod"
-        args:
-          install_dir: "/opt/informix"
-          install_tmp_dir: "/opt/informix_install"
-
-      - name: configure_informix_on_sauropod
-        function: configure_informix_on_sauropod
-        module: tasks.deploy_informix
-        description: "Create .bash_profile env vars and onconfig for Informix on sauropod"
-        args:
-          install_dir: "/opt/informix"
-          informix_server: "ifxserver"
-          rootdbs_size_kb: 200000
-
-      - name: prepare_informix_storage_on_sauropod
-        function: prepare_informix_storage_on_sauropod
-        module: tasks.deploy_informix
-        description: "Pre-allocate rootdbs chunk, create tmp dir, configure sqlhosts and /etc/services on sauropod"
-        args:
-          install_dir: "/opt/informix"
-          informix_server: "ifxserver"
-          informix_port: 9088
-          rootdbs_size_kb: 200000
-
-      - name: initialize_informix_on_sauropod
-        function: initialize_informix_on_sauropod
-        module: tasks.deploy_informix
-        description: "Run oninit -i and wait for Informix to come On-Line on sauropod"
-        args:
-          install_dir: "/opt/informix"
-          informix_server: "ifxserver"
-          timeout: 120
+      - name: configure_kernel_parameters
+        function: configure_kernel_parameters
+        module: tasks.deploy_informix_new
+        description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters, add informix user limits on sauropod"
 
