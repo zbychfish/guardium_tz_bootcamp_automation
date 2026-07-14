@@ -63,6 +63,21 @@ groups:
         module: tasks.deploy_cassandra
         description: "Deploy Apache Cassandra 4.1 on sauropod"
 
+      - name: deploy_informix
+        function: deploy_informix
+        module: tasks.deploy_informix
+        description: "Full Informix deployment: kernel, user, binaries, config, storage, network, init, firewall, service"
+        args:
+          installer_filename: "ibm.server.15.0.1.0.Linux.64.x86_64.tar"
+          installer_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix"
+          install_tmp_dir: "/opt/informix_tmp"
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          informix_host: "raptor.demo.guardium"
+          informix_port: 9088
+          informix_admin_port: 9089
+          rootdbs_size_kb: 200000
+
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
@@ -597,87 +612,3 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
-  informix_lab:
-    name: "Informix Lab"
-    description: "Configure sauropod for IBM Informix monitoring"
-    auto_execute: false
-    dependencies: [setup_appliances]
-    stages:
-      - name: configure_kernel_parameters
-        function: configure_kernel_parameters
-        module: tasks.deploy_informix_new
-        description: "Write /etc/sysctl.d/99-informix.conf, apply kernel parameters, add informix user limits on sauropod"
-
-      - name: create_informix_user
-        function: create_informix_user
-        module: tasks.deploy_informix_new
-        description: "Create informix group (gid 200), user (uid 200) and set password on sauropod"
-
-      - name: install_informix_binaries
-        function: install_informix_binaries
-        module: tasks.deploy_informix_new
-        description: "Upload installer, extract, write response.properties and run silent installer on sauropod"
-        args:
-          installer_filename: "ibm.server.15.0.1.0.Linux.64.x86_64.tar"
-          installer_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix"
-          install_tmp_dir: "/opt/informix_tmp"
-          install_dir: "/opt/ibm/informix"
-
-      - name: configure_informix_bash_profile
-        function: configure_informix_bash_profile
-        module: tasks.deploy_informix_new
-        description: "Configure /home/informix/.bash_profile with Informix environment variables"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-
-      - name: configure_informix_onconfig
-        function: configure_informix_onconfig
-        module: tasks.deploy_informix_new
-        description: "Copy onconfig.std and apply sed substitutions for ifxserver instance"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-          rootdbs_size_kb: 200000
-
-      - name: prepare_informix_storage
-        function: prepare_informix_storage
-        module: tasks.deploy_informix_new
-        description: "Pre-allocate rootdbs chunk and create tmp directory for Informix"
-        args:
-          install_dir: "/opt/ibm/informix"
-          rootdbs_size_kb: 200000
-
-      - name: open_informix_firewall_ports
-        function: open_informix_firewall_ports
-        module: tasks.deploy_informix_new
-        description: "Open Informix TCP ports 9088 and 9089 on sauropod firewall"
-        args:
-          informix_port: 9088
-          informix_admin_port: 9089
-
-      - name: configure_informix_network
-        function: configure_informix_network
-        module: tasks.deploy_informix_new
-        description: "Write sqlhosts file and add /etc/services entry for Informix"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-          informix_host: "raptor.demo.guardium"
-          informix_port: 9088
-
-      - name: initialize_informix
-        function: initialize_informix
-        module: tasks.deploy_informix_new
-        description: "Run oninit -i as informix user to initialize the Informix instance"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
-          
-      - name: create_informix_service
-        function: create_informix_service
-        module: tasks.deploy_informix_new
-        description: "Create /etc/systemd/system/informix-ifxserver.service and reload daemon"
-        args:
-          install_dir: "/opt/ibm/informix"
-          informix_server: "ifxserver"
