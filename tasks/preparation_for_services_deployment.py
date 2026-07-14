@@ -190,6 +190,24 @@ EOF""",
         logger.error("Failed to configure guardium_notes_dbtraffic")
         return False
 
+    driver_lib = f"{dbtraffic_dir}/venv/lib/python3.9/site-packages/onedb-odbc-driver/lib"
+    ldconf_content = (
+        f"{driver_lib}\n"
+        f"{driver_lib}/cli\n"
+        f"{driver_lib}/esql\n"
+        f"{driver_lib}/client/csm\n"
+    )
+    ldconf_commands = [
+        f"cat > /etc/ld.so.conf.d/onedb-ifx.conf << 'EOF'\n{ldconf_content}EOF",
+        "ldconfig",
+    ]
+    if not execute_commands(ldconf_commands, logger, verbose):
+        logger.error("Failed to configure onedb ODBC driver library paths")
+        return False
+
+    if verbose:
+        logger.info("✓ onedb ODBC driver library paths configured")
+
     if verbose:
         logger.info("✓ Required packages installed on raptor")
 
