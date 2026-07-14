@@ -235,6 +235,16 @@ def configure_informix_onconfig(
         logger.error(f"Failed to configure onconfig: {result['stderr']}")
         return False
 
+    logger.info(f"➜ Adding NETTYPE soctcp entry after ipcshm line...")
+    result = execute_local_command(
+        f"sed -i '/^NETTYPE[[:space:]]\\+ipcshm/a NETTYPE                    soctcp,1,50,NET' {onconfig_file}",
+        logger, verbose
+    )
+    if result['rc'] != 0:
+        logger.error(f"Failed to add NETTYPE soctcp: {result['stderr']}")
+        return False
+    logger.info("✓ NETTYPE soctcp,1,50,NET added")
+
     result = execute_local_command(f"chown informix:informix {onconfig_file}", logger, verbose)
     if result['rc'] != 0:
         logger.warning(f"Failed to chown onconfig: {result['stderr']}")
