@@ -295,6 +295,57 @@ def prepare_informix_storage(
     return True
 
 
+def configure_informix_network(
+    config, logger, verbose: bool = True,
+    install_dir: str = "/opt/ibm/informix",
+    informix_server: str = "ifxserver",
+    informix_host: str = "raptor.demo.guardium",
+    informix_port: int = 9088,
+    **kwargs
+) -> bool:
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("CONFIGURE INFORMIX NETWORK (sqlhosts + /etc/services)")
+        logger.info("=" * 80)
+
+    sqlhosts = f"{install_dir}/etc/sqlhosts"
+    sqlhosts_entry = f"{informix_server}  onsoctcp  {informix_host}  {informix_port}"
+    services_entry = f"{informix_server}  {informix_port}/tcp"
+
+    logger.info(f"➜ Writing {sqlhosts}...")
+    result = execute_local_command(
+        f"echo '{sqlhosts_entry}' > {sqlhosts}",
+        logger, verbose
+    )
+    if result['rc'] != 0:
+        logger.error(f"Failed to write sqlhosts: {result['stderr']}")
+        return False
+    logger.info(f"✓ sqlhosts written: {sqlhosts_entry}")
+
+    logger.info("➜ Checking /etc/services for existing entry...")
+    check = execute_local_command(
+        f"grep -c '^{informix_server}' /etc/services || true",
+        logger, False
+    )
+    if check['stdout'].strip() not in ('', '0'):
+        logger.info(f"⊘ /etc/services entry for '{informix_server}' already present — skipping")
+    else:
+        result = execute_local_command(
+            f"echo '{services_entry}' >> /etc/services",
+            logger, verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"Failed to add /etc/services entry: {result['stderr']}")
+            return False
+        logger.info(f"✓ /etc/services entry added: {services_entry}")
+
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX NETWORK CONFIGURED")
+        logger.info("=" * 80)
+    return True
+
+
 def install_informix_binaries(
     config, logger, verbose: bool = True,
     installer_filename: str = "ibm.server.15.0.1.0.Linux.64.x86_64.tar",

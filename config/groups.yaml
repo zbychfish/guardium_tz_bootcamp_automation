@@ -621,6 +621,16 @@ groups:
           install_dir: "/opt/ibm/informix"
           informix_server: "ifxserver"
 
+      - name: configure_informix_network
+        function: configure_informix_network
+        module: tasks.deploy_informix_new
+        description: "Write sqlhosts file and add /etc/services entry for Informix"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          informix_host: "raptor.demo.guardium"
+          informix_port: 9088
+
       - name: install_informix_binaries
         function: install_informix_binaries
         module: tasks.deploy_informix_new
