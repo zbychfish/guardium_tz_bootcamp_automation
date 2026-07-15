@@ -323,6 +323,20 @@ def deploy_informix(
             return False
         logger.info(f"✓ {desc}")
 
+    # ── 12. System users ─────────────────────────────────────────────────────
+    for user in ['appuser1', 'appuser2', 'adminuser1']:
+        for cmd, desc in [
+            (f"id {user} > /dev/null 2>&1 && echo EXISTS || useradd -M -s /sbin/nologin {user}", f"create user {user}"),
+            (f"echo '{user}:{password}' | chpasswd", f"set password for {user}"),
+        ]:
+            result = _run(cmd, logger, verbose, desc)
+            if result is False:
+                return False
+            if desc.startswith('create') and 'EXISTS' in result['stdout']:
+                logger.info(f"⊘ User '{user}' already exists — skipping")
+            else:
+                logger.info(f"✓ {desc}")
+
     if verbose:
         logger.info("=" * 80)
         logger.info("✓ INFORMIX DEPLOYED")
