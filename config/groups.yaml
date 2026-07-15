@@ -77,6 +77,7 @@ groups:
           informix_port: 9088
           informix_admin_port: 9089
           rootdbs_size_kb: 200000
+          jdbc_jars: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/jdbc-15.0.1.3.jar:/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/bson-4.11.1.jar"
 
   setup_appliances:
     name: "Setup Appliances"

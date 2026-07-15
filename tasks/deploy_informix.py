@@ -77,6 +77,7 @@ def deploy_informix(
     informix_port: int = INFORMIX_PORT,
     informix_admin_port: int = 9089,
     rootdbs_size_kb: int = ROOTDBS_SIZE_KB,
+    jdbc_jars: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/jdbc-15.0.1.3.jar:/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/bson-4.11.1.jar",
     **kwargs
 ) -> bool:
     if verbose:
@@ -336,6 +337,39 @@ def deploy_informix(
                 logger.info(f"⊘ User '{user}' already exists — skipping")
             else:
                 logger.info(f"✓ {desc}")
+
+    # ── 13. dbtraffic config ─────────────────────────────────────────────────
+    dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
+    dbtraffic_config = f"{dbtraffic_dir}/config/informix_raptor.yaml"
+    dbtraffic_content = f"""database:
+  type: informix
+  host: {informix_host}
+  port: {informix_port}
+  server: {informix_server}
+  database: sysmaster
+  user: informix
+  password: {password}
+
+workload:
+  duration_seconds: 3600
+  think_time_ms: 250
+
+scenario:
+  name: micro_payments
+  options:
+    locale: en_US
+    seed_customers: 100
+    app_users:
+      - appuser1
+      - appuser2
+    admin_users:
+      - adminuser1
+    default_password: {password}
+    jdbc_jar: {jdbc_jars}
+"""
+    if not _run(f"cat > {dbtraffic_config} << 'EOF'\n{dbtraffic_content}EOF", logger, verbose, "write dbtraffic informix config"):
+        return False
+    logger.info(f"✓ dbtraffic config written: {dbtraffic_config}")
 
     if verbose:
         logger.info("=" * 80)
