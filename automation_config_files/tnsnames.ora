@@ -1,6 +1,6 @@
 ORCLPDB1 =
   (DESCRIPTION =
-    (ADDRESS = (PROTOCOL = TCP)(HOST = sauropod.guardium.demo)(PORT = 1521))
+    (ADDRESS = (PROTOCOL = TCP)(HOST = sauropod.demo.guardium)(PORT = 1521))
     (CONNECT_DATA =
       (SERVICE_NAME = ORCLPDB1)
     )
@@ -8,7 +8,7 @@ ORCLPDB1 =
 
 ORCLPDB1_SSL =
   (DESCRIPTION =
-    (ADDRESS = (PROTOCOL = TCPS)(HOST = sauropod.guardium.demo)(PORT = 2484))
+    (ADDRESS = (PROTOCOL = TCPS)(HOST = sauropod.demo.guardium)(PORT = 2484))
     (CONNECT_DATA =
       (SERVICE_NAME = ORCLPDB1)
     )
