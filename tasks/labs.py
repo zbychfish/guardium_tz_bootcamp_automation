@@ -2702,18 +2702,31 @@ def register_kafka_cluster(
     logger.info("➜ Verifying cluster exists via GET /restAPI/kafka_cluster (max 6 attempts, 60s interval)...")
     for attempt in range(1, 7):
         clusters = api.get_kafka_clusters()
-        if debug:
-            logger.info(f"GET kafka_cluster response: {clusters}")
-        cluster_names = []
+        logger.info(f"GET kafka_cluster response: {clusters}")
+
+        # flatten whatever structure Guardium returns into a list of dicts
         if isinstance(clusters, list):
-            cluster_names = [c.get('clusterName', '') for c in clusters]
+            items = clusters
         elif isinstance(clusters, dict):
-            cluster_names = [c.get('clusterName', '') for c in clusters.get('data', clusters.get('clusters', []))]
-        if cluster_name in cluster_names:
+            items = next(
+                (v for k, v in clusters.items() if isinstance(v, list)),
+                []
+            )
+        else:
+            items = []
+
+        found = any(
+            c.get('name') == cluster_name or c.get('clusterName') == cluster_name
+            for c in items
+            if isinstance(c, dict)
+        )
+        if found:
             logger.info(f"✓ Kafka cluster '{cluster_name}' confirmed (attempt {attempt}/6)")
             return True
-        logger.warning(f"⚠ Cluster not found yet (attempt {attempt}/6), waiting 60s...")
-        time.sleep(60)
+
+        if attempt < 6:
+            logger.warning(f"⚠ Cluster not found yet (attempt {attempt}/6), waiting 60s...")
+            time.sleep(60)
 
     logger.error(f"✗ Kafka cluster '{cluster_name}' not found after 6 attempts")
     return False
