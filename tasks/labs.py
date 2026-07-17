@@ -1108,105 +1108,87 @@ def setup_raptor_to_deploy_etap(
         logger.error("ETAP setup requires podman-docker and skopeo packages")
         return False
     
-    # Step 3: Determine the latest ETAP version
+    # Step 3: Determine the latest ETAP version from ICR
     logger.info("\n➜ Determining the latest ETAP version from ICR...")
-    
+
+    etap_version = None
+
     try:
         skopeo_command = "skopeo list-tags docker://icr.io/guardium/guardium_external_s-tap"
         logger.info(f"Executing: {skopeo_command}")
-        
-        result = run_local_command(
-            command=skopeo_command,
-            shell=True,
-            timeout=120,  # 2 minutes timeout
-            check=True
-        )
-        
-        if not result.stdout:
-            logger.error("✗ No output from skopeo command")
-            return False
-        
-        # Parse JSON output
-        etap_versions = json.loads(result.stdout)
-        
-        if debug:
-            logger.debug(f"Available tags: {etap_versions.get('Tags', [])}")
-        
-        # Extract version numbers and find latest per minor version
-        latest = {}
-        tags = etap_versions.get("Tags", [])
-        
-        logger.info(f"Found {len(tags)} tags, analyzing versions...")
-        
-        for tag in tags:
-            # Match version pattern: v12.2.2.0 or similar
-            match = re.match(r"^v(\d+\.\d+\.\d+)", tag)
-            if not match:
-                continue
-            
-            version_str = match.group(1)
-            major, minor, patch = version_str.split(".")
-            key = f"{major}.{minor}"
-            
-            try:
-                v = Version(version_str)
-                if key not in latest or v > latest[key]:
-                    latest[key] = v
-                    if debug:
-                        logger.debug(f"Updated latest for {key}: {v}")
-            except Exception as e:
-                if debug:
-                    logger.debug(f"Failed to parse version {version_str}: {e}")
-                continue
-        
-        if not latest:
-            logger.error("✗ No valid ETAP versions found")
-            return False
-        
-        # Get Guardium minor version from config
-        guardium_minor_version = config.get_custom_variable('guardium_minor_version')
-        
-        if not guardium_minor_version:
-            # Try to auto-detect from available versions (use latest)
-            guardium_minor_version = max(latest.keys())
-            logger.info(f"No guardium_minor_version in config, using latest: {guardium_minor_version}")
-        
-        if guardium_minor_version not in latest:
-            logger.error(f"✗ No ETAP version found for Guardium {guardium_minor_version}")
-            logger.error(f"Available minor versions: {', '.join(latest.keys())}")
-            return False
-        
-        etap_version = str(latest[guardium_minor_version])
-        
-        logger.info(f"✓ Latest ETAP version for Guardium {guardium_minor_version}: {etap_version}")
-        
-        # Save to custom_variables in config
-        # Note: This updates the in-memory config, not the JSON file
-        config.set_custom_variable('guardium_etap_version', etap_version)
-        os.makedirs("/opt/ETAP/ca", exist_ok=True)
-        with open("/opt/ETAP/ca/guardium_etap_version.txt", "w", encoding="utf-8") as f:
-            f.write(etap_version)
-        
-        logger.info(f"✓ ETAP version saved to config: {etap_version}")
-        
-        logger.info("\n" + "=" * 80)
-        logger.info("✓ Raptor setup for ETAP deployment completed successfully")
-        logger.info(f"ETAP Version: {etap_version}")
-        logger.info("=" * 80)
-        
-        return True
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"✗ Failed to parse skopeo output: {e}")
-        if debug:
-            logger.debug(f"Output was: {result.stdout}")
-        return False
+
+        result = run_local_command(command=skopeo_command, shell=True, timeout=120, check=True)
+
+        if result.stdout:
+            etap_versions = json.loads(result.stdout)
+            if debug:
+                logger.debug(f"Available tags: {etap_versions.get('Tags', [])}")
+
+            latest = {}
+            for tag in etap_versions.get("Tags", []):
+                match = re.match(r"^v(\d+\.\d+\.\d+)", tag)
+                if not match:
+                    continue
+                version_str = match.group(1)
+                major, minor, _ = version_str.split(".")
+                key = f"{major}.{minor}"
+                try:
+                    v = Version(version_str)
+                    if key not in latest or v > latest[key]:
+                        latest[key] = v
+                except Exception:
+                    continue
+
+            if latest:
+                guardium_minor_version = config.get_custom_variable('guardium_minor_version') or max(latest.keys())
+                if guardium_minor_version in latest:
+                    etap_version = str(latest[guardium_minor_version])
+                    logger.info(f"✓ Latest ETAP version for Guardium {guardium_minor_version}: {etap_version}")
+
     except Exception as e:
-        logger.error(f"✗ Failed to determine ETAP version: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
+        logger.warning(f"⚠ skopeo failed ({e}) — falling back to local image")
+
+    # ── TEMPORARY WORKAROUND: ICR registry unavailable ───────────────────────
+    # When skopeo cannot reach icr.io, load the ETAP image from a local tar
+    # and extract the version from the archive filename.
+    # Remove this block once ICR access is restored.
+    if etap_version is None:
+        local_tar = "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar"
+        logger.warning("⚠ ICR registry unreachable — loading local ETAP image (TEMPORARY WORKAROUND)")
+        logger.info(f"➜ Loading image from {local_tar}...")
+
+        tar_match = re.search(r"guardium_external_s-tap_v(\d+\.\d+\.\d+)\.tar", local_tar)
+        if not tar_match:
+            logger.error(f"✗ Cannot extract version from tar filename: {local_tar}")
+            return False
+        etap_version = tar_match.group(1)
+
+        try:
+            load_result = run_local_command(
+                command=f"podman load -i {local_tar}",
+                shell=True,
+                timeout=300,
+                check=True
+            )
+            logger.info(f"✓ Local image loaded (version: {etap_version})")
+            if debug and load_result.stdout:
+                logger.debug(f"podman load output: {load_result.stdout}")
+        except Exception as e:
+            logger.error(f"✗ Failed to load local ETAP image: {e}")
+            return False
+    # ── END TEMPORARY WORKAROUND ─────────────────────────────────────────────
+
+    os.makedirs("/opt/ETAP/ca", exist_ok=True)
+    with open("/opt/ETAP/ca/guardium_etap_version.txt", "w", encoding="utf-8") as f:
+        f.write(etap_version)
+    config.set_custom_variable('guardium_etap_version', etap_version)
+
+    logger.info(f"✓ ETAP version saved: {etap_version}")
+    logger.info("\n" + "=" * 80)
+    logger.info("✓ Raptor setup for ETAP deployment completed successfully")
+    logger.info(f"ETAP Version: {etap_version}")
+    logger.info("=" * 80)
+    return True
 
 
 def setup_etap_certificates_mysql(
