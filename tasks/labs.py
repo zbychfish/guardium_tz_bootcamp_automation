@@ -482,7 +482,12 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
             api_target_host=api_target_host,
             **ie_config
         )
-    
+
+    if verbose:
+        logger.info(f"Setting STAP_DISCOVERY_ENABLED=0 on raptor ({stap_host})")
+    api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_ENABLED", param_value="0")
+    api.gim_schedule_install(client_ip=stap_host, date="now")
+
     logger.info("✓ MySQL IE corrected")
     return True
 
