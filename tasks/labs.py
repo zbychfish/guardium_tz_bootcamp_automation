@@ -2688,6 +2688,8 @@ def register_kafka_cluster(
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
+    import time
+
     logger.info(f"Cluster: {cluster_name}, members: {member_list}, cruise_control: {apply_cruise_control}")
     result = api.create_kafka_cluster(
         cluster_name=cluster_name,
@@ -2696,8 +2698,25 @@ def register_kafka_cluster(
     )
     if debug:
         logger.info(f"API response: {result}")
-    logger.info("✓ Kafka cluster registered")
-    return True
+
+    logger.info("➜ Verifying cluster exists via GET /restAPI/kafka_cluster (max 6 attempts, 60s interval)...")
+    for attempt in range(1, 7):
+        clusters = api.get_kafka_clusters()
+        if debug:
+            logger.info(f"GET kafka_cluster response: {clusters}")
+        cluster_names = []
+        if isinstance(clusters, list):
+            cluster_names = [c.get('clusterName', '') for c in clusters]
+        elif isinstance(clusters, dict):
+            cluster_names = [c.get('clusterName', '') for c in clusters.get('data', clusters.get('clusters', []))]
+        if cluster_name in cluster_names:
+            logger.info(f"✓ Kafka cluster '{cluster_name}' confirmed (attempt {attempt}/6)")
+            return True
+        logger.warning(f"⚠ Cluster not found yet (attempt {attempt}/6), waiting 60s...")
+        time.sleep(60)
+
+    logger.error(f"✗ Kafka cluster '{cluster_name}' not found after 6 attempts")
+    return False
 
 
 def start_kafka_nodes(

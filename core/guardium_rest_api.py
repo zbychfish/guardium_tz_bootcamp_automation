@@ -711,6 +711,18 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def get_kafka_clusters(
+        self,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/kafka_cluster'
+        params = {}
+        if api_target_host:
+            params['api_target_host'] = api_target_host
+        response = requests.get(url, params=params, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
     def create_kafka_cluster(
         self,
         cluster_name: str,
