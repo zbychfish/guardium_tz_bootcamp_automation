@@ -1548,3 +1548,48 @@ def copy_single_file_to_appliance_task(
         cloudsupport_password=cloudsupport_password,
         debug=debug
     )
+
+
+def prepare_log_guard_dir_all(
+    config,
+    logger,
+    verbose: bool = True,
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+    from core.appliance_operations import prepare_log_guard_dir, execute_on_appliances_async
+
+    logger.info("=" * 80)
+    logger.info("PREPARE /var/log/guard ON ALL APPLIANCES")
+    logger.info("=" * 80)
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    all_appliances = appliance_loader.get_all_appliances()
+    if not all_appliances:
+        logger.error("No appliances found in machines_info.json")
+        return False
+
+    appliance_names = list(all_appliances.keys())
+    logger.info(f"Found {len(appliance_names)} appliances: {', '.join(appliance_names)}")
+
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=prepare_log_guard_dir,
+        operation_name="prepare_log_guard_dir",
+        logger=logger,
+        config=config,
+        cloudsupport_password=cloudsupport_password,
+        debug=debug
+    )
+
+    success_count = sum(1 for s in results.values() if s)
+    failed_count = len(results) - success_count
+    logger.info(f"✓ Successful: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
+        for name, success in results.items():
+            if not success:
+                logger.error(f"  - {name}: {errors.get(name, 'Unknown error')}")
+    return failed_count == 0
+
+# Made with Bob

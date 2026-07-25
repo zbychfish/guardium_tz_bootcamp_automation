@@ -4466,3 +4466,70 @@ def activate_ltr(
         import traceback
         logger.error(traceback.format_exc())
         return False
+
+
+def prepare_log_guard_dir(
+    config,
+    logger,
+    appliance_name: str,
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+    import paramiko
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(appliance_name)
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found")
+        return False
+
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP for appliance '{appliance_name}'")
+        return False
+
+    if not cloudsupport_password:
+        cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
+    if not cloudsupport_password:
+        logger.error("cloudsupport_pwd not found in custom_variables")
+        return False
+
+    cmds = [
+        "sudo mkdir -p /var/log/guard",
+        "sudo chmod 2775 /var/log/guard",
+        "sudo chown root:guardium /var/log/guard",
+        "sudo touch /var/log/guard/jobqueue.log",
+        "sudo chmod 644 /var/log/guard/jobqueue.log",
+        "sudo chown tomcat:guardium /var/log/guard/jobqueue.log",
+    ]
+
+    ssh_client = paramiko.SSHClient()
+    ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        ssh_client.connect(
+            hostname=host,
+            username='cloudsupport',
+            password=cloudsupport_password,
+            look_for_keys=False,
+            allow_agent=False,
+            timeout=30
+        )
+        logger.info(f"✓ Connected to {appliance_name} ({host})")
+        for cmd in cmds:
+            stdin, stdout, stderr = ssh_client.exec_command(cmd)
+            rc = stdout.channel.recv_exit_status()
+            if rc != 0:
+                err = stderr.read().decode().strip()
+                logger.error(f"✗ [{appliance_name}] '{cmd}' failed (rc={rc}): {err}")
+                return False
+            if debug:
+                logger.info(f"  [{appliance_name}] {cmd} → ok")
+        logger.info(f"✓ /var/log/guard prepared on {appliance_name}")
+        return True
+    except Exception as e:
+        logger.error(f"✗ SSH failed on {appliance_name}: {e}")
+        return False
+    finally:
+        ssh_client.close()
+
+# Made with Bob
