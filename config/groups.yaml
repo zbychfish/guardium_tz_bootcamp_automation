@@ -420,6 +420,16 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+      - name: fetch_cm_certificate_on_sauropod
+        function: fetch_cm_certificate_on_sauropod
+        module: tasks.labs
+        description: "Fetch CM TLS certificate from cm.demo.guardium:8443 and save to /root/gn-trainings/vascanner/certs/vascanner.pem on sauropod"
+        args:
+          cm_host: "cm.demo.guardium"
+          cm_port: 8443
+          cert_path: "/root/gn-trainings/vascanner/certs/vascanner.pem"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

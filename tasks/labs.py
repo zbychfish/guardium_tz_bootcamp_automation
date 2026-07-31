@@ -3076,3 +3076,70 @@ def import_va_postgres_definitions(
         logger.info("✓ VA PostgreSQL definitions imported successfully")
 
     return success
+
+
+def fetch_cm_certificate_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_host: str = "cm.demo.guardium",
+    cm_port: int = 8443,
+    cert_path: str = "/root/gn-trainings/vascanner/certs/vascanner.pem",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.ssh_client import SSHClient
+
+    logger.info("=" * 80)
+    logger.info("FETCH CM CERTIFICATE ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port   = ssh_config.get('port', 2223)
+    ssh_user   = ssh_config.get('username', 'root')
+    password   = config.get_custom_variable('pwd')
+    if not password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    cert_dir = cert_path.rsplit('/', 1)[0]
+
+    cmds = [
+        (f"mkdir -p {cert_dir}",                                                                              "create cert dir"),
+        (f"openssl s_client -connect {cm_host}:{cm_port} -showcerts </dev/null 2>/dev/null "
+         f"| openssl x509 -outform PEM > {cert_path}",                                                       f"fetch certificate from {cm_host}:{cm_port}"),
+        (f"test -s {cert_path}",                                                                              "verify cert file non-empty"),
+    ]
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_user, password=password, port=ssh_port, timeout=60)
+    try:
+        logger.info(f"➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        for cmd, desc in cmds:
+            logger.info(f"➜ {desc}...")
+            result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                return False
+            logger.info(f"✓ {desc}")
+
+        logger.info(f"✓ Certificate saved to sauropod:{cert_path}")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
