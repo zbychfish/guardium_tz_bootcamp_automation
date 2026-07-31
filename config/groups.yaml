@@ -430,6 +430,31 @@ groups:
           cert_path: "/root/gn-trainings/vascanner/certs/vascanner.pem"
           debug: false
 
+      - name: create_va_api_key
+        function: create_va_api_key
+        module: tasks.labs
+        description: "Create VA API key 'vascanner' on CM via grdapi and save to .va_api_key"
+        args:
+          cm_appliance: "cm"
+          key_name: "vascanner"
+          key_file: ".va_api_key"
+          debug: false
+
+      - name: deploy_vascanner_on_sauropod
+        function: deploy_vascanner_on_sauropod
+        module: tasks.labs
+        description: "Login to cp.icr.io, pull va-scanner image, write config, run container on sauropod"
+        args:
+          image: "cp.icr.io/cp/ibm-guardium-data-security-center/guardium/vascanner-12.2.0/va-scanner:vascanner-v12.2.0"
+          container_name: "va-scanner-sauropod"
+          config_file: "/opt/vascanner/config"
+          certs_dir: "/root/gn-trainings/vascanner/certs"
+          va_agent_name: "VA_SCANNER_ON_SAUROPOD"
+          cm_host: "cm.demo.guardium"
+          cm_port: 8443
+          key_file: ".va_api_key"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

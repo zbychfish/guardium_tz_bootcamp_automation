@@ -3143,3 +3143,225 @@ def fetch_cm_certificate_on_sauropod(
         return False
     finally:
         ssh.disconnect()
+
+
+def create_va_api_key(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    key_name: str = "vascanner",
+    key_file: str = ".va_api_key",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_client import ApplianceClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+    from pathlib import Path
+
+    logger.info("=" * 80)
+    logger.info("CREATE VA API KEY")
+    logger.info("=" * 80)
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(cm_appliance)
+    if not appliance_config:
+        logger.error(f"Appliance '{cm_appliance}' not found")
+        return False
+
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP for appliance '{cm_appliance}'")
+        return False
+
+    appliance_type = appliance_config.get('type')
+    prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else r">"
+
+    cli_pwd = config.get_custom_variable('cli_pwd')
+    if not cli_pwd:
+        logger.error("cli_pwd not found in custom_variables")
+        return False
+
+    client = ApplianceClient(
+        host=host,
+        user="cli",
+        password=cli_pwd,
+        prompt_regex=prompt_regex,
+        initial_pattern=None,
+        timeout=60,
+        strip_ansi=True,
+        debug=debug
+    )
+    if not client.connect():
+        logger.error(f"Failed to connect to {cm_appliance}")
+        return False
+
+    try:
+        cmd = f"grdapi create_api_key name={key_name}"
+        logger.info(f"➜ {cmd}")
+        output = client.execute_command(cmd, timeout=30)
+        if verbose:
+            logger.info(f"Response:\n{output}")
+
+        # parse "Encoded API key: <value>"
+        api_key = None
+        for line in output.splitlines():
+            if "Encoded API key:" in line:
+                api_key = line.split("Encoded API key:", 1)[1].strip()
+                break
+
+        if not api_key:
+            logger.error("Could not parse 'Encoded API key' from output")
+            logger.error(f"Full output: {output}")
+            return False
+
+        logger.info(f"✓ API key generated: {api_key[:10]}...")
+
+        key_path = config.config_file.parent.parent / key_file
+        key_path.write_text(api_key, encoding='utf-8')
+        logger.info(f"✓ API key saved to: {key_path}")
+
+        return True
+
+    finally:
+        client.disconnect()
+
+
+def deploy_vascanner_on_sauropod(
+    config,
+    logger,
+    verbose: bool = True,
+    image: str = "cp.icr.io/cp/ibm-guardium-data-security-center/guardium/vascanner-12.2.0/va-scanner:vascanner-v12.2.0",
+    container_name: str = "va-scanner-sauropod",
+    config_file: str = "/opt/vascanner/config",
+    certs_dir: str = "/root/gn-trainings/vascanner/certs",
+    va_agent_name: str = "VA_SCANNER_ON_SAUROPOD",
+    cm_host: str = "cm.demo.guardium",
+    cm_port: int = 8443,
+    key_file: str = ".va_api_key",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.ssh_client import SSHClient
+    from pathlib import Path
+
+    logger.info("=" * 80)
+    logger.info("DEPLOY VA SCANNER ON SAUROPOD")
+    logger.info("=" * 80)
+
+    # ── resolve sauropod connection ──────────────────────────────────────────
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port   = ssh_config.get('port', 2223)
+    ssh_user   = ssh_config.get('username', 'root')
+    password   = config.get_custom_variable('pwd')
+    if not password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    # ── resolve IBM registry key ─────────────────────────────────────────────
+    ibm_key = config.get_custom_variable('ibm_container_api_key')
+    if not ibm_key:
+        logger.error("ibm_container_api_key not found in custom_variables")
+        return False
+
+    # ── resolve encoded API key from .va_api_key ─────────────────────────────
+    key_path = config.config_file.parent.parent / key_file
+    if not key_path.exists():
+        logger.error(f"{key_path} not found — run create_va_api_key stage first")
+        return False
+    api_key = key_path.read_text(encoding='utf-8').strip()
+    if not api_key:
+        logger.error(f"{key_path} is empty")
+        return False
+
+    config_content = (
+        f"GDP_HOST={cm_host}\n"
+        f"GDP_HOST_PORT={cm_port}\n"
+        f"CLIENT_API_KEY={api_key}\n"
+        f"VA_AGENT_NAME={va_agent_name}\n"
+    )
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_user, password=password, port=ssh_port, timeout=120)
+    try:
+        logger.info(f"➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        # ── 1. podman login ──────────────────────────────────────────────────
+        logger.info("➜ Logging in to cp.icr.io...")
+        result = ssh.execute_command(
+            f"podman login cp.icr.io -u cp -p '{ibm_key}'",
+            timeout=60, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"✗ podman login failed: {result['stderr']}")
+            return False
+        logger.info("✓ Logged in to cp.icr.io")
+
+        # ── 2. podman pull ───────────────────────────────────────────────────
+        logger.info(f"➜ Pulling image {image}...")
+        result = ssh.execute_command(
+            f"podman pull {image}",
+            timeout=600, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"✗ podman pull failed: {result['stderr']}")
+            return False
+        logger.info("✓ Image pulled")
+
+        # ── 3. get image ID ──────────────────────────────────────────────────
+        logger.info("➜ Resolving image ID...")
+        result = ssh.execute_command(
+            f"podman images --format '{{{{.ID}}}}' {image}",
+            timeout=30, print_output=verbose
+        )
+        if result['rc'] != 0 or not result['stdout'].strip():
+            logger.error(f"✗ Failed to get image ID: {result['stderr']}")
+            return False
+        image_id = result['stdout'].strip().splitlines()[0].strip()
+        logger.info(f"✓ Image ID: {image_id}")
+
+        # ── 4. write config file ─────────────────────────────────────────────
+        config_dir = config_file.rsplit('/', 1)[0]
+        logger.info(f"➜ Writing config to {config_file}...")
+        result = ssh.execute_command(
+            f"mkdir -p {config_dir} && cat > {config_file} << 'EOF'\n{config_content}EOF",
+            timeout=30, print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"✗ Failed to write config file: {result['stderr']}")
+            return False
+        logger.info("✓ Config file written")
+
+        # ── 5. podman run ────────────────────────────────────────────────────
+        logger.info(f"➜ Starting container {container_name}...")
+        run_cmd = (
+            f"podman run --network host -d --replace "
+            f"--env-file {config_file} "
+            f"--name {container_name} "
+            f"-v {certs_dir}:/var/vascanner/certs "
+            f"{image_id}"
+        )
+        result = ssh.execute_command(run_cmd, timeout=60, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ podman run failed: {result['stderr']}")
+            return False
+        logger.info(f"✓ Container {container_name} started")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
