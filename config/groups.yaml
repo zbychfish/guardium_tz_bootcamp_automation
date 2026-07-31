@@ -455,6 +455,16 @@ groups:
           key_file: ".va_api_key"
           debug: false
 
+      - name: import_dps
+        function: import_dps
+        module: tasks.labs
+        description: "Upload and import DPS file via Guardium Web UI (Playwright): Harden → Vulnerability Assessment → Customer Uploads"
+        args:
+          cm_appliance: "cm"
+          dps_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc"
+          demo_user: "demo"
+          headless: true
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

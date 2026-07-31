@@ -3365,3 +3365,70 @@ def deploy_vascanner_on_sauropod(
         return False
     finally:
         ssh.disconnect()
+
+
+def import_dps(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    dps_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc",
+    demo_user: str = "demo",
+    headless: bool = True,
+    **kwargs
+) -> bool:
+    import subprocess
+    from core.web_ui import guardium_customer_upload_import
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("IMPORT DPS")
+    logger.info("=" * 80)
+
+    import os
+    if not os.path.exists(dps_file):
+        logger.error(f"DPS file not found: {dps_file}")
+        return False
+
+    password = config.get_custom_variable('pwd')
+    if not password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(cm_appliance)
+    if not appliance_config:
+        logger.error(f"Appliance '{cm_appliance}' not found")
+        return False
+
+    cm_ip = appliance_config.get('ip')
+    if not cm_ip:
+        logger.error(f"No IP for appliance '{cm_appliance}'")
+        return False
+
+    login_url = f"https://{cm_ip}:8443"
+
+    logger.info("➜ Installing playwright browsers...")
+    result = subprocess.run(["playwright", "install", "chromium"], capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.warning(f"playwright install returned {result.returncode}: {result.stderr.strip()}")
+
+    logger.info(f"➜ Starting DPS import from {dps_file}...")
+    logger.info(f"  login_url: {login_url}, user: {demo_user}")
+
+    try:
+        guardium_customer_upload_import(
+            login_url=login_url,
+            username=demo_user,
+            password=password,
+            file_to_upload=dps_file,
+            headless=headless,
+        )
+        logger.info("✓ DPS imported successfully")
+        return True
+    except FileNotFoundError as e:
+        logger.error(f"✗ {e}")
+        return False
+    except Exception as e:
+        logger.error(f"✗ DPS import failed: {e}")
+        return False

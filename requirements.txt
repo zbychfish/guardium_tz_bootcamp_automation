@@ -25,3 +25,6 @@ oracledb>=2.0.0
 # IBM Cloud Object Storage (S3-compatible)
 boto3>=1.34.0
 botocore>=1.34.0
+
+# Browser automation (for DPS import via Guardium Web UI)
+playwright>=1.40.0
