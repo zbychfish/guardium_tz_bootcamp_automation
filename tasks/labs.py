@@ -2913,3 +2913,131 @@ def import_oracle_dashboard(
         logger.info("✓ Oracle dashboard imported successfully")
 
     return success
+
+
+def enable_vulnerability_management(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    flag_name: str = "VULNERABILITY_MANAGEMENT",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.appliance_client import ApplianceClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("ENABLE VULNERABILITY MANAGEMENT FEATURE FLAG")
+    logger.info("=" * 80)
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(cm_appliance)
+    if not appliance_config:
+        logger.error(f"Appliance '{cm_appliance}' not found")
+        return False
+
+    host = appliance_config.get('ip')
+    if not host:
+        logger.error(f"No IP for appliance '{cm_appliance}'")
+        return False
+
+    appliance_type = appliance_config.get('type')
+    prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else r">"
+
+    cli_pwd = config.get_custom_variable('cli_pwd')
+    if not cli_pwd:
+        logger.error("cli_pwd not found in custom_variables")
+        return False
+
+    client = ApplianceClient(
+        host=host,
+        user="cli",
+        password=cli_pwd,
+        prompt_regex=prompt_regex,
+        initial_pattern=None,
+        timeout=60,
+        strip_ansi=True,
+        debug=debug
+    )
+    if not client.connect():
+        logger.error(f"Failed to connect to {cm_appliance}")
+        return False
+
+    try:
+        # ── 1. Enable feature flag ───────────────────────────────────────────
+        cmd = f"grdapi enable_disable_feature_flag flagName={flag_name} action=enable"
+        logger.info(f"➜ {cmd}")
+        result = client.execute_command(cmd, timeout=30)
+        if verbose:
+            logger.info(f"Response: {result}")
+
+        # ── 2. Verify flag is ENABLED ────────────────────────────────────────
+        logger.info("➜ Verifying flag state via grdapi list_feature_flags...")
+        flags_output = client.execute_command("grdapi list_feature_flags", timeout=30)
+        if verbose or debug:
+            logger.info(f"Feature flags:\n{flags_output}")
+
+        for line in flags_output.splitlines():
+            if flag_name in line:
+                if "State: ENABLED" in line:
+                    logger.info(f"✓ {flag_name} is ENABLED")
+                    return True
+                else:
+                    logger.error(f"✗ {flag_name} found but state is not ENABLED: {line.strip()}")
+                    return False
+
+        logger.error(f"✗ {flag_name} not found in list_feature_flags output")
+        return False
+
+    finally:
+        client.disconnect()
+
+
+def create_va_postgres_account(
+    config,
+    logger,
+    verbose: bool = True,
+    db_user: str = "sqlguard",
+    db_group: str = "gdmmonitor",
+    **kwargs
+) -> bool:
+    from core.utils import execute_local_command
+
+    logger.info("=" * 80)
+    logger.info("CREATE VA POSTGRES ACCOUNT")
+    logger.info("=" * 80)
+
+    password = config.get_custom_variable('pwd')
+    if not password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    def psql(sql, desc):
+        if '$$' in sql:
+            cmd = f"sudo -u postgres psql -d postgres -U postgres << 'EOSQL'\n{sql}\nEOSQL"
+        else:
+            escaped = sql.replace('"', '\\"')
+            cmd = f'sudo -u postgres psql -d postgres -U postgres -c "{escaped}"'
+        result = execute_local_command(cmd, logger, verbose)
+        if result['rc'] != 0:
+            logger.error(f"Failed to {desc}: {result['stderr']}")
+            return False
+        logger.info(f"✓ {desc}")
+        return True
+
+    steps = [
+        (f"CREATE USER IF NOT EXISTS {db_user} WITH ENCRYPTED PASSWORD '{password}'",                                                                       f"create user {db_user}"),
+        (f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_group WHERE groname='{db_group}') THEN CREATE GROUP {db_group}; END IF; END $$",                      f"create group {db_group}"),
+        (f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_group g JOIN pg_user u ON u.usesysid=ANY(g.grolist) WHERE g.groname='{db_group}' AND u.usename='{db_user}') THEN ALTER GROUP {db_group} ADD USER {db_user}; END IF; END $$", f"add {db_user} to {db_group}"),
+        (f"GRANT pg_read_all_settings TO {db_group}",                                                                                                        f"grant pg_read_all_settings to {db_group}"),
+        (f"GRANT SELECT ON pg_authid TO {db_group}",                                                                                                         f"grant SELECT on pg_authid to {db_group}"),
+        (f"CREATE EXTENSION IF NOT EXISTS pgcrypto",                                                                                                         f"create extension pgcrypto"),
+    ]
+
+    for sql, desc in steps:
+        if not psql(sql, desc):
+            return False
+
+    logger.info("✓ VA PostgreSQL account ready")
+    return True

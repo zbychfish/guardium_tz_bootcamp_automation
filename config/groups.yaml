@@ -392,6 +392,25 @@ groups:
           collector_appliance: "coll1"
           debug: false
 
+  va_basics:
+    name: "VA Basics Lab"
+    description: "Enable Vulnerability Assessment feature and basic VA lab setup"
+    auto_execute: false
+    dependencies: [etap_lab]
+    stages:
+      - name: enable_vulnerability_management
+        function: enable_vulnerability_management
+        module: tasks.labs
+        description: "Enable VULNERABILITY_MANAGEMENT feature flag on CM and verify State=ENABLED"
+        args:
+          cm_appliance: "cm"
+          debug: false
+
+      - name: create_va_postgres_account
+        function: create_va_postgres_account
+        module: tasks.labs
+        description: "Create sqlguard user, gdmmonitor group and grant VA monitoring privileges on PostgreSQL (raptor)"
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
