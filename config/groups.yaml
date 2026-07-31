@@ -411,6 +411,15 @@ groups:
         module: tasks.labs
         description: "Create sqlguard user, gdmmonitor group and grant VA monitoring privileges on PostgreSQL (raptor)"
 
+      - name: import_va_postgres_definitions
+        function: import_va_postgres_definitions
+        module: tasks.labs
+        description: "Import VA security assessment definitions for PostgreSQL on raptor to CM"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

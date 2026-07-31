@@ -3027,7 +3027,7 @@ def create_va_postgres_account(
         return True
 
     steps = [
-        (f"CREATE USER IF NOT EXISTS {db_user} WITH ENCRYPTED PASSWORD '{password}'",                                                                       f"create user {db_user}"),
+        (f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_user WHERE usename='{db_user}') THEN CREATE USER {db_user} WITH ENCRYPTED PASSWORD '{password}'; END IF; END $$", f"create user {db_user}"),
         (f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_group WHERE groname='{db_group}') THEN CREATE GROUP {db_group}; END IF; END $$",                      f"create group {db_group}"),
         (f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_group g JOIN pg_user u ON u.usesysid=ANY(g.grolist) WHERE g.groname='{db_group}' AND u.usename='{db_user}') THEN ALTER GROUP {db_group} ADD USER {db_user}; END IF; END $$", f"add {db_user} to {db_group}"),
         (f"GRANT pg_read_all_settings TO {db_group}",                                                                                                        f"grant pg_read_all_settings to {db_group}"),
@@ -3041,3 +3041,38 @@ def create_va_postgres_account(
 
     logger.info("✓ VA PostgreSQL account ready")
     return True
+
+
+def import_va_postgres_definitions(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    logger.info("=" * 80)
+    logger.info("IMPORT VA POSTGRES DEFINITIONS")
+    logger.info("=" * 80)
+
+    definition_files = ["exp_security_assessment_postgres_on_raptor.sql"]
+
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"File to import: {definition_files[0]}")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+
+    if success:
+        logger.info("✓ VA PostgreSQL definitions imported successfully")
+
+    return success
