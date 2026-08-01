@@ -642,6 +642,11 @@ groups:
         args:
           cm_appliance: "cm"
 
+      - name: run_dbtraffic_pgsql_on_raptor
+        function: run_dbtraffic_pgsql_on_raptor
+        module: tasks.labs
+        description: "Run guardium-notes-dbtraffic pgsql on raptor: rebuild schema, then run 1 minute of fast traffic"
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

@@ -3602,3 +3602,23 @@ def configure_engine_on_raptor(config, logger, verbose=True,
 
     logger.info("✓ Inspection Engine configured on raptor")
     return True
+
+
+def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
+    from core.utils import execute_local_command
+
+    base = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
+
+    commands = [
+        f"bash -c 'cd {base} && source venv/bin/activate && guardium-notes-dbtraffic --config config/pgsql.yaml rebuild'",
+        f"bash -c 'cd {base} && source venv/bin/activate && guardium-notes-dbtraffic --config config/pgsql.yaml run --duration 1 --speed fast'",
+    ]
+
+    for cmd in commands:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ Command failed: {result['stderr']}")
+            return False
+
+    logger.info("✓ dbtraffic pgsql completed on raptor")
+    return True
