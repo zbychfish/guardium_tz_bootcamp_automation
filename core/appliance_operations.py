@@ -1248,22 +1248,19 @@ def configure_hosts_resolving(
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
     
-    # Get machines from config (loaded from machines_info.json)
-    machines = config.get('machines', {})
-    
+    # Get only regular (non-appliance) machines from config
+    machines = config.get_regular_machines()
+
     # Get all appliances from machines_info.json
     all_appliances = appliance_loader.get_all_appliances()
-    
-    # Combine both sources
-    total_entries = len(machines) + len(all_appliances) - 1  # -1 to exclude current appliance
-    
+
     if not machines and not all_appliances:
         logger.warning("No machines or appliances found to configure")
         logger.info("=" * 80)
         logger.info("No hosts to configure")
         logger.info("=" * 80)
         return True
-    
+
     logger.info(f"Found {len(machines)} Unix machines and {len(all_appliances)} appliances to configure")
     
     try:
