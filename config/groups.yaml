@@ -318,7 +318,7 @@ groups:
   exit_lab:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
-    auto_execute: false  # Executed on demand
+    auto_execute: true  # Executed on demand
     dependencies: [atap_lab]
     stages:
       - name: configure_db2_exit
@@ -352,7 +352,7 @@ groups:
   etap_lab:
     name: "ETAP Lab"
     description: "Setup raptor for External TAP (ETAP) deployment"
-    auto_execute: false  # Executed on demand
+    auto_execute: true  # Executed on demand
     dependencies: [exit_lab]
     stages:
       - name: setup_raptor_to_deploy_etap
@@ -395,7 +395,7 @@ groups:
   va_basics:
     name: "VA Basics Lab"
     description: "Enable Vulnerability Assessment feature and basic VA lab setup"
-    auto_execute: false
+    auto_execute: true
     dependencies: [etap_lab]
     stages:
       - name: import_dps
@@ -468,7 +468,7 @@ groups:
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
-    auto_execute: false
+    auto_execute: true
     dependencies: [va_basics]
     stages:
       - name: install_stap_on_sauropod
@@ -606,6 +606,26 @@ groups:
           profile_names: "oracle_21_container_sauropod"
           bulk_install_hosts: "coll1.demo.guardium"
           debug: true
+
+  policies_reports_part1:
+    name: "Policies and Reports"
+    description: "Basics - Policies and Reports"
+    auto_execute: false
+    dependencies: [oracle_lab]
+    stages:
+      - name: stop_raptor_databases
+        function: stop_raptor_databases
+        module: tasks.labs
+        description: "Stop all database services on raptor: Informix, MongoDB, MySQL, mysql-etap, oracle-etap"
+
+      - name: import_policies_reports_dashboard
+        function: import_policies_reports_dashboard
+        module: tasks.labs
+        description: "Import Policies and Reports dashboard to CM via REST API"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
 
   ltr_lab:
     name: "LTR Lab"

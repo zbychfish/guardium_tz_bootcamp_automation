@@ -3432,3 +3432,57 @@ def import_dps(
     except Exception as e:
         logger.error(f"✗ DPS import failed: {e}")
         return False
+
+
+def stop_raptor_databases(config, logger, verbose=True, **kwargs):
+    from core.utils import execute_commands
+
+    services = [
+        "informix-ifxserver",
+        "mongod",
+        "mysqld",
+        "mysql-etap",
+        "oracle-etap",
+    ]
+
+    commands = [f"systemctl stop {svc}" for svc in services]
+
+    if not execute_commands(commands, logger, verbose, stop_on_error=False):
+        logger.warning("Some services could not be stopped (may not be running)")
+
+    logger.info("✓ Raptor databases stopped")
+    return True
+
+
+def import_policies_reports_dashboard(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    logger.info("=" * 80)
+    logger.info("IMPORT POLICIES AND REPORTS DASHBOARD ON CM")
+    logger.info("=" * 80)
+
+    definition_files = ["exp_dashboard_policies_and_reports.sql"]
+
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"File to import: {definition_files[0]}")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+
+    if success:
+        logger.info("✓ Policies and Reports dashboard imported successfully")
+
+    return success
