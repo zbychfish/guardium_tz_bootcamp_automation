@@ -179,6 +179,20 @@ EOF""",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install --upgrade pip",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install -e .",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install -r requirements.txt",
+    ]
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to configure guardium_notes_dbtraffic")
+        return False
+
+    if verbose:
+        logger.info("✓ guardium_notes_dbtraffic configured on raptor")
+    return True
+
+
+def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+    if verbose:
+        logger.info("Configuring swap file on raptor")
+    commands = [
         "fallocate -l 8G /home/swapfile",
         "chmod 600 /home/swapfile",
         "mkswap /home/swapfile",
@@ -186,11 +200,10 @@ EOF""",
         r"grep -q '^/home/swapfile[[:space:]]\+swap[[:space:]]\+swap[[:space:]]\+defaults[[:space:]]\+0[[:space:]]\+0$' /etc/fstab || echo '/home/swapfile swap swap defaults 0 0' >> /etc/fstab",
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Failed to configure guardium_notes_dbtraffic")
+        logger.error("Swap file configuration failed")
         return False
-
     if verbose:
-        logger.info("✓ guardium_notes_dbtraffic configured and swap file set up on raptor")
+        logger.info("✓ Swap file configured on raptor")
     return True
 
 
