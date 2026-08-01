@@ -3489,7 +3489,10 @@ def import_policies_reports_dashboard(
 
 
 def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
-                                      cm_appliance="cm", stap_host=None, **kwargs):
+                                      cm_appliance="cm", stap_host=None,
+                                      installation_delay=10, **kwargs):
+    import re
+    import time
     from core.guardium_rest_api import create_guardium_api
     from core.utils import execute_local_command
 
@@ -3512,6 +3515,38 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
             logger.info(f"Setting {param}={value} on raptor ({stap_host})")
         api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
 
+    logger.info("Scheduling GIM install on raptor...")
+    api.gim_schedule_install(client_ip=stap_host, date="now")
+    logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
+    time.sleep(installation_delay)
+
+    logger.info("Monitoring installation progress...")
+    pending = ["initial"]
+    check_count = 0
+    while pending:
+        check_count += 1
+        logger.info(f"  Check #{check_count}: Querying module status...")
+        modules = api.gim_list_client_modules(client_ip=stap_host)
+
+        if "ErrorCode" in modules or "ErrorMessage" in modules:
+            logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
+            return False
+
+        entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
+        result_mods = []
+        for entry in entries:
+            m_state = re.search(r"STATE:\s+([A-Z\-]+)", entry)
+            m_name = re.search(r"NAME:\s+([A-Z0-9\-]+)", entry)
+            result_mods.append({"name": m_name.group(1) if m_name else "?", "state": m_state.group(1) if m_state else "?"})
+
+        pending = [m for m in result_mods if m["state"] != "INSTALLED"]
+        if pending:
+            logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
+            logger.info("  Waiting 30s before next check...")
+            time.sleep(30)
+        else:
+            logger.info("  ✓ All modules installed successfully!")
+
     logger.info("Restarting STAP agent on raptor...")
     result = execute_local_command(
         "/opt/guardium/modules/STAP/current/guard-config-update --restart STAP",
@@ -3521,5 +3556,5 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
         logger.error(f"✗ Failed to restart STAP: {result['stderr']}")
         return False
 
-    logger.info("✓ STAP firewall flags set and agent restarted on raptor")
+    logger.info("✓ STAP firewall flags set, modules installed, agent restarted on raptor")
     return True
