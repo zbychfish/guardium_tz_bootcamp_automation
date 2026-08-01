@@ -654,6 +654,15 @@ groups:
         module: tasks.labs
         description: "Run guardium-notes-dbtraffic pgsql on raptor: rebuild schema, then run 1 minute of fast traffic"
 
+      - name: install_app_data_access_policy
+        function: install_app_data_access_policy
+        module: tasks.labs
+        description: "Install policy 'Application data access control' on coll1"
+        args:
+          cm_appliance: "cm"
+          collector_appliance: "coll1"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

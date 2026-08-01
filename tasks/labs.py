@@ -3651,3 +3651,20 @@ def add_postgres_app_profile_member(config, logger, verbose=True,
 
     logger.info(f"✓ Member added to group '{group_desc}'")
     return True
+
+
+def install_app_data_access_policy(config, logger, verbose=True,
+                                   cm_appliance="cm", collector_appliance="coll1",
+                                   policy_name="Application data access control",
+                                   debug=False, **kwargs):
+    from tasks.setup_appliances import install_policy_on_collector
+
+    return install_policy_on_collector(
+        config=config,
+        logger=logger,
+        verbose=verbose,
+        cm_appliance=cm_appliance,
+        collector_appliance=collector_appliance,
+        policy_name=policy_name,
+        debug=debug
+    )
