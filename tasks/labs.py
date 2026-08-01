@@ -3486,3 +3486,40 @@ def import_policies_reports_dashboard(
         logger.info("✓ Policies and Reports dashboard imported successfully")
 
     return success
+
+
+def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
+                                      cm_appliance="cm", stap_host=None, **kwargs):
+    from core.guardium_rest_api import create_guardium_api
+    from core.utils import execute_local_command
+
+    if not stap_host:
+        machines = config.get('machines', {})
+        stap_host = machines.get('raptor', {}).get('private_ip')
+        if not stap_host:
+            logger.error("stap_host not provided and not found in machines config")
+            return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+    api.get_token(username='demo', password=pwd)
+
+    for param, value in [("STAP_FIREWALL_INSTALLED", "1"), ("STAP_FIREWALL_DEFAULT_STATE", "1")]:
+        if verbose:
+            logger.info(f"Setting {param}={value} on raptor ({stap_host})")
+        api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
+
+    logger.info("Restarting STAP agent on raptor...")
+    result = execute_local_command(
+        "/opt/guardium/modules/STAP/current/guard-config-update --restart STAP",
+        logger=logger, verbose=verbose
+    )
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to restart STAP: {result['stderr']}")
+        return False
+
+    logger.info("✓ STAP firewall flags set and agent restarted on raptor")
+    return True
