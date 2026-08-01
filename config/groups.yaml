@@ -698,6 +698,15 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+      - name: create_va_oauth_client
+        function: create_va_oauth_client
+        module: tasks.labs
+        description: "Register OAuth client 'va-api' on CM and save client_secret to .client_secret_va"
+        args:
+          appliance_name: "cm"
+          client_id: "va-api"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
