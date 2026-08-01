@@ -3622,3 +3622,32 @@ def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
 
     logger.info("✓ dbtraffic pgsql completed on raptor")
     return True
+
+
+def add_postgres_app_profile_member(config, logger, verbose=True,
+                                    cm_appliance="cm", **kwargs):
+    from core.guardium_rest_api import create_guardium_api
+
+    raptor_ip = config.get_machine_ip('raptor', use_private=True)
+    if not raptor_ip:
+        logger.error("Raptor IP not found in machines config")
+        return False
+
+    member = f"{raptor_ip}+POSTGRESQL CLIENT PROGRAM+APPUSER%+{raptor_ip}+%"
+    group_desc = "Postgres application profiles"
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+    api.get_token(username='demo', password=pwd)
+
+    if verbose:
+        logger.info(f"Adding member to group '{group_desc}'")
+        logger.info(f"  member: {member}")
+
+    api.create_group_member(desc=group_desc, member=member)
+
+    logger.info(f"✓ Member added to group '{group_desc}'")
+    return True

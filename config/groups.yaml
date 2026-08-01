@@ -627,6 +627,13 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+      - name: add_postgres_app_profile_member
+        function: add_postgres_app_profile_member
+        module: tasks.labs
+        description: "Add raptor postgres application profile tuple member to group 'Postgres application profiles'"
+        args:
+          cm_appliance: "cm"
+
       - name: configure_engine_on_raptor
         function: configure_engine_on_raptor
         module: tasks.labs

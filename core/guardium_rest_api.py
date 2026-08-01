@@ -803,6 +803,14 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def create_group_member(self, desc: str, member: str) -> dict:
+        url = f'{self.base_url}/restAPI/group_member'
+        headers = self.get_headers()
+        data = {'desc': desc, 'member': member}
+        response = requests.post(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
     def engine_config(
         self,
         compute_average: Optional[bool] = None,
