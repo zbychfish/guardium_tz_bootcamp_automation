@@ -83,7 +83,7 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     auto_execute: true  # Executed on demand
-    dependencies: [initial_preparation]  # Requires initial_preparation to be completed
+    dependencies: [initial_preparation, other_preparations]  # Requires initial_preparation to be completed
     stages:
       - name: reset_cli_password_all
         function: reset_cli_password_all
@@ -228,7 +228,7 @@ groups:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"
     auto_execute: true  # Executed on demand
-    dependencies: [initial_preparation, setup_appliances, other_preparations]  # Requires initial_preparation and setup_appliances
+    dependencies: [setup_appliances]  # Requires initial_preparation and setup_appliances
     stages:
      
       - name: import_gim_modules
@@ -245,8 +245,8 @@ groups:
   atap_lab:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
-    auto_execute: false  # Executed after marker, on demand
-    dependencies: [setup_appliances, gim_lab]  # Requires initial_preparation to be completed
+    auto_execute: true  # Executed after marker, on demand
+    dependencies: [gim_lab]  # Requires initial_preparation to be completed
     stages:
       
       - name: install_gim_on_raptor
@@ -398,6 +398,16 @@ groups:
     auto_execute: false
     dependencies: [etap_lab]
     stages:
+      - name: import_dps
+        function: import_dps
+        module: tasks.labs
+        description: "Upload and import DPS file via Guardium Web UI (Playwright): Harden → Vulnerability Assessment → Customer Uploads"
+        args:
+          cm_appliance: "cm"
+          dps_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc"
+          demo_user: "demo"
+          headless: true
+
       - name: enable_vulnerability_management
         function: enable_vulnerability_management
         module: tasks.labs
@@ -455,21 +465,11 @@ groups:
           key_file: ".va_api_key"
           debug: false
 
-      - name: import_dps
-        function: import_dps
-        module: tasks.labs
-        description: "Upload and import DPS file via Guardium Web UI (Playwright): Harden → Vulnerability Assessment → Customer Uploads"
-        args:
-          cm_appliance: "cm"
-          dps_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc"
-          demo_user: "demo"
-          headless: true
-
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
     auto_execute: false
-    dependencies: [etap_lab]
+    dependencies: [va_basics]
     stages:
       - name: install_stap_on_sauropod
         function: install_stap_on_sauropod
