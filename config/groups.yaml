@@ -663,6 +663,21 @@ groups:
           collector_appliance: "coll1"
           debug: false
 
+  va_api:
+    name: "VA API"
+    description: "Import VA dashboard and Oracle security assessment definitions"
+    auto_execute: false
+    dependencies: [policies_reports_part1]
+    stages:
+      - name: import_va_api_definitions
+        function: import_va_api_definitions
+        module: tasks.labs
+        description: "Import VA dashboard and Oracle on sauropod security assessment to CM via REST API"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

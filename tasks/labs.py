@@ -3668,3 +3668,40 @@ def install_app_data_access_policy(config, logger, verbose=True,
         policy_name=policy_name,
         debug=debug
     )
+
+
+def import_va_api_definitions(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    logger.info("=" * 80)
+    logger.info("IMPORT VA API DEFINITIONS ON CM")
+    logger.info("=" * 80)
+
+    definition_files = [
+        "exp_dashboard_va.sql",
+        "exp_security_assessment_oracle_on_sauropod.sql",
+    ]
+
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"Files to import: {', '.join(definition_files)}")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+
+    if success:
+        logger.info("✓ VA API definitions imported successfully")
+
+    return success
