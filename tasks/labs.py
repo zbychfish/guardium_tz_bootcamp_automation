@@ -3468,10 +3468,13 @@ def import_policies_reports_dashboard(
     logger.info("IMPORT POLICIES AND REPORTS DASHBOARD ON CM")
     logger.info("=" * 80)
 
-    definition_files = ["exp_dashboard_policies_and_reports.sql"]
+    definition_files = [
+        "exp_dashboard_policies_and_reports.sql",
+        "exp_policy_policies_part1.sql",
+    ]
 
     logger.info(f"CM Appliance: {cm_appliance}")
-    logger.info(f"File to import: {definition_files[0]}")
+    logger.info(f"Files to import: {', '.join(definition_files)}")
 
     success = import_definitions_files(
         config=config,
@@ -3557,4 +3560,45 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
         return False
 
     logger.info("✓ STAP firewall flags set, modules installed, agent restarted on raptor")
+    return True
+
+
+def configure_engine_on_raptor(config, logger, verbose=True,
+                               cm_appliance="cm", collector_appliance="coll1",
+                               compute_average=True, inspect_data=True,
+                               log_records=True, record_empty=True, **kwargs):
+    from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found")
+        return False
+    collector_ip = collector_config.get('ip')
+    if not collector_ip:
+        logger.error(f"Collector '{collector_appliance}' has no IP")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+    api.get_token(username='demo', password=pwd)
+
+    if verbose:
+        logger.info(f"Configuring Inspection Engine (api_target_host={collector_ip})")
+        logger.info(f"  compute_average={compute_average}, inspect_data={inspect_data}, "
+                    f"log_records={log_records}, record_empty={record_empty}")
+
+    api.engine_config(
+        compute_average=compute_average,
+        inspect_data=inspect_data,
+        log_records=log_records,
+        record_empty=record_empty,
+        api_target_host=collector_ip
+    )
+
+    logger.info("✓ Inspection Engine configured on raptor")
     return True

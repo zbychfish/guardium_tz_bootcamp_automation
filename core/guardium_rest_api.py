@@ -803,6 +803,43 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def engine_config(
+        self,
+        compute_average: Optional[bool] = None,
+        inspect_data: Optional[bool] = None,
+        log_exception_sql: Optional[bool] = None,
+        log_records: Optional[bool] = None,
+        log_sequencing: Optional[bool] = None,
+        max_hits: Optional[int] = None,
+        parse_xml: Optional[bool] = None,
+        record_empty: Optional[bool] = None,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/engine_config'
+        headers = self.get_headers()
+        data: dict = {}
+        if compute_average is not None:
+            data['computeAverage'] = 1 if compute_average else 0
+        if inspect_data is not None:
+            data['inspectData'] = 1 if inspect_data else 0
+        if log_exception_sql is not None:
+            data['logExceptionSql'] = 1 if log_exception_sql else 0
+        if log_records is not None:
+            data['logRecords'] = 1 if log_records else 0
+        if log_sequencing is not None:
+            data['logSequencing'] = 1 if log_sequencing else 0
+        if max_hits is not None:
+            data['maxHits'] = max_hits
+        if parse_xml is not None:
+            data['parseXml'] = 1 if parse_xml else 0
+        if record_empty is not None:
+            data['recordEmpty'] = 1 if record_empty else 0
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        response = requests.put(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
 
 
 
