@@ -902,8 +902,9 @@ groups:
       - name: install_policy_on_sauropod
         function: install_policy_on_sauropod
         module: tasks.labs
-        description: "Install 'Default bootcamp policy' on sauropod via REST API"
+        description: "Install 'Default bootcamp policy' on sauropod via REST API (units param)"
         args:
           cm_appliance: "cm"
           policy_name: "Default bootcamp policy"
+          units: "sauropod.demo.guardium"
           debug: false

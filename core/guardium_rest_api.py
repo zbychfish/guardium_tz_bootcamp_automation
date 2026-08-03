@@ -582,6 +582,7 @@ class GuardiumRestAPI:
         policy: str,
         install_action: Optional[str] = None,
         api_target_host: Optional[str] = None,
+        units: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: int = 60,
         debug: bool = False
@@ -593,6 +594,7 @@ class GuardiumRestAPI:
             policy: Policy name
             install_action: Install action (optional)
             api_target_host: Target host IP (optional)
+            units: Target unit name e.g. "sauropod.demo.guardium" (optional)
             max_retries: Maximum number of retries for ErrorCode/ID 15 (default: 3)
             retry_delay: Delay in seconds between retries (default: 60)
             debug: Enable debug logging (default: False)
@@ -616,6 +618,8 @@ class GuardiumRestAPI:
             data['install_action'] = install_action
         if api_target_host:
             data['api_target_host'] = api_target_host
+        if units:
+            data['units'] = units
         
         if debug:
             print(f"DEBUG - API Call: POST {url}")
