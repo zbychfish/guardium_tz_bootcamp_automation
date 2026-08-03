@@ -4551,3 +4551,46 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
         return False
     finally:
         ssh.disconnect()
+
+
+def install_policy_on_sauropod(config, logger, verbose=True,
+                               cm_appliance="cm",
+                               policy_name="Default bootcamp policy",
+                               debug=False, **kwargs):
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("INSTALL POLICY ON SAUROPOD")
+    logger.info("=" * 80)
+    logger.info(f"  policy={policy_name}")
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    logger.info(f"➜ Installing policy '{policy_name}' on sauropod ({sauropod_ip})...")
+    result = api.install_policy(
+        policy=policy_name,
+        api_target_host=sauropod_ip,
+        max_retries=3,
+        retry_delay=60,
+        debug=debug
+    )
+
+    error_code = result.get('ErrorCode') or result.get('ID', '0')
+    if str(error_code) not in ('0', ''):
+        logger.error(f"✗ Policy installation failed: {result}")
+        return False
+
+    logger.info(f"✓ Policy '{policy_name}' installed on sauropod")
+    return True
+
