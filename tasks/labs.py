@@ -2621,6 +2621,10 @@ def run_uc_and_setup_kafka_node(
     logger.info("\n" + "=" * 80)
     logger.info("✓ RUN UC AND SETUP KAFKA NODE - COMPLETED")
     logger.info("=" * 80)
+
+    import time
+    logger.info("⌛ Waiting 1 minute...")
+    time.sleep(60)
     return True
 
 
