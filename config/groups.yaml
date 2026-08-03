@@ -799,7 +799,7 @@ groups:
     auto_execute: false
     dependencies: [oracle_lab_uc2]
     stages:
-      - name:   
+      - name: prepare_cm_for_edge_patching  
         function: copy_single_file_to_appliance_task
         module: tasks.setup_appliances
         description: "Copy Edge patch file to cm for installation"
@@ -813,11 +813,20 @@ groups:
       - name: install_edge_patch_on_cm
         function: install_edge_patch_via_api
         module: tasks.labs
-        description: "Install Edge patch on cm via REST API, then monitor until DONE"
+        description: "Initiate Edge patch installation on cm via REST API patch_install"
         args:
           cm_appliance: "cm"
           patch_filename: "SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
           mode: "local_only"
+          debug: false
+
+      - name: monitor_edge_patch_on_cm
+        function: monitor_edge_patch_installation
+        module: tasks.labs
+        description: "Monitor Edge patch installation on cm: wait for appear (15s), then DONE (60s)"
+        args:
+          cm_appliance: "cm"
+          patch_filename: "SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
           appear_interval: 15
           appear_max: 40
           install_interval: 60
