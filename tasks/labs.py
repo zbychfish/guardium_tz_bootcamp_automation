@@ -3981,6 +3981,55 @@ def monitor_edge_patch_installation(config, logger, verbose=True,
     return False
 
 
+def register_edge_gateway(config, logger, verbose=True,
+                          cm_appliance="cm",
+                          exports_to="cm.demo.guardium",
+                          name="sauropod.demo.guardium",
+                          namespace="edge",
+                          storageclass_rw_once="local-path",
+                          version="v2.1.1",
+                          description=None,
+                          debug=False, **kwargs):
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("REGISTER EDGE GATEWAY ON CM")
+    logger.info("=" * 80)
+    logger.info(f"  name={name}, namespace={namespace}, exportsTo={exports_to}")
+    logger.info(f"  storageclass_rw_once={storageclass_rw_once}, version={version}")
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+    api.get_token(username='demo', password=pwd)
+
+    try:
+        result = api.register_edge(
+            exports_to=exports_to,
+            name=name,
+            namespace=namespace,
+            storageclass_rw_once=storageclass_rw_once,
+            version=version,
+            description=description,
+        )
+    except Exception as e:
+        logger.error(f"✗ registerEdge API call failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info(f"  API response: {result}")
+    if result.get('ErrorCode') or result.get('errorCode'):
+        logger.error(f"✗ registerEdge returned error: {result}")
+        return False
+
+    logger.info("✓ Edge gateway registered successfully on CM")
+    return True
+
+
 def install_k3s_on_sauropod(config, logger, verbose=True,
                             k3s_version="v1.32.13+k3s1",
                             cm_appliance="cm",

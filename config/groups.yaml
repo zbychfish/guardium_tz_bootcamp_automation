@@ -844,3 +844,16 @@ groups:
           max_wait: 300
           check_interval: 15
           debug: false
+
+      - name: register_edge_gateway
+        function: register_edge_gateway
+        module: tasks.labs
+        description: "Register Edge gateway on CM via REST API registerEdge"
+        args:
+          cm_appliance: "cm"
+          exports_to: "cm.demo.guardium"
+          name: "sauropod.demo.guardium"
+          namespace: "edge"
+          storageclass_rw_once: "local-path"
+          version: "v2.1.1"
+          debug: false

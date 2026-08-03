@@ -871,7 +871,49 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
-
+    def register_edge(
+        self,
+        exports_to: str,
+        name: str,
+        namespace: str,
+        storageclass_rw_once: str,
+        version: str,
+        description: Optional[str] = None,
+        backup_exports: Optional[str] = None,
+        cpu_limits: Optional[str] = None,
+        deploy_proxy: Optional[bool] = None,
+        external_registry_name: Optional[str] = None,
+        last_version: Optional[str] = None,
+        memory_limits: Optional[str] = None,
+        storage_requests: Optional[str] = None,
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/registerEdge'
+        params: dict = {
+            'exportsTo': exports_to,
+            'name': name,
+            'namespace': namespace,
+            'storageclass_rw_once': storageclass_rw_once,
+            'version': version,
+        }
+        if description is not None:
+            params['description'] = description
+        if backup_exports is not None:
+            params['backupExports'] = backup_exports
+        if cpu_limits is not None:
+            params['cpuLimits'] = cpu_limits
+        if deploy_proxy is not None:
+            params['deployProxy'] = 1 if deploy_proxy else 0
+        if external_registry_name is not None:
+            params['externalRegistryName'] = external_registry_name
+        if last_version is not None:
+            params['lastVersion'] = last_version
+        if memory_limits is not None:
+            params['memoryLimits'] = memory_limits
+        if storage_requests is not None:
+            params['storageRequests'] = storage_requests
+        response = requests.get(url, params=params, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
 
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':
