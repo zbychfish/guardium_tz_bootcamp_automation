@@ -868,16 +868,6 @@ groups:
           sauropod_dest: "/tmp/edge.tar.gz"
           debug: false
 
-      - name: download_edge_bundle_from_cm
-        function: download_edge_bundle_from_cm
-        module: tasks.labs
-        description: "Copy edge bundle tar.gz from CM (/var/IBM/Guardium/edges/<node>) to sauropod /tmp/ and extract"
-        args:
-          cm_appliance: "cm"
-          node_name: "sauropod.demo.guardium"
-          sauropod_remote_dir: "/tmp/"
-          debug: false
-
       - name: deploy_edge_gateway
         function: deploy_edge_gateway
         module: tasks.labs

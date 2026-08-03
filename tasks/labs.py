@@ -4299,9 +4299,20 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
             logger.error(f"✗ Failed to upload bundle to sauropod")
             return False
         logger.info(f"✓ Edge bundle uploaded to sauropod: {sauropod_dest}")
+        extract_dir = os.path.dirname(sauropod_dest.rstrip('/'))
+        for cmd, desc in [
+            (f"tar -xzf {sauropod_dest} -C {extract_dir}", f"extract {sauropod_dest}"),
+            (f"rm -f {sauropod_dest}", f"remove archive {sauropod_dest}"),
+        ]:
+            result = ssh.execute_command(cmd, print_output=False)
+            if result['rc'] != 0:
+                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                return False
+            logger.info(f"  ✓ {desc}")
+        logger.info(f"✓ Edge bundle extracted to {extract_dir}")
         return True
     except Exception as e:
-        logger.error(f"✗ Upload failed: {e}")
+        logger.error(f"✗ Upload/extract failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4313,129 +4324,6 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
         except OSError:
             pass
 
-
-
-def download_edge_bundle_from_cm(config, logger, verbose=True,
-                                 cm_appliance="cm",
-                                 node_name="sauropod.demo.guardium",
-                                 sauropod_remote_dir="/tmp/",
-                                 debug=False, **kwargs):
-    import os
-    import paramiko
-    import time
-    from core.appliance_config_loader import ApplianceConfigLoader
-    from core.ssh_client import SSHClient
-
-    logger.info("=" * 80)
-    logger.info("COPY EDGE BUNDLE FROM CM TO SAUROPOD")
-    logger.info("=" * 80)
-
-    # ── CM config ───────────────────────────────────────────────────────────────
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(cm_appliance)
-    if not appliance_config:
-        logger.error(f"Appliance '{cm_appliance}' not found in machines_info.json")
-        return False
-    cm_ip = appliance_config.get('ip')
-    if not cm_ip:
-        logger.error(f"Appliance '{cm_appliance}' has no IP")
-        return False
-
-    cloudsupport_pwd = config.get_custom_variable('cloudsupport_pwd')
-    if not cloudsupport_pwd:
-        logger.error("cloudsupport_pwd not found in custom_variables")
-        return False
-
-    # ── Sauropod config ─────────────────────────────────────────────────────────
-    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
-    if not sauropod_ip:
-        logger.error("Sauropod IP not found in machines config")
-        return False
-
-    ssh_config = config.get('ssh', {})
-    ssh_port = ssh_config.get('port', 2223)
-    ssh_username = ssh_config.get('username', 'root')
-    root_pwd = config.get_custom_variable('pwd')
-    if not root_pwd:
-        logger.error("pwd not found in custom_variables")
-        return False
-
-    # ── Step 1: find bundle on CM via cloudsupport ──────────────────────────────
-    remote_dir = f"/var/IBM/Guardium/edges/{node_name}"
-    logger.info(f"➜ Looking for *.tar.gz in {remote_dir} on CM ({cm_ip})...")
-
-    ssh_cm = paramiko.SSHClient()
-    ssh_cm.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    try:
-        ssh_cm.connect(cm_ip, username='cloudsupport', password=cloudsupport_pwd,
-                       look_for_keys=False, allow_agent=False, timeout=30)
-
-        _, stdout, _ = ssh_cm.exec_command(f"sudo ls {remote_dir}/*.tar.gz 2>/dev/null")
-        stdout.channel.recv_exit_status()
-        files = [l.strip() for l in stdout.read().decode().splitlines() if l.strip().endswith('.tar.gz')]
-        if not files:
-            logger.error(f"✗ No .tar.gz file found in {remote_dir}")
-            return False
-        remote_cm_path = files[0]
-        filename = os.path.basename(remote_cm_path)
-        logger.info(f"  Found: {remote_cm_path}")
-
-        # ── Step 2: scp push from CM to sauropod directly ───────────────────────
-        # cloudsupport on CM runs sshpass+scp to push file to sauropod /tmp/
-        sauropod_path = os.path.join(sauropod_remote_dir, filename)
-        logger.info(f"➜ Copying {filename} from CM to sauropod ({sauropod_ip}:{ssh_port}) → {sauropod_path}...")
-
-        scp_cmd = (
-            f"sshpass -p '{root_pwd}' scp -P {ssh_port}"
-            f" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-            f" {remote_cm_path} {ssh_username}@{sauropod_ip}:{sauropod_path}"
-        )
-        _, stdout, stderr = ssh_cm.exec_command(scp_cmd, timeout=300)
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            err = stderr.read().decode().strip()
-            logger.error(f"✗ scp failed (exit {exit_status}): {err}")
-            return False
-
-        logger.info(f"✓ Edge bundle copied to sauropod: {sauropod_path}")
-
-    except Exception as e:
-        logger.error(f"✗ Operation failed: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        ssh_cm.close()
-
-    # ── Step 3: extract on sauropod and remove archive ───────────────────────────
-    logger.info(f"➜ Extracting {filename} on sauropod ({sauropod_ip}:{ssh_port})...")
-    ssh_sauropod = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
-                             port=ssh_port, timeout=60)
-    try:
-        if not ssh_sauropod.connect():
-            logger.error("✗ Failed to connect to sauropod for extraction")
-            return False
-        extract_dir = sauropod_remote_dir.rstrip('/')
-        for cmd, desc in [
-            (f"tar -xzf {sauropod_path} -C {extract_dir}", f"extract {filename}"),
-            (f"rm -f {sauropod_path}", f"remove archive {filename}"),
-        ]:
-            result = ssh_sauropod.execute_command(cmd, print_output=False)
-            if result['rc'] != 0:
-                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
-                return False
-            logger.info(f"  ✓ {desc}")
-        logger.info(f"✓ Edge bundle extracted to {extract_dir}")
-        return True
-    except Exception as e:
-        logger.error(f"✗ Extraction failed: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        ssh_sauropod.disconnect()
 
 
 def deploy_edge_gateway(config, logger, verbose=True,
