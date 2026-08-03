@@ -848,7 +848,7 @@ groups:
       - name: register_edge_gateway
         function: register_edge_gateway
         module: tasks.labs
-        description: "Register Edge gateway on CM via REST API registerEdge"
+        description: "Register Edge gateway on CM via grdapi registerEdge CLI command"
         args:
           cm_appliance: "cm"
           exports_to: "cm.demo.guardium"
@@ -856,4 +856,14 @@ groups:
           namespace: "edge"
           storageclass_rw_once: "local-path"
           version: "v2.1.1"
+          debug: false
+
+      - name: download_edge_bundle_from_cm
+        function: download_edge_bundle_from_cm
+        module: tasks.labs
+        description: "Copy edge bundle tar.gz from CM (/var/IBM/Guardium/edges/<node>) to sauropod /tmp/"
+        args:
+          cm_appliance: "cm"
+          node_name: "sauropod.demo.guardium"
+          sauropod_remote_dir: "/tmp/"
           debug: false
