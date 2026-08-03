@@ -3853,24 +3853,24 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         logger.error("cli_pwd not found in custom_variables")
         return False
 
-    logger.info("➜ Running 'show install patch available' on CM CLI...")
+    logger.info("➜ Registering patches on CM: show system patch available...")
     cli = ApplianceClient(
-        host=cm_ip, user='cli', password=cli_pwd,
-        prompt_regex=cli_prompt, timeout=300,
-        strip_ansi=True, debug=debug
+        host=cm_ip,
+        user='cli',
+        password=cli_pwd,
+        prompt_regex=cli_prompt,
+        initial_pattern=None,
+        timeout=60,
+        strip_ansi=True,
+        debug=debug
     )
-    try:
-        if not cli.connect():
-            logger.error("✗ Failed to connect to CM CLI")
-            return False
-        logger.info("  Waiting for command to complete (may take over 1 minute)...")
-        output = cli.execute_command("show install patch available", timeout=300)
-        if verbose:
-            logger.info(f"  Output:\n{output}")
-        logger.info("✓ 'show install patch available' completed")
-    except TimeoutError:
-        logger.error("✗ 'show install patch available' timed out after 300s")
+    if not cli.connect():
+        logger.error("✗ Failed to connect to CM CLI")
         return False
+    try:
+        patch_output = cli.execute_command("show system patch available")
+        logger.info(f"Available patches:\n{patch_output}")
+        logger.info("✓ Patches registered on CM")
     except Exception as e:
         logger.error(f"✗ CLI command failed: {e}")
         if debug:
