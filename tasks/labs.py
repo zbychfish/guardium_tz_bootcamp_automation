@@ -4387,27 +4387,23 @@ def deploy_edge_gateway(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── run edge-install.sh with TTY (invoke_shell) ──────────────────────────────
-    logger.info(f"➜ Running {edge_dir}/{install_script} with TTY (timeout={script_timeout}s)...")
+    # ── run edge-install.sh with PTY via exec_command ────────────────────────────
+    logger.info(f"➜ Running {edge_dir}/{install_script} with PTY (timeout={script_timeout}s)...")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
         client.connect(sauropod_ip, port=ssh_port, username=ssh_username, password=root_pwd,
                        look_for_keys=False, allow_agent=False, timeout=30)
 
-        channel = client.invoke_shell(term="xterm", width=200, height=50)
-        channel.settimeout(0.5)
-        time.sleep(0.5)
-        while channel.recv_ready():
-            channel.recv(65535)
-
-        cmd = f"cd {edge_dir} && bash {install_script}; echo __EXIT_CODE__:$?\n"
-        channel.send(cmd.encode())
+        transport = client.get_transport()
+        channel = transport.open_session()
+        channel.get_pty(term="xterm", width=200, height=50)
+        channel.settimeout(1.0)
+        channel.exec_command(f"cd {edge_dir} && bash {install_script}")
 
         buf = ""
         deadline = time.time() + script_timeout
         last_activity = time.time()
-        exit_code = None
         answers_sent = 0
 
         while time.time() < deadline:
@@ -4424,25 +4420,33 @@ def deploy_edge_gateway(config, logger, verbose=True,
                     while buf.count('[y/N]?') > answers_sent:
                         time.sleep(0.3)
                         logger.info("  >>> Sending: y")
-                        channel.send(b"y\n")
+                        channel.sendall(b"y\n")
                         answers_sent += 1
-                    if '__EXIT_CODE__:' in buf:
-                        import re
-                        m = re.search(r'__EXIT_CODE__:(\d+)', buf)
-                        if m:
-                            exit_code = int(m.group(1))
-                        break
             except socket.timeout:
                 if time.time() - last_activity > 60:
                     logger.warning("  ⚠ No output for 60s, still waiting...")
                     last_activity = time.time()
-                continue
-            if channel.closed:
+            if channel.exit_status_ready():
+                # drain remaining output
+                try:
+                    while True:
+                        tail = channel.recv(4096).decode('utf-8', errors='replace')
+                        if not tail:
+                            break
+                        buf += tail
+                        if verbose:
+                            for line in tail.splitlines():
+                                if line.strip():
+                                    logger.info(f"  {line}")
+                except socket.timeout:
+                    pass
                 break
 
-        if exit_code is None:
+        if not channel.exit_status_ready():
             logger.error(f"✗ edge-install.sh timed out after {script_timeout}s")
             return False
+
+        exit_code = channel.recv_exit_status()
         if exit_code != 0:
             logger.error(f"✗ edge-install.sh failed (rc={exit_code})")
             return False
