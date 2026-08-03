@@ -861,9 +861,32 @@ groups:
       - name: download_edge_bundle_from_cm
         function: download_edge_bundle_from_cm
         module: tasks.labs
-        description: "Copy edge bundle tar.gz from CM (/var/IBM/Guardium/edges/<node>) to sauropod /tmp/"
+        description: "Copy edge bundle tar.gz from CM (/var/IBM/Guardium/edges/<node>) to sauropod /tmp/ and extract"
         args:
           cm_appliance: "cm"
           node_name: "sauropod.demo.guardium"
           sauropod_remote_dir: "/tmp/"
+          debug: false
+
+      - name: deploy_edge_gateway
+        function: deploy_edge_gateway
+        module: tasks.labs
+        description: "Install expect on sauropod and run edge-install.sh from /tmp/sauropod.demo.guardium"
+        args:
+          edge_dir: "/tmp/sauropod.demo.guardium"
+          install_script: "edge-install.sh"
+          script_timeout: 600
+          debug: false
+
+      - name: monitor_edge_gateway_deployment
+        function: monitor_edge_gateway_deployment
+        module: tasks.labs
+        description: "Wait for edge-manager pod, then monitor logs until EDGE_SERVICES_INSTALLATION_STATUS is Completed"
+        args:
+          namespace: "edge"
+          pod_prefix: "edge-manager"
+          appear_interval: 15
+          appear_max: 40
+          log_interval: 30
+          log_max: 60
           debug: false

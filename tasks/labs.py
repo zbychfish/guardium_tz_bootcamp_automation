@@ -4358,3 +4358,156 @@ def download_edge_bundle_from_cm(config, logger, verbose=True,
     finally:
         ssh_sauropod.disconnect()
 
+
+def deploy_edge_gateway(config, logger, verbose=True,
+                        edge_dir="/tmp/sauropod.demo.guardium",
+                        install_script="edge-install.sh",
+                        script_timeout=600,
+                        debug=False, **kwargs):
+    import time
+    from core.ssh_client import SSHClient
+
+    logger.info("=" * 80)
+    logger.info("DEPLOY EDGE GATEWAY ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+    root_pwd = config.get_custom_variable('pwd')
+    if not root_pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
+                    port=ssh_port, timeout=60)
+    try:
+        logger.info(f"Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("✗ Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        logger.info("➜ Installing expect...")
+        result = ssh.execute_command("dnf -y install expect", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ Failed to install expect: {result['stderr']}")
+            return False
+        logger.info("✓ expect installed")
+
+        script_path = f"{edge_dir}/{install_script}"
+        logger.info(f"➜ Running {script_path} (timeout={script_timeout}s)...")
+        result = ssh.execute_command(
+            f"cd {edge_dir} && bash {install_script}",
+            timeout=script_timeout,
+            print_output=verbose
+        )
+        if result['rc'] != 0:
+            logger.error(f"✗ edge-install.sh failed (rc={result['rc']}): {result['stderr']}")
+            return False
+
+        logger.info("✓ edge-install.sh completed")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+
+def monitor_edge_gateway_deployment(config, logger, verbose=True,
+                                    namespace="edge",
+                                    pod_prefix="edge-manager",
+                                    appear_interval=15, appear_max=40,
+                                    log_interval=30, log_max=60,
+                                    completion_marker="EDGE_SERVICES_INSTALLATION_STATUS is Completed",
+                                    debug=False, **kwargs):
+    import time
+    from core.ssh_client import SSHClient
+
+    logger.info("=" * 80)
+    logger.info("MONITOR EDGE GATEWAY DEPLOYMENT ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+    root_pwd = config.get_custom_variable('pwd')
+    if not root_pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
+                    port=ssh_port, timeout=60)
+    try:
+        if not ssh.connect():
+            logger.error("✗ Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        # ── Phase 1: wait for edge-manager pod to appear ─────────────────────────
+        logger.info(f"⏳ Phase 1: Waiting for pod '{pod_prefix}*' in namespace '{namespace}'")
+        logger.info(f"   Checking every {appear_interval}s (max {appear_max} checks)...")
+        pod_name = None
+        for check in range(1, appear_max + 1):
+            time.sleep(appear_interval)
+            result = ssh.execute_command(
+                f"kubectl get pods -n {namespace} --no-headers 2>/dev/null",
+                print_output=False
+            )
+            for line in result['stdout'].splitlines():
+                if line.strip().startswith(pod_prefix):
+                    pod_name = line.split()[0]
+                    break
+            if pod_name:
+                logger.info(f"  ✓ #{check}/{appear_max}: Pod found → {pod_name}")
+                break
+            logger.info(f"  #{check}/{appear_max}: Pod '{pod_prefix}*' not yet visible, waiting {appear_interval}s...")
+
+        if not pod_name:
+            logger.error(f"✗ Pod '{pod_prefix}*' did not appear after {appear_interval * appear_max}s")
+            return False
+
+        # ── Phase 2: wait for completion log line ────────────────────────────────
+        logger.info(f"⏳ Phase 2: Monitoring logs of {pod_name} (every {log_interval}s, max {log_max} checks)...")
+        for check in range(1, log_max + 1):
+            time.sleep(log_interval)
+            logger.info(f"  Check #{check}/{log_max}: kubectl logs {pod_name} -n {namespace}...")
+            result = ssh.execute_command(
+                f"kubectl logs {pod_name} -n {namespace} 2>/dev/null | grep '{completion_marker}' | tail -n 1",
+                print_output=False
+            )
+            line = result['stdout'].strip()
+            if line:
+                logger.info(f"  ✓ Completed: {line}")
+                logger.info("=" * 80)
+                logger.info("✓ Edge gateway deployment completed successfully")
+                logger.info("=" * 80)
+                return True
+            logger.info(f"  Not yet completed, waiting {log_interval}s...")
+
+        logger.error(f"✗ Timeout: completion marker not found after {log_interval * log_max}s")
+        return False
+
+    except Exception as e:
+        logger.error(f"✗ Operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
