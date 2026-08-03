@@ -4428,6 +4428,7 @@ def deploy_edge_gateway(config, logger, verbose=True,
         deadline = time.time() + script_timeout
         last_activity = time.time()
         exit_code = None
+        answers_sent = 0
 
         while time.time() < deadline:
             try:
@@ -4439,6 +4440,12 @@ def deploy_edge_gateway(config, logger, verbose=True,
                         for line in chunk.splitlines():
                             if line.strip():
                                 logger.info(f"  {line}")
+                    # respond to each [y/N]? prompt with 'y'
+                    while buf.count('[y/N]?') > answers_sent:
+                        time.sleep(0.3)
+                        logger.info("  >>> Sending: y")
+                        channel.send(b"y\n")
+                        answers_sent += 1
                     if '__EXIT_CODE__:' in buf:
                         import re
                         m = re.search(r'__EXIT_CODE__:(\d+)', buf)
