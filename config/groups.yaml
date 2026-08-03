@@ -793,3 +793,29 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+  edge_lab:
+    name: "Edge Lab"
+    description: "Install Edge patch on CM and configure Edge features"
+    auto_execute: false
+    dependencies: [oracle_lab_uc2]
+    stages:
+      - name: prepare_cm_for_edge_patching
+        function: copy_single_file_to_appliance_task
+        module: tasks.setup_appliances
+        description: "Copy Edge patch file to cm for installation"
+        args:
+          appliance_name: "cm"
+          source_file_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/extensions/SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
+          target_dir: "/var/IBM/Guardium/log/patches/"
+          owner: "tomcat:tomcat"
+          debug: false
+
+      - name: install_edge_patch_on_cm
+        function: install_patch_on_appliance_single
+        module: tasks.setup_appliances
+        description: "Install Edge patch on cm"
+        args:
+          appliance_name: "cm"
+          patch_selection: "1"
+          reinstall_answer: "y"
+          debug: false
