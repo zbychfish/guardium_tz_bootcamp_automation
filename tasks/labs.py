@@ -3860,7 +3860,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         password=cli_pwd,
         prompt_regex=cli_prompt,
         initial_pattern=None,
-        timeout=60,
+        timeout=300,
         strip_ansi=True,
         debug=debug
     )
@@ -3868,7 +3868,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         logger.error("✗ Failed to connect to CM CLI")
         return False
     try:
-        patch_output = cli.execute_command("show system patch available")
+        patch_output = cli.execute_command("show system patch available", timeout=300)
         logger.info(f"Available patches:\n{patch_output}")
         logger.info("✓ Patches registered on CM")
     except Exception as e:
@@ -4242,9 +4242,10 @@ def download_edge_bundle_from_cm(config, logger, verbose=True,
                                  sauropod_remote_dir="/tmp/",
                                  debug=False, **kwargs):
     import os
-    import tempfile
-    from core.ssh_client import SSHClient
+    import paramiko
+    import time
     from core.appliance_config_loader import ApplianceConfigLoader
+    from core.ssh_client import SSHClient
 
     logger.info("=" * 80)
     logger.info("COPY EDGE BUNDLE FROM CM TO SAUROPOD")
@@ -4280,18 +4281,19 @@ def download_edge_bundle_from_cm(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── Step 1: find bundle on CM ────────────────────────────────────────────────
+    # ── Step 1: find bundle on CM via cloudsupport ──────────────────────────────
     remote_dir = f"/var/IBM/Guardium/edges/{node_name}"
     logger.info(f"➜ Looking for *.tar.gz in {remote_dir} on CM ({cm_ip})...")
 
-    ssh_cm = SSHClient(host=cm_ip, username='cloudsupport', password=cloudsupport_pwd, port=22, timeout=30)
+    ssh_cm = paramiko.SSHClient()
+    ssh_cm.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
-        if not ssh_cm.connect():
-            logger.error("✗ Failed to connect to CM as cloudsupport")
-            return False
+        ssh_cm.connect(cm_ip, username='cloudsupport', password=cloudsupport_pwd,
+                       look_for_keys=False, allow_agent=False, timeout=30)
 
-        result = ssh_cm.execute_command(f"sudo ls {remote_dir}/*.tar.gz 2>/dev/null", print_output=False)
-        files = [l.strip() for l in result['stdout'].splitlines() if l.strip().endswith('.tar.gz')]
+        _, stdout, _ = ssh_cm.exec_command(f"sudo ls {remote_dir}/*.tar.gz 2>/dev/null")
+        stdout.channel.recv_exit_status()
+        files = [l.strip() for l in stdout.read().decode().splitlines() if l.strip().endswith('.tar.gz')]
         if not files:
             logger.error(f"✗ No .tar.gz file found in {remote_dir}")
             return False
@@ -4299,47 +4301,32 @@ def download_edge_bundle_from_cm(config, logger, verbose=True,
         filename = os.path.basename(remote_cm_path)
         logger.info(f"  Found: {remote_cm_path}")
 
-        # ── Step 2: download from CM to raptor /tmp/ ─────────────────────────────
-        tmp_path = os.path.join(tempfile.gettempdir(), filename)
-        logger.info(f"➜ Downloading {filename} from CM to raptor ({tmp_path})...")
-        if not ssh_cm.download_file(remote_cm_path, tmp_path):
-            logger.error(f"✗ Failed to download {remote_cm_path}")
-            return False
-        logger.info(f"  ✓ Downloaded to {tmp_path}")
-    except Exception as e:
-        logger.error(f"✗ CM operation failed: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        ssh_cm.disconnect()
+        # ── Step 2: scp push from CM to sauropod directly ───────────────────────
+        # cloudsupport on CM runs sshpass+scp to push file to sauropod /tmp/
+        sauropod_path = os.path.join(sauropod_remote_dir, filename)
+        logger.info(f"➜ Copying {filename} from CM to sauropod ({sauropod_ip}:{ssh_port}) → {sauropod_path}...")
 
-    # ── Step 3: upload from raptor to sauropod ───────────────────────────────────
-    sauropod_path = os.path.join(sauropod_remote_dir, filename)
-    logger.info(f"➜ Uploading {filename} to sauropod ({sauropod_ip}:{ssh_port}) → {sauropod_path}...")
+        scp_cmd = (
+            f"sshpass -p '{root_pwd}' scp -P {ssh_port}"
+            f" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            f" {remote_cm_path} {ssh_username}@{sauropod_ip}:{sauropod_path}"
+        )
+        _, stdout, stderr = ssh_cm.exec_command(scp_cmd, timeout=300)
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0:
+            err = stderr.read().decode().strip()
+            logger.error(f"✗ scp failed (exit {exit_status}): {err}")
+            return False
 
-    ssh_sauropod = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
-                             port=ssh_port, timeout=60)
-    try:
-        if not ssh_sauropod.connect():
-            logger.error("✗ Failed to connect to sauropod")
-            return False
-        if not ssh_sauropod.upload_file(tmp_path, sauropod_path):
-            logger.error(f"✗ Failed to upload {filename} to sauropod")
-            return False
         logger.info(f"✓ Edge bundle copied to sauropod: {sauropod_path}")
         return True
+
     except Exception as e:
-        logger.error(f"✗ Sauropod upload failed: {e}")
+        logger.error(f"✗ Operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
         return False
     finally:
-        ssh_sauropod.disconnect()
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+        ssh_cm.close()
 
