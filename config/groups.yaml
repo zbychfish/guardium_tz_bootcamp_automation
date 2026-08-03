@@ -584,15 +584,15 @@ groups:
           apply_cruise_control: false
           debug: true
 
-      - name: start_kafka_nodes
-        function: start_kafka_nodes
-        module: tasks.labs
-        description: "Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
-        args:
-          cm_appliance: "cm"
-          cluster_name: "kafka_cluster_1"
-          member_list: "kafka1.demo.guardium"
-          debug: true
+      # - name: start_kafka_nodes
+      #   function: start_kafka_nodes
+      #   module: tasks.labs
+      #   description: "Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
+      #   args:
+      #     cm_appliance: "cm"
+      #     cluster_name: "kafka_cluster_1"
+      #     member_list: "kafka1.demo.guardium"
+      #     debug: true
 
       - name: create_uc_credential
         function: create_uc_credential_for_oracle_container

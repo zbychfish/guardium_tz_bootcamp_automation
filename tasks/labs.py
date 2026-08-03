@@ -2727,14 +2727,19 @@ def register_kafka_cluster(
         )
         if found:
             logger.info(f"✓ Kafka cluster '{cluster_name}' confirmed (attempt {attempt}/6)")
-            return True
+            break
 
         if attempt < 6:
             logger.warning(f"⚠ Cluster not found yet (attempt {attempt}/6), waiting 60s...")
             time.sleep(60)
+    else:
+        logger.error(f"✗ Kafka cluster '{cluster_name}' not found after 6 attempts")
+        return False
 
-    logger.error(f"✗ Kafka cluster '{cluster_name}' not found after 6 attempts")
-    return False
+    logger.info("⌛ Waiting 5 minutes for Kafka cluster to stabilize...")
+    time.sleep(300)
+    logger.info("✓ Kafka cluster registration completed")
+    return True
 
 
 def start_kafka_nodes(
