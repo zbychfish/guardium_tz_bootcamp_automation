@@ -3818,11 +3818,15 @@ def install_edge_patch_via_api(config, logger, verbose=True,
                                cm_appliance="cm",
                                patch_filename="SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig",
                                mode="local_only",
+                               appear_interval=15, appear_max=40,
+                               install_interval=60, install_max=60,
                                debug=False, **kwargs):
     import re
     import os
+    import time
     from core.guardium_rest_api import create_guardium_api
     from core.appliance_config_loader import ApplianceConfigLoader
+    from core.appliance_client import ApplianceClient
 
     logger.info("=" * 80)
     logger.info("INSTALL EDGE PATCH ON CM VIA REST API")
@@ -3832,7 +3836,8 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     if not m:
         logger.error(f"Cannot extract patch_number from filename: {patch_filename}")
         return False
-    patch_number = int(m.group(1))
+    patch_number_str = m.group(1)
+    patch_number = int(patch_number_str)
     logger.info(f"Patch number: {patch_number}")
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
@@ -3843,6 +3848,13 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     cm_ip = appliance_config.get('ip')
     if not cm_ip:
         logger.error(f"Appliance '{cm_appliance}' has no IP")
+        return False
+
+    appliance_type = appliance_config.get('type', 'cm')
+    cli_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
+    cli_pwd = config.get_custom_variable('cli_pwd')
+    if not cli_pwd:
+        logger.error("cli_pwd not found in custom_variables")
         return False
 
     api = create_guardium_api(config, logger, cm_appliance)
@@ -3868,7 +3880,76 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         return False
 
     logger.info("✓ Edge patch installation initiated via REST API on CM")
-    return True
+
+    def _cli_show_patch_install():
+        client = ApplianceClient(
+            host=cm_ip, user='cli', password=cli_pwd,
+            prompt_regex=cli_prompt, timeout=60,
+            strip_ansi=True, debug=debug
+        )
+        try:
+            if not client.connect():
+                return None
+            output = client.execute_command("show system patch install")
+            return output
+        except Exception:
+            return None
+        finally:
+            client.disconnect()
+
+    def _parse_patch_status(output, patch_num_str):
+        for line in output.splitlines():
+            line = line.strip()
+            if re.match(rf'^{re.escape(patch_num_str)}\s+', line):
+                return line
+        return None
+
+    # ── Phase 1: wait for patch to appear in install list (every 15s) ──────────
+    logger.info(f"⏳ Phase 1: Waiting for patch {patch_number_str} to appear in 'show system patch install'")
+    logger.info(f"   Checking every {appear_interval}s (max {appear_max} checks = {appear_interval * appear_max}s)...")
+    appeared = False
+    for check in range(1, appear_max + 1):
+        time.sleep(appear_interval)
+        output = _cli_show_patch_install()
+        if output is None:
+            logger.warning(f"  #{check}/{appear_max}: CLI unavailable, retrying...")
+            continue
+        status_line = _parse_patch_status(output, patch_number_str)
+        if status_line:
+            logger.info(f"  ✓ #{check}/{appear_max}: Patch {patch_number_str} appeared → {status_line}")
+            appeared = True
+            break
+        logger.info(f"  #{check}/{appear_max}: Patch {patch_number_str} not yet visible, waiting {appear_interval}s...")
+
+    if not appeared:
+        logger.error(f"✗ Patch {patch_number_str} did not appear in install list after {appear_interval * appear_max}s")
+        return False
+
+    # ── Phase 2: wait for DONE status (every 60s) ───────────────────────────────
+    logger.info(f"⏳ Phase 2: Monitoring installation (every {install_interval}s, max {install_max} checks)...")
+    for check in range(1, install_max + 1):
+        time.sleep(install_interval)
+        logger.info(f"  Check #{check}/{install_max}: querying 'show system patch install'...")
+        output = _cli_show_patch_install()
+        if output is None:
+            logger.warning(f"  #{check}/{install_max}: CLI unavailable (appliance may be restarting), retrying...")
+            continue
+        status_line = _parse_patch_status(output, patch_number_str)
+        if not status_line:
+            logger.warning(f"  #{check}/{install_max}: Patch {patch_number_str} disappeared from list, retrying...")
+            continue
+        logger.info(f"  #{check}/{install_max}: {status_line}")
+        if "DONE: Patch installation Succeeded" in status_line:
+            logger.info("=" * 80)
+            logger.info(f"✓ Edge patch {patch_number_str} installed successfully on CM")
+            logger.info("=" * 80)
+            return True
+        if "FAIL" in status_line.upper() or "ERROR" in status_line.upper():
+            logger.error(f"✗ Patch installation failed: {status_line}")
+            return False
+
+    logger.error(f"✗ Timeout: patch {patch_number_str} not installed after {install_interval * install_max}s")
+    return False
 
 
 def install_k3s_on_sauropod(config, logger, verbose=True,
