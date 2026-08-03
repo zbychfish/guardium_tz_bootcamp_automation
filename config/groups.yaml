@@ -813,10 +813,10 @@ groups:
       - name: install_edge_patch_on_cm
         function: install_patch_on_appliance_single
         module: tasks.setup_appliances
-        description: "Install Edge patch on cm"
+        description: "Install Edge patch on cm (auto-detects position from patch list)"
         args:
           appliance_name: "cm"
-          patch_selection: "1"
+          patch_filename: "SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
           reinstall_answer: "y"
           debug: false
 

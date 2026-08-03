@@ -1489,21 +1489,69 @@ def install_patch_on_appliance_single(
     verbose: bool = True,
     appliance_name: Optional[str] = None,
     patch_selection: Optional[str] = None,
+    patch_filename: Optional[str] = None,
     reinstall_answer: str = "y",
     user: Optional[str] = None,
     password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
     from core.appliance_operations import install_patch_on_appliance as core_install
-    
+    import os
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
-    
-    if not patch_selection:
-        logger.error("patch_selection is required")
+
+    if not patch_selection and not patch_filename:
+        logger.error("patch_selection or patch_filename is required")
         return False
-    
+
+    # Auto-detect patch_selection from filename by checking patches dir on appliance
+    if not patch_selection and patch_filename:
+        from core.appliance_client import ApplianceClient
+        from core.appliance_config_loader import ApplianceConfigLoader
+
+        appliance_loader = ApplianceConfigLoader(config_loader=config)
+        appliance_config = appliance_loader.get_appliance(appliance_name)
+        if not appliance_config:
+            logger.error(f"Appliance '{appliance_name}' not found")
+            return False
+
+        host = appliance_config.get('ip')
+        appliance_type = appliance_config.get('type')
+        cli_pwd = config.get_custom_variable('cli_pwd')
+        if not cli_pwd:
+            logger.error("cli_pwd not found in custom_variables")
+            return False
+
+        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
+
+        client = ApplianceClient(host=host, user='cli', password=cli_pwd,
+                                 prompt_regex=prompt_regex, timeout=60,
+                                 strip_ansi=True, debug=debug)
+        if not client.connect():
+            logger.error("Failed to connect to appliance for patch list")
+            return False
+
+        try:
+            output = client.execute_command("show system patch")
+        finally:
+            client.disconnect()
+
+        # Parse "N. filename" lines, sort alphabetically (as Guardium does), find position
+        import re
+        sig_name = os.path.basename(patch_filename)
+        entries = re.findall(r'^\s*\d+\.\s+(\S+)', output, re.MULTILINE)
+        sorted_entries = sorted(entries)
+        logger.info(f"Patches on appliance (sorted): {sorted_entries}")
+
+        try:
+            patch_selection = str(sorted_entries.index(sig_name) + 1)
+            logger.info(f"Auto-detected patch_selection={patch_selection} for '{sig_name}'")
+        except ValueError:
+            logger.error(f"Patch '{sig_name}' not found in list: {sorted_entries}")
+            return False
+
     return core_install(
         config=config,
         logger=logger,
