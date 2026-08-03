@@ -2835,6 +2835,11 @@ def import_uc_profile_oracle_container(
     if debug:
         logger.info(f"API response: {result}")
     logger.info("✓ UC profile imported")
+
+    logger.info("⌛ Waiting 1 minute for UC profile to be processed...")
+    import time
+    time.sleep(60)
+    logger.info("✓ Wait completed")
     return True
 
 
