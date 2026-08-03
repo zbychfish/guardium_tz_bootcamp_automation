@@ -811,6 +811,29 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def patch_install(
+        self,
+        patch_number: int,
+        unit_ip_list: str,
+        mode: str = "local_only",
+        patch_date: Optional[str] = None,
+        api_target_host: Optional[str] = None
+    ) -> dict:
+        url = f'{self.base_url}/restAPI/patch_install'
+        headers = self.get_headers()
+        data: dict = {
+            'patch_number': patch_number,
+            'unitIpList': unit_ip_list,
+            'mode': mode,
+        }
+        if patch_date:
+            data['patch_date'] = patch_date
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        response = requests.put(url, json=data, headers=headers, verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
     def engine_config(
         self,
         compute_average: Optional[bool] = None,

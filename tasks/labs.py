@@ -3814,6 +3814,63 @@ def create_va_oauth_client(config, logger, verbose=True,
         client.disconnect()
 
 
+def install_edge_patch_via_api(config, logger, verbose=True,
+                               cm_appliance="cm",
+                               patch_filename="SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig",
+                               mode="local_only",
+                               debug=False, **kwargs):
+    import re
+    import os
+    from core.guardium_rest_api import create_guardium_api
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("INSTALL EDGE PATCH ON CM VIA REST API")
+    logger.info("=" * 80)
+
+    m = re.search(r'12\.0p(\d+)', os.path.basename(patch_filename))
+    if not m:
+        logger.error(f"Cannot extract patch_number from filename: {patch_filename}")
+        return False
+    patch_number = int(m.group(1))
+    logger.info(f"Patch number: {patch_number}")
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = appliance_loader.get_appliance(cm_appliance)
+    if not appliance_config:
+        logger.error(f"Appliance '{cm_appliance}' not found in machines_info.json")
+        return False
+    cm_ip = appliance_config.get('ip')
+    if not cm_ip:
+        logger.error(f"Appliance '{cm_appliance}' has no IP")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+    api.get_token(username='demo', password=pwd)
+
+    logger.info(f"➜ Calling patch_install API (patch_number={patch_number}, unit={cm_ip}, mode={mode})...")
+    try:
+        result = api.patch_install(patch_number=patch_number, unit_ip_list=cm_ip, mode=mode)
+    except Exception as e:
+        logger.error(f"✗ patch_install API call failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info(f"  API response: {result}")
+    if result.get('ErrorCode') or result.get('errorCode'):
+        logger.error(f"✗ patch_install returned error: {result}")
+        return False
+
+    logger.info("✓ Edge patch installation initiated via REST API on CM")
+    return True
+
+
 def install_k3s_on_sauropod(config, logger, verbose=True,
                             k3s_version="v1.32.13+k3s1",
                             cm_appliance="cm",
