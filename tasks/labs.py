@@ -4319,7 +4319,6 @@ def download_edge_bundle_from_cm(config, logger, verbose=True,
             return False
 
         logger.info(f"✓ Edge bundle copied to sauropod: {sauropod_path}")
-        return True
 
     except Exception as e:
         logger.error(f"✗ Operation failed: {e}")
@@ -4329,4 +4328,33 @@ def download_edge_bundle_from_cm(config, logger, verbose=True,
         return False
     finally:
         ssh_cm.close()
+
+    # ── Step 3: extract on sauropod and remove archive ───────────────────────────
+    logger.info(f"➜ Extracting {filename} on sauropod ({sauropod_ip}:{ssh_port})...")
+    ssh_sauropod = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
+                             port=ssh_port, timeout=60)
+    try:
+        if not ssh_sauropod.connect():
+            logger.error("✗ Failed to connect to sauropod for extraction")
+            return False
+        extract_dir = sauropod_remote_dir.rstrip('/')
+        for cmd, desc in [
+            (f"tar -xzf {sauropod_path} -C {extract_dir}", f"extract {filename}"),
+            (f"rm -f {sauropod_path}", f"remove archive {filename}"),
+        ]:
+            result = ssh_sauropod.execute_command(cmd, print_output=False)
+            if result['rc'] != 0:
+                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                return False
+            logger.info(f"  ✓ {desc}")
+        logger.info(f"✓ Edge bundle extracted to {extract_dir}")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Extraction failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh_sauropod.disconnect()
 
