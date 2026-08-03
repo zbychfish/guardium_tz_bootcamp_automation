@@ -1506,9 +1506,9 @@ def install_patch_on_appliance_single(
         logger.error("patch_selection or patch_filename is required")
         return False
 
-    # Auto-detect patch_selection from filename by checking patches dir on appliance
+    # Auto-detect patch_selection by listing /var/IBM/Guardium/log/patches/ via SSH
     if not patch_selection and patch_filename:
-        from core.appliance_client import ApplianceClient
+        import paramiko
         from core.appliance_config_loader import ApplianceConfigLoader
 
         appliance_loader = ApplianceConfigLoader(config_loader=config)
@@ -1518,38 +1518,31 @@ def install_patch_on_appliance_single(
             return False
 
         host = appliance_config.get('ip')
-        appliance_type = appliance_config.get('type')
-        cli_pwd = config.get_custom_variable('cli_pwd')
-        if not cli_pwd:
-            logger.error("cli_pwd not found in custom_variables")
-            return False
-
-        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
-
-        client = ApplianceClient(host=host, user='cli', password=cli_pwd,
-                                 prompt_regex=prompt_regex, timeout=60,
-                                 strip_ansi=True, debug=debug)
-        if not client.connect():
-            logger.error("Failed to connect to appliance for patch list")
+        cloudsupport_pwd = config.get_custom_variable('cloudsupport_pwd')
+        if not cloudsupport_pwd:
+            logger.error("cloudsupport_pwd not found in custom_variables")
             return False
 
         try:
-            output = client.execute_command("show system patch")
-        finally:
-            client.disconnect()
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(host, username='cloudsupport', password=cloudsupport_pwd, timeout=30)
+            _, stdout, _ = ssh.exec_command("sudo ls /var/IBM/Guardium/log/patches/*.sig 2>/dev/null")
+            raw = stdout.read().decode()
+            ssh.close()
+        except Exception as e:
+            logger.error(f"Failed to list patches via SSH: {e}")
+            return False
 
-        # Parse "N. filename" lines, sort alphabetically (as Guardium does), find position
-        import re
         sig_name = os.path.basename(patch_filename)
-        entries = re.findall(r'^\s*\d+\.\s+(\S+)', output, re.MULTILINE)
-        sorted_entries = sorted(entries)
-        logger.info(f"Patches on appliance (sorted): {sorted_entries}")
+        entries = sorted([os.path.basename(p.strip()) for p in raw.splitlines() if p.strip()])
+        logger.info(f"Patches on appliance (sorted): {entries}")
 
         try:
-            patch_selection = str(sorted_entries.index(sig_name) + 1)
+            patch_selection = str(entries.index(sig_name) + 1)
             logger.info(f"Auto-detected patch_selection={patch_selection} for '{sig_name}'")
         except ValueError:
-            logger.error(f"Patch '{sig_name}' not found in list: {sorted_entries}")
+            logger.error(f"Patch '{sig_name}' not found in list: {entries}")
             return False
 
     return core_install(

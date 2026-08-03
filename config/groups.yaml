@@ -265,7 +265,7 @@ groups:
   atap_lab:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
-    auto_execute: true  # Executed after marker, on demand
+    auto_execute: false  # Executed after marker, on demand
     dependencies: [gim_lab]  # Requires initial_preparation to be completed
     stages:
       
@@ -339,7 +339,7 @@ groups:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
     auto_execute: true  # Executed on demand
-    dependencies: [atap_lab]
+    dependencies: [false]
     stages:
       - name: configure_db2_exit
         function: db2_exit_configuration
@@ -415,7 +415,7 @@ groups:
   va_basics:
     name: "VA Basics Lab"
     description: "Enable Vulnerability Assessment feature and basic VA lab setup"
-    auto_execute: true
+    auto_execute: false
     dependencies: [etap_lab]
     stages:
       - name: import_dps
@@ -488,7 +488,7 @@ groups:
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
-    auto_execute: true
+    auto_execute: false
     dependencies: [va_basics]
     stages:
       - name: install_stap_on_sauropod
