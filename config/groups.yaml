@@ -819,3 +819,15 @@ groups:
           patch_selection: "1"
           reinstall_answer: "y"
           debug: false
+
+      - name: install_k3s_on_sauropod
+        function: install_k3s_on_sauropod
+        module: tasks.labs
+        description: "Install k3s v1.32.13+k3s1 on sauropod (--disable traefik), wait for 3 pods Running, patch CoreDNS"
+        args:
+          k3s_version: "v1.32.13+k3s1"
+          cm_appliance: "cm"
+          expected_pods: 3
+          max_wait: 300
+          check_interval: 15
+          debug: false

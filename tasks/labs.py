@@ -3808,3 +3808,150 @@ def create_va_oauth_client(config, logger, verbose=True,
         return False
     finally:
         client.disconnect()
+
+
+def install_k3s_on_sauropod(config, logger, verbose=True,
+                            k3s_version="v1.32.13+k3s1",
+                            cm_appliance="cm",
+                            expected_pods=3, max_wait=300, check_interval=15,
+                            debug=False, **kwargs):
+    import time
+    from core.ssh_client import SSHClient
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("INSTALL K3S ON SAUROPOD")
+    logger.info("=" * 80)
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    cm_config = appliance_loader.get_appliance(cm_appliance)
+    if not cm_config:
+        logger.error(f"Appliance '{cm_appliance}' not found in machines_info.json")
+        return False
+    cm_ip = cm_config.get('ip')
+    if not cm_ip:
+        logger.error(f"Appliance '{cm_appliance}' has no IP")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("Root password (pwd) not found in custom_variables")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                    port=ssh_port, timeout=60)
+
+    try:
+        logger.info(f"Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        if not ssh.connect():
+            logger.error("Failed to connect to sauropod")
+            return False
+        logger.info("✓ Connected to sauropod")
+
+        install_cmd = (
+            f"curl -sfL https://get.k3s.io | "
+            f"INSTALL_K3S_VERSION={k3s_version} sh -s - --disable traefik"
+        )
+        logger.info(f"➜ Installing k3s {k3s_version}...")
+        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ k3s installation failed: {result['stderr']}")
+            return False
+        logger.info("✓ k3s installed")
+
+        logger.info(f"➜ Waiting for {expected_pods} pods Running (max {max_wait}s, check every {check_interval}s)...")
+        elapsed = 0
+        while elapsed < max_wait:
+            result = ssh.execute_command("kubectl get pods -A --no-headers 2>/dev/null", print_output=False)
+            if result['rc'] == 0:
+                lines = [l for l in result['stdout'].splitlines() if l.strip()]
+                running = [l for l in lines if 'Running' in l]
+                logger.info(f"  Pods Running: {len(running)}/{len(lines)} (elapsed {elapsed}s)")
+                if debug:
+                    for l in lines:
+                        logger.info(f"    {l}")
+                if len(running) >= expected_pods:
+                    logger.info(f"✓ {len(running)} pods Running — k3s ready")
+                    break
+            time.sleep(check_interval)
+            elapsed += check_interval
+        else:
+            logger.error(f"✗ Timeout: expected {expected_pods} pods Running after {max_wait}s")
+            return False
+
+        # Patch CoreDNS NodeHosts and Corefile with correct IPs, then restart
+        logger.info(f"➜ Patching CoreDNS (sauropod_ip={sauropod_ip}, cm_ip={cm_ip})...")
+
+        node_hosts_value = (
+            f"{sauropod_ip} sauropod.demo.guardium\\n"
+            f"{cm_ip} cm.demo.guardium\\n"
+            f"{cm_ip} cm.demo.guardium.demo.guardium\\n"
+        )
+        corefile_value = (
+            ".:53 {\\n"
+            "    errors\\n"
+            "    health\\n"
+            "    ready\\n"
+            "    kubernetes cluster.local in-addr.arpa ip6.arpa {\\n"
+            "        pods insecure\\n"
+            "        fallthrough in-addr.arpa ip6.arpa\\n"
+            "    }\\n"
+            "    hosts {\\n"
+            f"        {cm_ip} cm.demo.guardium\\n"
+            f"        {cm_ip} cm.demo.guardium.demo.guardium\\n"
+            "        fallthrough\\n"
+            "    }\\n"
+            "    prometheus :9153\\n"
+            "    forward . /etc/resolv.conf\\n"
+            "    cache 30\\n"
+            "    loop\\n"
+            "    reload\\n"
+            "    loadbalance\\n"
+            "}\\n"
+        )
+
+        coredns_cmds = [
+            (
+                f"kubectl -n kube-system patch configmap coredns --type='json' "
+                f"-p='[{{\"op\":\"replace\",\"path\":\"/data/NodeHosts\",\"value\":\"{node_hosts_value}\"}}]'",
+                "patch CoreDNS NodeHosts"
+            ),
+            (
+                f"kubectl -n kube-system patch configmap coredns --type=json "
+                f"-p='[{{\"op\":\"replace\",\"path\":\"/data/Corefile\",\"value\":\"{corefile_value}\"}}]'",
+                "patch CoreDNS Corefile"
+            ),
+            (
+                "kubectl -n kube-system rollout restart deployment coredns",
+                "restart CoreDNS"
+            ),
+        ]
+
+        for cmd, desc in coredns_cmds:
+            logger.info(f"  ➜ {desc}...")
+            result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"  ✗ Failed to {desc}: {result['stderr']}")
+                return False
+            logger.info(f"  ✓ {desc}")
+
+        logger.info("✓ k3s installed and CoreDNS configured on sauropod")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ SSH operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
