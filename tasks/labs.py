@@ -4365,6 +4365,8 @@ def deploy_edge_gateway(config, logger, verbose=True,
                         script_timeout=600,
                         debug=False, **kwargs):
     import time
+    import socket
+    import paramiko
     from core.ssh_client import SSHClient
 
     logger.info("=" * 80)
@@ -4384,6 +4386,7 @@ def deploy_edge_gateway(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
+    # ── Step 1: install expect (no TTY needed) ───────────────────────────────────
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
                     port=ssh_port, timeout=60)
     try:
@@ -4392,26 +4395,72 @@ def deploy_edge_gateway(config, logger, verbose=True,
             logger.error("✗ Failed to connect to sauropod")
             return False
         logger.info("✓ Connected to sauropod")
-
         logger.info("➜ Installing expect...")
         result = ssh.execute_command("dnf -y install expect", print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"✗ Failed to install expect: {result['stderr']}")
             return False
         logger.info("✓ expect installed")
+    except Exception as e:
+        logger.error(f"✗ Failed to install expect: {e}")
+        return False
+    finally:
+        ssh.disconnect()
 
-        script_path = f"{edge_dir}/{install_script}"
-        logger.info(f"➜ Running {script_path} (timeout={script_timeout}s)...")
-        result = ssh.execute_command(
-            f"cd {edge_dir} && bash {install_script}",
-            timeout=script_timeout,
-            print_output=verbose
-        )
-        if result['rc'] != 0:
-            logger.error(f"✗ edge-install.sh failed (rc={result['rc']}): {result['stderr']}")
+    # ── Step 2: run edge-install.sh with TTY (invoke_shell) ──────────────────────
+    logger.info(f"➜ Running {edge_dir}/{install_script} with TTY (timeout={script_timeout}s)...")
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        client.connect(sauropod_ip, port=ssh_port, username=ssh_username, password=root_pwd,
+                       look_for_keys=False, allow_agent=False, timeout=30)
+
+        channel = client.invoke_shell(term="xterm", width=200, height=50)
+        channel.settimeout(0.5)
+        time.sleep(0.5)
+        while channel.recv_ready():
+            channel.recv(65535)
+
+        cmd = f"cd {edge_dir} && bash {install_script}; echo __EXIT_CODE__:$?\n"
+        channel.send(cmd.encode())
+
+        buf = ""
+        deadline = time.time() + script_timeout
+        last_activity = time.time()
+        exit_code = None
+
+        while time.time() < deadline:
+            try:
+                chunk = channel.recv(4096).decode('utf-8', errors='replace')
+                if chunk:
+                    buf += chunk
+                    last_activity = time.time()
+                    if verbose:
+                        for line in chunk.splitlines():
+                            if line.strip():
+                                logger.info(f"  {line}")
+                    if '__EXIT_CODE__:' in buf:
+                        import re
+                        m = re.search(r'__EXIT_CODE__:(\d+)', buf)
+                        if m:
+                            exit_code = int(m.group(1))
+                        break
+            except socket.timeout:
+                if time.time() - last_activity > 60:
+                    logger.warning("  ⚠ No output for 60s, still waiting...")
+                    last_activity = time.time()
+                continue
+            if channel.closed:
+                break
+
+        if exit_code is None:
+            logger.error(f"✗ edge-install.sh timed out after {script_timeout}s")
+            return False
+        if exit_code != 0:
+            logger.error(f"✗ edge-install.sh failed (rc={exit_code})")
             return False
 
-        logger.info("✓ edge-install.sh completed")
+        logger.info("✓ edge-install.sh completed successfully")
         return True
 
     except Exception as e:
@@ -4421,7 +4470,7 @@ def deploy_edge_gateway(config, logger, verbose=True,
             logger.error(traceback.format_exc())
         return False
     finally:
-        ssh.disconnect()
+        client.close()
 
 
 def monitor_edge_gateway_deployment(config, logger, verbose=True,
