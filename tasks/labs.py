@@ -3823,6 +3823,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     import os
     from core.guardium_rest_api import create_guardium_api
     from core.appliance_config_loader import ApplianceConfigLoader
+    from core.appliance_client import ApplianceClient
 
     logger.info("=" * 80)
     logger.info("INSTALL EDGE PATCH ON CM VIA REST API")
@@ -3844,6 +3845,36 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     if not cm_ip:
         logger.error(f"Appliance '{cm_appliance}' has no IP")
         return False
+
+    appliance_type = appliance_config.get('type', 'cm')
+    cli_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
+    cli_pwd = config.get_custom_variable('cli_pwd')
+    if not cli_pwd:
+        logger.error("cli_pwd not found in custom_variables")
+        return False
+
+    logger.info("➜ Running 'show install patch available' on CM CLI...")
+    cli = ApplianceClient(
+        host=cm_ip, user='cli', password=cli_pwd,
+        prompt_regex=cli_prompt, timeout=120,
+        strip_ansi=True, debug=debug
+    )
+    try:
+        if not cli.connect():
+            logger.error("✗ Failed to connect to CM CLI")
+            return False
+        output = cli.execute_command("show install patch available")
+        if verbose:
+            logger.info(f"  Output:\n{output}")
+        logger.info("✓ 'show install patch available' completed")
+    except Exception as e:
+        logger.error(f"✗ CLI command failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        cli.disconnect()
 
     api = create_guardium_api(config, logger, cm_appliance)
     pwd = config.get_custom_variable('pwd')
