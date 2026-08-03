@@ -4023,71 +4023,48 @@ def register_edge_gateway(config, logger, verbose=True,
                           namespace="edge",
                           storageclass_rw_once="local-path",
                           version="v2.1.1",
+                          deploy_proxy=1,
                           debug=False, **kwargs):
-    from core.appliance_config_loader import ApplianceConfigLoader
-    from core.appliance_client import ApplianceClient
+    from core.guardium_rest_api import create_guardium_api
 
     logger.info("=" * 80)
     logger.info("REGISTER EDGE GATEWAY ON CM")
     logger.info("=" * 80)
     logger.info(f"  name={name}, namespace={namespace}, exportsTo={exports_to}")
-    logger.info(f"  storageclass_rw_once={storageclass_rw_once}, version={version}")
+    logger.info(f"  storageclass_rw_once={storageclass_rw_once}, version={version}, deployProxy={deploy_proxy}")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(cm_appliance)
-    if not appliance_config:
-        logger.error(f"Appliance '{cm_appliance}' not found in machines_info.json")
-        return False
-    cm_ip = appliance_config.get('ip')
-    if not cm_ip:
-        logger.error(f"Appliance '{cm_appliance}' has no IP")
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("pwd not found in custom_variables")
         return False
 
-    appliance_type = appliance_config.get('type', 'cm')
-    cli_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
-    cli_pwd = config.get_custom_variable('cli_pwd')
-    if not cli_pwd:
-        logger.error("cli_pwd not found in custom_variables")
-        return False
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
 
-    cmd = (
-        f"grdapi registerEdge"
-        f" exportsTo={exports_to}"
-        f" name={name}"
-        f" storageclass_rw_once={storageclass_rw_once}"
-        f" version={version}"
-        f" namespace={namespace}"
-    )
-    logger.info(f"➜ Executing: {cmd}")
-
-    cli = ApplianceClient(
-        host=cm_ip, user='cli', password=cli_pwd,
-        prompt_regex=cli_prompt, timeout=120,
-        strip_ansi=True, debug=debug
-    )
     try:
-        if not cli.connect():
-            logger.error("✗ Failed to connect to CM CLI")
-            return False
-        output = cli.execute_command(cmd, timeout=120)
-        if verbose:
-            logger.info(f"  Output:\n{output}")
-        if "errorCode" in output.lower() or "errorMessage" in output.lower():
-            logger.error(f"✗ registerEdge returned error: {output}")
-            return False
-        logger.info("✓ Edge gateway registered successfully on CM")
-        return True
-    except TimeoutError:
-        logger.error("✗ registerEdge CLI command timed out after 120s")
-        return False
+        result = api.register_edge(
+            name=name,
+            namespace=namespace,
+            exports_to=exports_to,
+            storageclass_rw_once=storageclass_rw_once,
+            version=version,
+            deploy_proxy=deploy_proxy,
+        )
     except Exception as e:
-        logger.error(f"✗ CLI command failed: {e}")
+        logger.error(f"✗ register_edge API call failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
         return False
-    finally:
-        cli.disconnect()
+
+    if verbose:
+        logger.info(f"  API response: {result}")
+    if result.get('ErrorCode') or result.get('errorCode'):
+        logger.error(f"✗ register_edge returned error: {result}")
+        return False
+
+    logger.info("✓ Edge gateway registered successfully on CM")
+    return True
 
 
 def install_k3s_on_sauropod(config, logger, verbose=True,

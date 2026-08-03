@@ -848,7 +848,7 @@ groups:
       - name: register_edge_gateway
         function: register_edge_gateway
         module: tasks.labs
-        description: "Register Edge gateway on CM via grdapi registerEdge CLI command"
+        description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge"
         args:
           cm_appliance: "cm"
           exports_to: "cm.demo.guardium"
@@ -856,6 +856,7 @@ groups:
           namespace: "edge"
           storageclass_rw_once: "local-path"
           version: "v2.1.1"
+          deploy_proxy: 1
           debug: false
 
       - name: download_edge_bundle_via_api
