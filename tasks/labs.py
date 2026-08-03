@@ -4236,6 +4236,85 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
     finally:
         ssh.disconnect()
 
+
+def download_edge_bundle_via_api(config, logger, verbose=True,
+                                 cm_appliance="cm",
+                                 edge_name="sauropod.demo.guardium",
+                                 sauropod_dest="/tmp/edge.tar.gz",
+                                 debug=False, **kwargs):
+    import os
+    import tempfile
+    from core.guardium_rest_api import create_guardium_api
+    from core.ssh_client import SSHClient
+
+    logger.info("=" * 80)
+    logger.info("DOWNLOAD EDGE BUNDLE VIA REST API TO SAUROPOD")
+    logger.info("=" * 80)
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    # ── call REST API from raptor ────────────────────────────────────────────────
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+    logger.info(f"➜ Calling get_bundle(name={edge_name}) on CM...")
+    try:
+        bundle_bytes = api.get_bundle(name=edge_name)
+    except Exception as e:
+        logger.error(f"✗ get_bundle API call failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+
+    if not bundle_bytes:
+        logger.error("✗ get_bundle returned empty response")
+        return False
+    logger.info(f"✓ Bundle received ({len(bundle_bytes)} bytes)")
+
+    # ── upload to sauropod via SFTP ──────────────────────────────────────────────
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    tmp_path = os.path.join(tempfile.gettempdir(), 'edge.tar.gz')
+    with open(tmp_path, 'wb') as f:
+        f.write(bundle_bytes)
+    logger.info(f"➜ Uploading to sauropod ({sauropod_ip}:{ssh_port}) → {sauropod_dest}...")
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
+                    port=ssh_port, timeout=120)
+    try:
+        if not ssh.connect():
+            logger.error("✗ Failed to connect to sauropod")
+            return False
+        if not ssh.upload_file(tmp_path, sauropod_dest):
+            logger.error(f"✗ Failed to upload bundle to sauropod")
+            return False
+        logger.info(f"✓ Edge bundle uploaded to sauropod: {sauropod_dest}")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Upload failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+
 def download_edge_bundle_from_cm(config, logger, verbose=True,
                                  cm_appliance="cm",
                                  node_name="sauropod.demo.guardium",

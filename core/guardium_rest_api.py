@@ -871,6 +871,12 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def get_bundle(self, name: str) -> bytes:
+        url = f'{self.base_url}/restAPI/get_bundle'
+        response = requests.get(url, params={'name': name}, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.content
+
     def register_edge(
         self,
         exports_to: str,

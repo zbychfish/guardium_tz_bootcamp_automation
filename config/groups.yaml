@@ -858,6 +858,16 @@ groups:
           version: "v2.1.1"
           debug: false
 
+      - name: download_edge_bundle_via_api
+        function: download_edge_bundle_via_api
+        module: tasks.labs
+        description: "Download edge bundle from CM REST API get_bundle, save as /tmp/edge.tar.gz on sauropod"
+        args:
+          cm_appliance: "cm"
+          edge_name: "sauropod.demo.guardium"
+          sauropod_dest: "/tmp/edge.tar.gz"
+          debug: false
+
       - name: download_edge_bundle_from_cm
         function: download_edge_bundle_from_cm
         module: tasks.labs
