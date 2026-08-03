@@ -4023,7 +4023,7 @@ def register_edge_gateway(config, logger, verbose=True,
                           namespace="edge",
                           storageclass_rw_once="local-path",
                           version="v2.1.1",
-                          deploy_proxy=1,
+                          deploy_proxy=True,
                           debug=False, **kwargs):
     from core.guardium_rest_api import create_guardium_api
 

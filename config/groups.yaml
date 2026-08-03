@@ -856,7 +856,7 @@ groups:
           namespace: "edge"
           storageclass_rw_once: "local-path"
           version: "v2.1.1"
-          deploy_proxy: 1
+          deploy_proxy: true
           debug: false
 
       - name: download_edge_bundle_via_api

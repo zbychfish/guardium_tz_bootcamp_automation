@@ -9,7 +9,7 @@ import os
 import json
 import requests
 import time
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, Union
 from functools import wraps
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -884,7 +884,7 @@ class GuardiumRestAPI:
         exports_to: str,
         storageclass_rw_once: str,
         version: str,
-        deploy_proxy: int = 1,
+        deploy_proxy: Union[bool, int] = True,
         description: Optional[str] = None,
         backup_exports: Optional[str] = None,
         cpu_limits: Optional[str] = None,
@@ -900,7 +900,7 @@ class GuardiumRestAPI:
             'exportsTo': exports_to,
             'storageclass_rw_once': storageclass_rw_once,
             'version': version,
-            'deployProxy': str(deploy_proxy),
+            'deployProxy': str(int(deploy_proxy)),
         }
         if description is not None:
             data['description'] = description
