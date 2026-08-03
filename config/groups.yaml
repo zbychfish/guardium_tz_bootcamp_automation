@@ -869,10 +869,17 @@ groups:
           sauropod_dest: "/tmp/edge.tar.gz"
           debug: false
 
+      - name: prepare_sauropod_for_edge
+        function: prepare_sauropod_for_edge
+        module: tasks.labs
+        description: "Stop & disable firewalld on raptor, install expect on sauropod"
+        args:
+          debug: false
+
       - name: deploy_edge_gateway
         function: deploy_edge_gateway
         module: tasks.labs
-        description: "Install expect on sauropod and run edge-install.sh from /tmp/sauropod.demo.guardium"
+        description: "Run edge-install.sh from /tmp/sauropod.demo.guardium with TTY"
         args:
           edge_dir: "/tmp/sauropod.demo.guardium"
           install_script: "edge-install.sh"

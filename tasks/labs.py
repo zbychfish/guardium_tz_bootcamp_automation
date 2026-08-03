@@ -4303,6 +4303,64 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
 
 
 
+def prepare_sauropod_for_edge(config, logger, verbose=True,
+                              debug=False, **kwargs):
+    from core.ssh_client import SSHClient
+    from core.utils import execute_local_command
+
+    logger.info("=" * 80)
+    logger.info("PREPARE SAUROPOD FOR EDGE DEPLOYMENT")
+    logger.info("=" * 80)
+
+    # ── stop & disable firewalld on raptor ───────────────────────────────────────
+    for cmd, desc in [
+        ("systemctl stop firewalld", "stop firewalld"),
+        ("systemctl disable firewalld", "disable firewalld"),
+    ]:
+        logger.info(f"➜ {desc}...")
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+            return False
+        logger.info(f"  ✓ {desc}")
+
+    # ── install expect on sauropod ───────────────────────────────────────────────
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("Sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+    root_pwd = config.get_custom_variable('pwd')
+    if not root_pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
+                    port=ssh_port, timeout=60)
+    try:
+        if not ssh.connect():
+            logger.error("✗ Failed to connect to sauropod")
+            return False
+        logger.info("➜ Installing expect on sauropod...")
+        result = ssh.execute_command("dnf -y install expect", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ Failed to install expect: {result['stderr']}")
+            return False
+        logger.info("✓ expect installed on sauropod")
+        return True
+    except Exception as e:
+        logger.error(f"✗ Operation failed: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+
 def deploy_edge_gateway(config, logger, verbose=True,
                         edge_dir="/tmp/sauropod.demo.guardium",
                         install_script="edge-install.sh",
@@ -4311,7 +4369,6 @@ def deploy_edge_gateway(config, logger, verbose=True,
     import time
     import socket
     import paramiko
-    from core.ssh_client import SSHClient
 
     logger.info("=" * 80)
     logger.info("DEPLOY EDGE GATEWAY ON SAUROPOD")
@@ -4330,28 +4387,7 @@ def deploy_edge_gateway(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── Step 1: install expect (no TTY needed) ───────────────────────────────────
-    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_pwd,
-                    port=ssh_port, timeout=60)
-    try:
-        logger.info(f"Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
-        if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
-            return False
-        logger.info("✓ Connected to sauropod")
-        logger.info("➜ Installing expect...")
-        result = ssh.execute_command("dnf -y install expect", print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ Failed to install expect: {result['stderr']}")
-            return False
-        logger.info("✓ expect installed")
-    except Exception as e:
-        logger.error(f"✗ Failed to install expect: {e}")
-        return False
-    finally:
-        ssh.disconnect()
-
-    # ── Step 2: run edge-install.sh with TTY (invoke_shell) ──────────────────────
+    # ── run edge-install.sh with TTY (invoke_shell) ──────────────────────────────
     logger.info(f"➜ Running {edge_dir}/{install_script} with TTY (timeout={script_timeout}s)...")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
