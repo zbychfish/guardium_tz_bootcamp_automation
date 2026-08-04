@@ -918,3 +918,12 @@ groups:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
+
+      - name: configure_stap_for_edge_on_sauropod
+        function: configure_stap_for_edge_on_sauropod
+        module: tasks.labs
+        description: "Get haproxy NodePorts from k3s, set STAP params via GIM API, schedule install"
+        args:
+          cm_appliance: "cm"
+          installation_delay: 10
+          debug: false
