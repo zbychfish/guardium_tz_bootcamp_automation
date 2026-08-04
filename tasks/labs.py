@@ -4557,13 +4557,14 @@ def install_policy_on_sauropod(config, logger, verbose=True,
                                cm_appliance="cm",
                                policy_name="Default bootcamp policy",
                                units="sauropod.demo.guardium",
+                               install_action="install_override",
                                debug=False, **kwargs):
     from core.guardium_rest_api import create_guardium_api
 
     logger.info("=" * 80)
     logger.info("INSTALL POLICY ON SAUROPOD")
     logger.info("=" * 80)
-    logger.info(f"  policy={policy_name}, units={units}")
+    logger.info(f"  policy={policy_name}, units={units}, install_action={install_action}")
 
     pwd = config.get_custom_variable('pwd')
     if not pwd:
@@ -4577,6 +4578,7 @@ def install_policy_on_sauropod(config, logger, verbose=True,
     result = api.install_policy(
         policy=policy_name,
         units=units,
+        install_action=install_action,
         max_retries=3,
         retry_delay=60,
         debug=debug
