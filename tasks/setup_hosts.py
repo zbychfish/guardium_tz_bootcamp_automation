@@ -862,4 +862,89 @@ def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
 
 
 
+def create_demo_user_on_ceratops(config, logger, verbose=True,
+                                  ceratops_machine: str = "ceratops",
+                                  ssh_username: str = "itzuser",
+                                  demo_username: str = "demo",
+                                  debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("CREATE DEMO USER ON CERATOPS (WINDOWS)")
+    logger.info("=" * 80)
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("✗ pwd not found in custom_variables")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            commands = [
+                f'net user {demo_username} "{pwd}" /add',
+                f'net localgroup Administrators {demo_username} /add',
+            ]
+            for cmd in commands:
+                logger.info(f"  ➜ {cmd}")
+                result = ssh.execute_command(cmd, print_output=verbose)
+                if result['rc'] != 0:
+                    combined = (result['stdout'] + result['stderr']).lower()
+                    if "already" in combined or "member" in combined:
+                        logger.info(f"  ℹ Already exists, skipping")
+                    else:
+                        logger.error(f"✗ Command failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                        return False
+                else:
+                    logger.info("  ✓ OK")
+
+            logger.info(f"✓ User '{demo_username}' created and added to Administrators on {ceratops_machine}")
+            return True
+
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 # Made with Bob

@@ -39,6 +39,16 @@ groups:
         module: tasks.preparation_for_services_deployment
         description: "Install kernel-devel, Java 11 and podman on sauropod via SSH"
 
+      - name: create_demo_user_on_ceratops
+        function: create_demo_user_on_ceratops
+        module: tasks.setup_hosts
+        description: "Create 'demo' user on ceratops (Windows) via SSH as itzuser, add to Administrators"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          demo_username: "demo"
+          debug: false
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
