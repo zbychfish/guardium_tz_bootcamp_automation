@@ -909,3 +909,12 @@ groups:
           units: "sauropod.demo.guardium"
           install_action: "install_override"
           debug: false
+
+      - name: import_edge_dashboard
+        function: import_edge_dashboard
+        module: tasks.labs
+        description: "Import Edge dashboard from exports/exp_dashboard_edge.sql"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false

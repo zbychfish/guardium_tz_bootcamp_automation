@@ -4592,3 +4592,37 @@ def install_policy_on_sauropod(config, logger, verbose=True,
     logger.info(f"✓ Policy '{policy_name}' installed on sauropod")
     return True
 
+
+def import_edge_dashboard(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    logger.info("=" * 80)
+    logger.info("IMPORT EDGE DASHBOARD ON CM")
+    logger.info("=" * 80)
+
+    definition_files = ["exp_dashboard_edge.sql"]
+
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"Files to import: {', '.join(definition_files)}")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+
+    if success:
+        logger.info("✓ Edge dashboard imported successfully")
+
+    return success
+
