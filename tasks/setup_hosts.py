@@ -1173,24 +1173,20 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
     else:
         logger.info("  No SSH key in custom_variables — using agent/default keys")
 
+    # Build a .ps1 script and upload via SFTP — avoids all quoting/escaping
+    # issues that arise when passing JSON through SSH exec_command → cmd.exe
     reg_value = (
         '[{"toplevel_name":"Guardium"},'
         '{"name":"cm (guardium)","url":"https://cm.demo.guardium:8443"},'
         '{"name":"coll1 (guardium)","url":"https://coll1.demo.guardium:8443"}]'
     )
-
-    commands = [
-        (
-            'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" '
-            '/v ManagedFavorites /t REG_SZ '
-            f'/d "{reg_value}" /f',
-            "Add ManagedFavorites registry key"
-        ),
-        (
-            'taskkill /IM msedge.exe /F',
-            "Kill msedge.exe (non-fatal if not running)"
-        ),
-    ]
+    ps_script = (
+        '$v = @\'\n'
+        f'{reg_value}\n'
+        '\'@\n'
+        'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" '
+        '/v ManagedFavorites /t REG_SZ /d $v /f\n'
+    )
 
     try:
         ssh = SSHClient(
@@ -1205,18 +1201,43 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
             return False
 
         try:
-            for cmd, desc in commands:
-                logger.info(f"  ➜ {desc}")
-                result = ssh.execute_command(cmd, print_output=verbose)
-                if result['rc'] != 0:
-                    # taskkill rc=128 means process not found — non-fatal
-                    if "taskkill" in cmd and result['rc'] == 128:
-                        logger.info("  ℹ msedge.exe not running, skipping")
-                    else:
-                        logger.error(f"✗ Command failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
-                        return False
-                else:
-                    logger.info("  ✓ OK")
+            tmp_ps_local = None
+            try:
+                # write .ps1 to local temp, upload via SFTP — no quoting issues
+                ps_fd, tmp_ps_local = tempfile.mkstemp(prefix="bookmarks_", suffix=".ps1")
+                try:
+                    os.write(ps_fd, ps_script.encode('utf-8'))
+                finally:
+                    os.close(ps_fd)
+
+                tmp_ps_remote = r'C:\Windows\Temp\set_bookmarks.ps1'
+                logger.info(f"  ➜ Uploading bookmarks script to {ceratops_machine}:{tmp_ps_remote}...")
+                if not ssh.upload_file(tmp_ps_local, tmp_ps_remote):
+                    logger.error("✗ SFTP upload of PS script failed")
+                    return False
+            finally:
+                if tmp_ps_local and os.path.exists(tmp_ps_local):
+                    os.remove(tmp_ps_local)
+
+            # run the script
+            logger.info("  ➜ Add ManagedFavorites registry key")
+            result = ssh.execute_command(
+                f'powershell -ExecutionPolicy Bypass -File "{tmp_ps_remote}"',
+                print_output=verbose
+            )
+            if result['rc'] != 0:
+                logger.error(f"✗ Registry update failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                return False
+            logger.info("  ✓ OK")
+
+            # cleanup script
+            ssh.execute_command(f'del /f "{tmp_ps_remote}"', print_output=False)
+
+            # kill edge — non-fatal
+            logger.info("  ➜ Kill msedge.exe (non-fatal if not running)")
+            result = ssh.execute_command('taskkill /IM msedge.exe /F', print_output=verbose)
+            if result['rc'] not in (0, 128):
+                logger.info(f"  ℹ taskkill rc={result['rc']} — msedge.exe probably not running")
 
             logger.info(f"✓ Edge bookmarks created on {ceratops_machine}")
             return True
