@@ -49,6 +49,19 @@ groups:
           demo_username: "demo"
           debug: false
 
+      - name: copy_agent_files_to_ceratops
+        function: copy_agent_files_to_ceratops
+        module: tasks.setup_hosts
+        description: "Create bootcamp desktop dir and SCP gim + shell agent dirs from raptor to ceratops"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          dest_dir: 'C:\Users\demo\Desktop\bootcamp'
+          source_dirs:
+            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim"
+            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell"
+          debug: false
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"

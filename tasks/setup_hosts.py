@@ -947,4 +947,104 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def copy_agent_files_to_ceratops(config, logger, verbose=True,
+                                  ceratops_machine: str = "ceratops",
+                                  ssh_username: str = "itzuser",
+                                  dest_dir: str = r'C:\Users\demo\Desktop\bootcamp',
+                                  source_dirs: list = None,
+                                  debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+    import subprocess
+
+    logger.info("=" * 80)
+    logger.info("COPY AGENT FILES TO CERATOPS")
+    logger.info("=" * 80)
+
+    if source_dirs is None:
+        source_dirs = [
+            "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim",
+            "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell",
+        ]
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        # ── Step 1: create dest_dir on ceratops via SSH ──────────────────────────
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            mkdir_cmd = f'mkdir "{dest_dir}"'
+            logger.info(f"  ➜ {mkdir_cmd}")
+            result = ssh.execute_command(mkdir_cmd, print_output=verbose)
+            if result['rc'] != 0:
+                combined = (result['stdout'] + result['stderr']).lower()
+                if "already exists" in combined or "file exists" in combined:
+                    logger.info("  ℹ Directory already exists, skipping")
+                else:
+                    logger.error(f"✗ mkdir failed (rc={result['rc']}): {result['stderr'].strip()}")
+                    return False
+            else:
+                logger.info(f"  ✓ Created {dest_dir}")
+        finally:
+            ssh.disconnect()
+
+        # ── Step 2: SCP each source_dir to ceratops ──────────────────────────────
+        scp_base = ["scp", "-r", "-P", "2223", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
+        if key_file:
+            scp_base += ["-i", key_file]
+
+        for src in source_dirs:
+            dir_name = os.path.basename(src.rstrip("/"))
+            remote_dest = f"{ssh_username}@{ceratops_ip}:{dest_dir}\\{dir_name}"
+            cmd = scp_base + [src, remote_dest]
+            logger.info(f"  ➜ scp {src} → {remote_dest}")
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                logger.error(f"✗ scp failed (rc={proc.returncode}): {proc.stderr.strip()}")
+                return False
+            logger.info(f"  ✓ Copied {dir_name}")
+
+        logger.info(f"✓ Agent files copied to {ceratops_machine}:{dest_dir}")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 # Made with Bob
