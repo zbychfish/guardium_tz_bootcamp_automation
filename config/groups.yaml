@@ -270,7 +270,7 @@ groups:
   gim_lab:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"
-    auto_execute: true  # Executed on demand
+    auto_execute: false  # Executed on demand
     dependencies: [setup_appliances]  # Requires initial_preparation and setup_appliances
     stages:
      
@@ -361,8 +361,8 @@ groups:
   exit_lab:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
-    auto_execute: true  # Executed on demand
-    dependencies: [false]
+    auto_execute: false  # Executed on demand
+    dependencies: [atap_lab]
     stages:
       - name: configure_db2_exit
         function: db2_exit_configuration
