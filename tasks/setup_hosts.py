@@ -950,7 +950,7 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
 def copy_agent_files_to_ceratops(config, logger, verbose=True,
                                   ceratops_machine: str = "ceratops",
                                   ssh_username: str = "itzuser",
-                                  dest_dir: str = r'C:\Users\demo\Desktop\bootcamp',
+                                  dest_dir: str = r'C:\bootcamp',
                                   source_dirs: list = None,
                                   debug: bool = False, **kwargs) -> bool:
     import tempfile

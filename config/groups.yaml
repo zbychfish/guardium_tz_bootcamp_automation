@@ -56,7 +56,7 @@ groups:
         args:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
-          dest_dir: 'C:\Users\demo\Desktop\bootcamp'
+          dest_dir: 'C:\bootcamp'
           source_dirs:
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim"
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/zip"
