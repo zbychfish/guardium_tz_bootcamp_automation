@@ -1100,15 +1100,25 @@ def configure_hosts_on_ceratops(config, logger, verbose=True,
             return False
 
         try:
-            hosts_file = r'C:\Windows\System32\drivers\etc\hosts'
-            # append entries — PowerShell Add-Content writes UTF-16LE by default on PS5,
-            # use Out-File with ASCII to stay safe for Guardium name resolution
-            ps_cmd = (
-                f'$content = @\'\n{hosts_content}\n\'@; '
-                f'Add-Content -Path "{hosts_file}" -Value $content -Encoding ASCII'
-            )
-            cmd = f'powershell -Command "{ps_cmd}"'
-            logger.info(f"  ➜ Updating {hosts_file} on ceratops...")
+            hosts_file   = r'C:\Windows\System32\drivers\etc\hosts'
+            tmp_remote   = r'C:\Windows\Temp\hosts_automation'
+
+            # write hosts content to a local temp file, then upload via SFTP
+            tmp_local_fd, tmp_local_path = tempfile.mkstemp(prefix="hosts_", suffix=".txt")
+            try:
+                os.write(tmp_local_fd, hosts_content.encode('ascii', errors='replace'))
+            finally:
+                os.close(tmp_local_fd)
+
+            logger.info(f"  ➜ Uploading hosts content to {ceratops_machine}:{tmp_remote}...")
+            if not ssh.upload_file(tmp_local_path, tmp_remote):
+                logger.error("✗ SFTP upload of hosts file failed")
+                return False
+            os.remove(tmp_local_path)
+
+            # append temp file content to the real hosts file
+            cmd = f'powershell -Command "Get-Content \'{tmp_remote}\' | Add-Content -Path \'{hosts_file}\' -Encoding ASCII; Remove-Item \'{tmp_remote}\' -Force"'
+            logger.info(f"  ➜ Appending entries to {hosts_file}...")
             result = ssh.execute_command(cmd, print_output=verbose)
             if result['rc'] != 0:
                 logger.error(f"✗ Failed to update hosts (rc={result['rc']}): {result['stderr'].strip()}")
