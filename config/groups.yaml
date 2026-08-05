@@ -59,7 +59,7 @@ groups:
           dest_dir: 'C:\Users\demo\Desktop\bootcamp'
           source_dirs:
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim"
-            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell"
+            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/zip"
           debug: false
 
   other_preparations:
