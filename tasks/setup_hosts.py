@@ -1047,4 +1047,88 @@ def copy_agent_files_to_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def configure_hosts_on_ceratops(config, logger, verbose=True,
+                                 ceratops_machine: str = "ceratops",
+                                 ssh_username: str = "itzuser",
+                                 debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("CONFIGURE HOSTS RESOLVING ON CERATOPS (WINDOWS)")
+    logger.info("=" * 80)
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    all_machines = config.get_machines()
+    if not all_machines:
+        logger.error("✗ No machines found in config")
+        return False
+
+    hosts_content = generate_hosts_content(all_machines)
+    logger.info(f"  Generated {len(all_machines)} host entries")
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            hosts_file = r'C:\Windows\System32\drivers\etc\hosts'
+            # append entries — PowerShell Add-Content writes UTF-16LE by default on PS5,
+            # use Out-File with ASCII to stay safe for Guardium name resolution
+            ps_cmd = (
+                f'$content = @\'\n{hosts_content}\n\'@; '
+                f'Add-Content -Path "{hosts_file}" -Value $content -Encoding ASCII'
+            )
+            cmd = f'powershell -Command "{ps_cmd}"'
+            logger.info(f"  ➜ Updating {hosts_file} on ceratops...")
+            result = ssh.execute_command(cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Failed to update hosts (rc={result['rc']}): {result['stderr'].strip()}")
+                return False
+
+            logger.info(f"✓ Hosts resolving configured on {ceratops_machine}")
+            return True
+
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 # Made with Bob

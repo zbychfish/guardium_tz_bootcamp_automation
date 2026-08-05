@@ -62,6 +62,15 @@ groups:
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/zip"
           debug: false
 
+      - name: configure_hosts_on_ceratops
+        function: configure_hosts_on_ceratops
+        module: tasks.setup_hosts
+        description: "Append all environment machines to C:\\Windows\\System32\\drivers\\etc\\hosts on ceratops via SSH"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          debug: false
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
