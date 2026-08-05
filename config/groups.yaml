@@ -62,15 +62,13 @@ groups:
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/zip"
           debug: false
 
-      - name: copy_bookmarks_to_ceratops
-        function: copy_bookmarks_to_ceratops
+      - name: create_bookmarks_on_ceratops
+        function: create_bookmarks_on_ceratops
         module: tasks.setup_hosts
-        description: "Upload Edge Bookmarks file to C:\\Users\\demo\\AppData\\Local\\Microsoft\\Edge\\User Data\\Default\\ on ceratops"
+        description: "Create Edge managed bookmarks via registry and kill msedge process on ceratops"
         args:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
-          source_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/windows/Bookmarks"
-          dest_dir: 'C:\Users\demo\AppData\Local\Microsoft\Edge\User Data\Default'
           debug: false
 
       - name: configure_hosts_on_ceratops

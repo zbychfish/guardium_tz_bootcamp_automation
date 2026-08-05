@@ -1141,22 +1141,16 @@ def configure_hosts_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
-def copy_bookmarks_to_ceratops(config, logger, verbose=True,
-                                ceratops_machine: str = "ceratops",
-                                ssh_username: str = "itzuser",
-                                source_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/windows/Bookmarks",
-                                dest_dir: str = r'C:\Users\demo\AppData\Local\Microsoft\Edge\User Data\Default',
-                                debug: bool = False, **kwargs) -> bool:
+def create_bookmarks_on_ceratops(config, logger, verbose=True,
+                                  ceratops_machine: str = "ceratops",
+                                  ssh_username: str = "itzuser",
+                                  debug: bool = False, **kwargs) -> bool:
     import tempfile
     import os
 
     logger.info("=" * 80)
-    logger.info("COPY EDGE BOOKMARKS TO CERATOPS")
+    logger.info("CREATE EDGE BOOKMARKS ON CERATOPS (WINDOWS REGISTRY)")
     logger.info("=" * 80)
-
-    if not os.path.isfile(source_file):
-        logger.error(f"✗ Source file not found: {source_file}")
-        return False
 
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
     if not ceratops_ip:
@@ -1179,6 +1173,25 @@ def copy_bookmarks_to_ceratops(config, logger, verbose=True,
     else:
         logger.info("  No SSH key in custom_variables — using agent/default keys")
 
+    reg_value = (
+        '[{"toplevel_name":"Guardium"},'
+        '{"name":"cm (guardium)","url":"https://cm.demo.guardium:8443"},'
+        '{"name":"coll1 (guardium)","url":"https://coll1.demo.guardium:8443"}]'
+    )
+
+    commands = [
+        (
+            'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge" '
+            '/v ManagedFavorites /t REG_SZ '
+            f'/d "{reg_value}" /f',
+            "Add ManagedFavorites registry key"
+        ),
+        (
+            'taskkill /IM msedge.exe /F',
+            "Kill msedge.exe (non-fatal if not running)"
+        ),
+    ]
+
     try:
         ssh = SSHClient(
             host=ceratops_ip,
@@ -1192,33 +1205,20 @@ def copy_bookmarks_to_ceratops(config, logger, verbose=True,
             return False
 
         try:
-            # ensure dest_dir exists
-            mkdir_cmd = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{dest_dir}\' | Out-Null"'
-            logger.info(f"  ➜ Ensuring directory exists: {dest_dir}")
-            result = ssh.execute_command(mkdir_cmd, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ mkdir failed (rc={result['rc']}): {result['stderr'].strip()}")
-                return False
-            logger.info("  ✓ Directory ready")
+            for cmd, desc in commands:
+                logger.info(f"  ➜ {desc}")
+                result = ssh.execute_command(cmd, print_output=verbose)
+                if result['rc'] != 0:
+                    # taskkill rc=128 means process not found — non-fatal
+                    if "taskkill" in cmd and result['rc'] == 128:
+                        logger.info("  ℹ msedge.exe not running, skipping")
+                    else:
+                        logger.error(f"✗ Command failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                        return False
+                else:
+                    logger.info("  ✓ OK")
 
-            # upload Bookmarks via SFTP to a temp location
-            filename = os.path.basename(source_file)
-            tmp_remote = f'C:\\Windows\\Temp\\{filename}'
-            logger.info(f"  ➜ Uploading {filename} to {ceratops_machine}:{tmp_remote}...")
-            if not ssh.upload_file(source_file, tmp_remote):
-                logger.error("✗ SFTP upload of Bookmarks failed")
-                return False
-
-            # move from temp to final destination
-            dest_file = f'{dest_dir}\\{filename}'
-            move_cmd = f'powershell -Command "Move-Item -Force -Path \'{tmp_remote}\' -Destination \'{dest_file}\'"'
-            logger.info(f"  ➜ Moving to {dest_file}...")
-            result = ssh.execute_command(move_cmd, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ Move failed (rc={result['rc']}): {result['stderr'].strip()}")
-                return False
-
-            logger.info(f"✓ Bookmarks copied to {ceratops_machine}:{dest_file}")
+            logger.info(f"✓ Edge bookmarks created on {ceratops_machine}")
             return True
 
         finally:
