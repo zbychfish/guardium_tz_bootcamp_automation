@@ -838,7 +838,7 @@ groups:
     name: "Edge Lab"
     description: "Install Edge patch on CM and configure Edge features"
     auto_execute: false
-    dependencies: [oracle_lab_uc2]
+    dependencies: [ltr_lab]
     stages:
       - name: prepare_cm_for_edge_patching  
         function: copy_single_file_to_appliance_task
