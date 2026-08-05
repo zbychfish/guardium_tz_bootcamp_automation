@@ -1185,8 +1185,8 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
     ps_commands = (
         "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Force | Out-Null; "
         f"$json = '{json_value}'; "
-        "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'ManagedFavorites' -Type String -Value $json; "
-        "Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'FavoritesBarEnabled' -Type DWord -Value 1"
+        "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'ManagedFavorites' -PropertyType String -Value $json -Force | Out-Null; "
+        "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'FavoritesBarEnabled' -PropertyType DWord -Value 1 -Force | Out-Null"
     )
 
     try:
