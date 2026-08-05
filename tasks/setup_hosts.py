@@ -1173,20 +1173,14 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
     else:
         logger.info("  No SSH key in custom_variables — using agent/default keys")
 
-    # JSON value — single quotes only, safe to pass inside PS double-quoted string
-    json_value = (
-        '[{"toplevel_name":"Guardium"},'
-        '{"name":"cm (guardium)","url":"https://cm.demo.guardium:8443"},'
-        '{"name":"coll1 (guardium)","url":"https://coll1.demo.guardium:8443"}]'
-    )
-
-    # exec_command sends directly to OpenSSH → PowerShell (no cmd.exe in between)
-    # JSON is assigned to $json variable — no escaping of curly braces needed
-    ps_commands = (
-        "New-Item -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Force | Out-Null; "
-        f"$json = '{json_value}'; "
-        "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'ManagedFavorites' -PropertyType String -Value $json -Force | Out-Null; "
-        "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge' -Name 'FavoritesBarEnabled' -PropertyType DWord -Value 1 -Force | Out-Null"
+    ps_script = (
+        'New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Force | Out-Null\n'
+        '\n'
+        '$json = \'[{"toplevel_name":"Guardium"},{"name":"cm (guardium)","url":"https://cm.demo.guardium:8443"},{"name":"coll1 (guardium)","url":"https://coll1.demo.guardium"}]\'\n'
+        '\n'
+        'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "ManagedFavorites" -Type String -Value $json\n'
+        '\n'
+        'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "FavoritesBarEnabled" -Type DWord -Value 1\n'
     )
 
     try:
@@ -1202,13 +1196,30 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
             return False
 
         try:
-            logger.info("  ➜ Configure Edge bookmarks via registry (PowerShell)")
+            tmp_ps_remote = r'C:\Windows\Temp\set_bookmarks.ps1'
+
+            # write script to local temp file, upload via SFTP
+            tmp_ps_fd, tmp_ps_local = tempfile.mkstemp(prefix="bookmarks_", suffix=".ps1")
+            try:
+                os.write(tmp_ps_fd, ps_script.encode('utf-8'))
+            finally:
+                os.close(tmp_ps_fd)
+
+            logger.info(f"  ➜ Uploading set_bookmarks.ps1 to {ceratops_machine}...")
+            ok = ssh.upload_file(tmp_ps_local, tmp_ps_remote)
+            os.remove(tmp_ps_local)
+            if not ok:
+                logger.error("✗ SFTP upload failed")
+                return False
+
+            logger.info("  ➜ Running set_bookmarks.ps1")
             result = ssh.execute_command(
-                f'powershell -Command "{ps_commands}"',
+                f'powershell -ExecutionPolicy Bypass -File "{tmp_ps_remote}"',
                 print_output=verbose
             )
+            ssh.execute_command(f'del /f "{tmp_ps_remote}"', print_output=False)
             if result['rc'] != 0:
-                logger.error(f"✗ Registry update failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                logger.error(f"✗ Script failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
                 return False
             logger.info("  ✓ OK")
 
