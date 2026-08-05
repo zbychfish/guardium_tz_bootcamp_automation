@@ -1141,4 +1141,98 @@ def configure_hosts_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def copy_bookmarks_to_ceratops(config, logger, verbose=True,
+                                ceratops_machine: str = "ceratops",
+                                ssh_username: str = "itzuser",
+                                source_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/windows/Bookmarks",
+                                dest_dir: str = r'C:\Users\demo\AppData\Local\Microsoft\Edge\User Data\Default',
+                                debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("COPY EDGE BOOKMARKS TO CERATOPS")
+    logger.info("=" * 80)
+
+    if not os.path.isfile(source_file):
+        logger.error(f"✗ Source file not found: {source_file}")
+        return False
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            # ensure dest_dir exists
+            mkdir_cmd = f'powershell -Command "New-Item -ItemType Directory -Force -Path \'{dest_dir}\' | Out-Null"'
+            logger.info(f"  ➜ Ensuring directory exists: {dest_dir}")
+            result = ssh.execute_command(mkdir_cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ mkdir failed (rc={result['rc']}): {result['stderr'].strip()}")
+                return False
+            logger.info("  ✓ Directory ready")
+
+            # upload Bookmarks via SFTP to a temp location
+            filename = os.path.basename(source_file)
+            tmp_remote = f'C:\\Windows\\Temp\\{filename}'
+            logger.info(f"  ➜ Uploading {filename} to {ceratops_machine}:{tmp_remote}...")
+            if not ssh.upload_file(source_file, tmp_remote):
+                logger.error("✗ SFTP upload of Bookmarks failed")
+                return False
+
+            # move from temp to final destination
+            dest_file = f'{dest_dir}\\{filename}'
+            move_cmd = f'powershell -Command "Move-Item -Force -Path \'{tmp_remote}\' -Destination \'{dest_file}\'"'
+            logger.info(f"  ➜ Moving to {dest_file}...")
+            result = ssh.execute_command(move_cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Move failed (rc={result['rc']}): {result['stderr'].strip()}")
+                return False
+
+            logger.info(f"✓ Bookmarks copied to {ceratops_machine}:{dest_file}")
+            return True
+
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 # Made with Bob
