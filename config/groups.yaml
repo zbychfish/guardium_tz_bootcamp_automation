@@ -80,6 +80,16 @@ groups:
           ssh_username: "itzuser"
           debug: false
 
+      - name: configure_timezone_on_ceratops
+        function: configure_timezone_on_ceratops
+        module: tasks.setup_hosts
+        description: "Set timezone to GMT Standard Time on ceratops via SSH (tzutil /s) and verify"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          timezone: "GMT Standard Time"
+          debug: false
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
