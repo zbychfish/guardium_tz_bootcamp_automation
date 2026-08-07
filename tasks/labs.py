@@ -4656,10 +4656,29 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── Step 1: get NodePorts from sauropod ──────────────────────────────────────
-    logger.info("➜ Getting haproxy NodePorts from sauropod...")
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
                     port=ssh_port, timeout=30)
+
+    # ── Step 1: open NodePort range on sauropod firewall ────────────────────────
+    logger.info("➜ Opening NodePort range 30000-32767/tcp on sauropod firewall...")
+    try:
+        if not ssh.connect():
+            logger.error("✗ Failed to connect to sauropod")
+            return False
+        for cmd, desc in [
+            ("firewall-cmd --permanent --add-port=30000-32767/tcp", "allow 30000-32767/tcp"),
+            ("firewall-cmd --reload",                               "reload firewall"),
+        ]:
+            result = ssh.execute_command(cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                return False
+            logger.info(f"  ✓ {desc}")
+    finally:
+        ssh.disconnect()
+
+    # ── Step 2: get NodePorts from sauropod ──────────────────────────────────────
+    logger.info("➜ Getting haproxy NodePorts from sauropod...")
     try:
         if not ssh.connect():
             logger.error("✗ Failed to connect to sauropod")
@@ -4689,7 +4708,7 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
     logger.info(f"  NodePort 16016 → {node_port_16016}")
     logger.info(f"  NodePort 16018 → {node_port_16018}")
 
-    # ── Step 2: set GIM params ───────────────────────────────────────────────────
+    # ── Step 3: set GIM params ───────────────────────────────────────────────────
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
@@ -4704,7 +4723,7 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
         logger.info(f"  Setting {param}={value} on sauropod ({sauropod_ip})")
         api.gim_client_params(client_ip=sauropod_ip, param_name=param, param_value=value)
 
-    # ── Step 3: schedule install + monitor ──────────────────────────────────────
+    # ── Step 4: schedule install + monitor ──────────────────────────────────────
     logger.info("➜ Scheduling GIM install on sauropod...")
     api.gim_schedule_install(client_ip=sauropod_ip, date="now")
     logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
