@@ -1372,6 +1372,17 @@ def install_edge_on_ceratops(config, logger, verbose=True,
             return False
 
         try:
+            # ── check if Edge is already installed ──────────────────────────────
+            logger.info("  ➜ Checking if Microsoft Edge is already installed...")
+            result = ssh.execute_command(
+                'wmic product where "name like \'%%Edge%%\'" get Name,Version',
+                print_output=verbose
+            )
+            if 'Microsoft Edge' in result['stdout']:
+                logger.info("  ℹ Microsoft Edge already installed — skipping")
+                return True
+
+            logger.info("  ➜ Edge not found — installing...")
             cmd = f'msiexec /i "{msi_path}" /qn /norestart'
             logger.info(f"  ➜ {cmd}")
             result = ssh.execute_command(cmd, timeout=120, print_output=verbose)

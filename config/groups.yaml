@@ -60,7 +60,7 @@ groups:
           source_dirs:
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim"
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/zip"
-            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/software"
+            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/windows/software"
           debug: false
 
       - name: install_edge_on_ceratops
