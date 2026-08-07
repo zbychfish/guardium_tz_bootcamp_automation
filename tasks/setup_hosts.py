@@ -1326,4 +1326,74 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def install_edge_on_ceratops(config, logger, verbose=True,
+                              ceratops_machine: str = "ceratops",
+                              ssh_username: str = "itzuser",
+                              msi_path: str = r'C:\bootcamp\software\MicrosoftEdgeEnterpriseX64.msi',
+                              debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("INSTALL EDGE ON CERATOPS (WINDOWS)")
+    logger.info("=" * 80)
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            cmd = f'msiexec /i "{msi_path}" /qn /norestart'
+            logger.info(f"  ➜ {cmd}")
+            result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Edge installation failed (rc={result['rc']}): {result['stderr'].strip()}")
+                return False
+
+            logger.info(f"✓ Edge installed on {ceratops_machine}")
+            return True
+
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 # Made with Bob

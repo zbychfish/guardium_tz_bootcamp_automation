@@ -60,6 +60,17 @@ groups:
           source_dirs:
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim"
             - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/zip"
+            - "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/software"
+          debug: false
+
+      - name: install_edge_on_ceratops
+        function: install_edge_on_ceratops
+        module: tasks.setup_hosts
+        description: "Install Microsoft Edge Enterprise (silent, /qn /norestart) on ceratops via SSH as itzuser"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          msi_path: 'C:\bootcamp\software\MicrosoftEdgeEnterpriseX64.msi'
           debug: false
 
       - name: create_bookmarks_on_ceratops
