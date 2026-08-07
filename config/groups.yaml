@@ -923,7 +923,7 @@ groups:
       - name: prepare_sauropod_for_edge
         function: prepare_sauropod_for_edge
         module: tasks.labs
-        description: "Stop & disable firewalld on raptor, install expect on sauropod"
+        description: "Add firewall-cmd rules (6443/tcp, 8472/udp, 10250/tcp, masquerade) on raptor, install expect on sauropod"
         args:
           debug: false
 

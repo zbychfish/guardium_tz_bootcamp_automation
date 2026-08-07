@@ -4312,10 +4312,13 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
     logger.info("PREPARE SAUROPOD FOR EDGE DEPLOYMENT")
     logger.info("=" * 80)
 
-    # ── stop & disable firewalld on raptor ───────────────────────────────────────
+    # ── configure firewall rules on raptor ──────────────────────────────────────
     for cmd, desc in [
-        ("systemctl stop firewalld", "stop firewalld"),
-        ("systemctl disable firewalld", "disable firewalld"),
+        ("firewall-cmd --permanent --add-port=6443/tcp",  "allow 6443/tcp"),
+        ("firewall-cmd --permanent --add-port=8472/udp",  "allow 8472/udp"),
+        ("firewall-cmd --permanent --add-port=10250/tcp", "allow 10250/tcp"),
+        ("firewall-cmd --permanent --add-masquerade",     "enable masquerade"),
+        ("firewall-cmd --reload",                         "reload firewall"),
     ]:
         logger.info(f"➜ {desc}...")
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
