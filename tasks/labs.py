@@ -4306,28 +4306,11 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
 def prepare_sauropod_for_edge(config, logger, verbose=True,
                               debug=False, **kwargs):
     from core.ssh_client import SSHClient
-    from core.utils import execute_local_command
 
     logger.info("=" * 80)
     logger.info("PREPARE SAUROPOD FOR EDGE DEPLOYMENT")
     logger.info("=" * 80)
 
-    # ── configure firewall rules on raptor ──────────────────────────────────────
-    for cmd, desc in [
-        ("firewall-cmd --permanent --add-port=6443/tcp",  "allow 6443/tcp"),
-        ("firewall-cmd --permanent --add-port=8472/udp",  "allow 8472/udp"),
-        ("firewall-cmd --permanent --add-port=10250/tcp", "allow 10250/tcp"),
-        ("firewall-cmd --permanent --add-masquerade",     "enable masquerade"),
-        ("firewall-cmd --reload",                         "reload firewall"),
-    ]:
-        logger.info(f"➜ {desc}...")
-        result = execute_local_command(cmd, logger=logger, verbose=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ Failed to {desc}: {result['stderr']}")
-            return False
-        logger.info(f"  ✓ {desc}")
-
-    # ── install expect on sauropod ───────────────────────────────────────────────
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
         logger.error("Sauropod IP not found in machines config")
@@ -4347,6 +4330,23 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
         if not ssh.connect():
             logger.error("✗ Failed to connect to sauropod")
             return False
+
+        # ── configure firewall rules on sauropod ────────────────────────────────
+        for cmd, desc in [
+            ("firewall-cmd --permanent --add-port=6443/tcp",  "allow 6443/tcp"),
+            ("firewall-cmd --permanent --add-port=8472/udp",  "allow 8472/udp"),
+            ("firewall-cmd --permanent --add-port=10250/tcp", "allow 10250/tcp"),
+            ("firewall-cmd --permanent --add-masquerade",     "enable masquerade"),
+            ("firewall-cmd --reload",                         "reload firewall"),
+        ]:
+            logger.info(f"➜ {desc}...")
+            result = ssh.execute_command(cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                return False
+            logger.info(f"  ✓ {desc}")
+
+        # ── install expect on sauropod ───────────────────────────────────────────
         logger.info("➜ Installing expect on sauropod...")
         result = ssh.execute_command("dnf -y install expect", print_output=verbose)
         if result['rc'] != 0:
