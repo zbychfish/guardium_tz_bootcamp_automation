@@ -101,6 +101,15 @@ groups:
           timezone: "GMT Standard Time"
           debug: false
 
+      - name: configure_mssql_on_ceratops
+        function: configure_mssql_on_ceratops
+        module: tasks.setup_hosts
+        description: "Enable SA login and set SA password on MSSQLSERVER on ceratops (only if MSSQLSERVER is Running)"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          debug: false
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
