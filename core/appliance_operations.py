@@ -2268,7 +2268,7 @@ def prepare_appliance_for_patching(
                 password=cli_password,
                 prompt_regex=cli_prompt_regex,
                 initial_pattern=None,
-                timeout=60,
+                timeout=300,
                 strip_ansi=True,
                 debug=debug
             )
@@ -2279,7 +2279,7 @@ def prepare_appliance_for_patching(
             
             # Execute show system patch available to register patches
             logger.info("  Executing: show system patch available")
-            patch_output = cli_client.execute_command("show system patch available")
+            patch_output = cli_client.execute_command("show system patch available", timeout=300)
             logger.info(f"Available patches:\n{patch_output}")
             
             cli_client.disconnect()
