@@ -3860,7 +3860,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         password=cli_pwd,
         prompt_regex=cli_prompt,
         initial_pattern=None,
-        timeout=300,
+        timeout=600,
         strip_ansi=True,
         debug=debug
     )
@@ -3868,7 +3868,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         logger.error("✗ Failed to connect to CM CLI")
         return False
     try:
-        patch_output = cli.execute_command("show system patch available", timeout=300)
+        patch_output = cli.execute_command("show system patch available", timeout=600)
         logger.info(f"Available patches:\n{patch_output}")
         logger.info("✓ Patches registered on CM")
     except Exception as e:
