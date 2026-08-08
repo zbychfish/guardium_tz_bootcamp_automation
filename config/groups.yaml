@@ -583,7 +583,6 @@ groups:
           ssh_username: "itzuser"
           setup_exe: 'C:\bootcamp\gim_unpacked\Setup.exe'
           appliance: "cm.demo.guardium"
-          local_ip: "ceratops.demo.guardium"
           debug: false
 
       - name: install_winstap_on_ceratops

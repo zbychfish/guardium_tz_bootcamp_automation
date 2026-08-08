@@ -4841,7 +4841,7 @@ def install_gim_on_ceratops(config, logger, verbose=True,
                              ssh_username: str = "itzuser",
                              setup_exe: str = r'C:\bootcamp\gim_unpacked\GIM_Client\Setup.exe',
                              appliance: str = "coll1.demo.guardium",
-                             local_ip: str = "ceratops.demo.guardium",
+                             local_ip: Optional[str] = None,
                              debug: bool = False, **kwargs) -> bool:
     import tempfile
     import os
@@ -4855,6 +4855,9 @@ def install_gim_on_ceratops(config, logger, verbose=True,
     if not ceratops_ip:
         logger.error(f"✗ IP not found for machine: {ceratops_machine}")
         return False
+
+    if not local_ip:
+        local_ip = ceratops_ip
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
     key_file = None
