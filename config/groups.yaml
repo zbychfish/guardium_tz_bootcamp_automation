@@ -592,7 +592,7 @@ groups:
         description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
         args:
           appliance_name: "cm"
-          collector_name: "coll1.demo.guardium"
+          collector_name: "coll1"
           module: "WINSTAP"
           module_version: ""
           debug: false
