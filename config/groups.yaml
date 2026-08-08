@@ -582,7 +582,7 @@ groups:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
           setup_exe: 'C:\bootcamp\gim_unpacked\Setup.exe'
-          appliance: "coll1.demo.guardium"
+          appliance: "cm.demo.guardium"
           local_ip: "ceratops.demo.guardium"
           debug: false
 
