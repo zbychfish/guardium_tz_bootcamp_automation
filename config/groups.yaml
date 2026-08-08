@@ -571,7 +571,7 @@ groups:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
           zip_path: 'C:\bootcamp\zip\GIM-Installer-12.2_r120202259_1.zip'
-          dest_dir: 'C:\bootcamp'
+          dest_dir: 'C:\bootcamp\gim_unpacked'
           debug: false
 
   oracle_lab:
