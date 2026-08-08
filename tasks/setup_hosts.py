@@ -1475,12 +1475,12 @@ def configure_mssql_on_ceratops(config, logger, verbose=True,
 
             # ── restart in single-user mode and configure SA ─────────────────────
             steps = [
-                ('net stop mssqlserver',             'stop MSSQLSERVER'),
-                ('net start mssqlserver /mSQLCMD',   'start in single-user mode'),
-                (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa ENABLE; GO ALTER LOGIN sa WITH PASSWORD = \'{pwd}\'; GO EXIT"',
-                                                     'configure SA login'),
-                ('net stop mssqlserver',             'stop MSSQLSERVER'),
-                ('net start mssqlserver',            'start MSSQLSERVER'),
+                ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
+                ('net start mssqlserver /mSQLCMD',                                             'start in single-user mode'),
+                (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa ENABLE"',                         'enable SA login'),
+                (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa WITH PASSWORD = \'{pwd}\'"',       'set SA password'),
+                ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
+                ('net start mssqlserver',                                                      'start MSSQLSERVER'),
             ]
 
             for cmd, desc in steps:
