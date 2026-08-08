@@ -4916,7 +4916,9 @@ def install_winstap_on_ceratops(config, logger, verbose=False,
                                  client_ip: Optional[str] = None,
                                  module: str = "WINSTAP",
                                  module_version: str = "",
+                                 gim_registration_delay: int = 60,
                                  debug: bool = False, **kwargs) -> bool:
+    import time
     from core.appliance_operations import install_gim_module
     from core.appliance_config_loader import ApplianceConfigLoader
 
@@ -4944,6 +4946,10 @@ def install_winstap_on_ceratops(config, logger, verbose=False,
 
     logger.info(f"  - Client IP (ceratops): {client_ip}")
     logger.info(f"  - SQL Guard IP (collector '{collector_name}'): {sqlguard_ip}")
+    logger.info(f"  - Module version: {module_version}")
+
+    logger.info(f"⌛ Waiting {gim_registration_delay}s for GIM client registration...")
+    time.sleep(gim_registration_delay)
 
     return install_gim_module(
         config=config,
