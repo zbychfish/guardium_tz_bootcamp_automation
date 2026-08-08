@@ -557,6 +557,23 @@ groups:
           key_file: ".va_api_key"
           debug: false
 
+  winstap_lab:
+    name: "WinSTAP Lab"
+    description: "Windows STAP lab - prepare ceratops for GIM/STAP installation"
+    auto_execute: false
+    dependencies: [va_basics]
+    stages:
+      - name: extract_zip_on_ceratops
+        function: extract_zip_on_ceratops
+        module: tasks.labs
+        description: "Extract GIM-Installer zip on ceratops to C:\\bootcamp"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.2_r120202259_1.zip'
+          dest_dir: 'C:\bootcamp'
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
