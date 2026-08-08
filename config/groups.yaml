@@ -574,6 +574,18 @@ groups:
           dest_dir: 'C:\bootcamp\gim_unpacked'
           debug: false
 
+      - name: install_gim_on_ceratops
+        function: install_gim_on_ceratops
+        module: tasks.labs
+        description: "Run Setup.exe unattended to install GIM client on ceratops"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          setup_exe: 'C:\bootcamp\gim_unpacked\GIM_Client\Setup.exe'
+          appliance: "coll1.demo.guardium"
+          local_ip: "ceratops.demo.guardium"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
