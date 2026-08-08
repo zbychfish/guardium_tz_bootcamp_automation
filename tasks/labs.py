@@ -3430,7 +3430,7 @@ def import_dps(
     logger.info(f"➜ Starting DPS import from {dps_file}...")
     logger.info(f"  login_url: {login_url}, user: {demo_user}")
 
-    import sleep from time
+    from time import sleep
     sleep(30)
 
     try:
