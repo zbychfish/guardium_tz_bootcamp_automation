@@ -592,7 +592,6 @@ groups:
         args:
           appliance_name: "cm"
           collector_name: "coll1"
-          client_ip: "ceratops.demo.guardium"
           module: "WINSTAP"
           module_version: ""
           debug: false
