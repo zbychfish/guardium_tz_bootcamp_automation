@@ -3391,6 +3391,7 @@ def import_dps(
     headless: bool = True,
     **kwargs
 ) -> bool:
+    import sys
     import subprocess
     from core.web_ui import guardium_customer_upload_import
     from core.appliance_config_loader import ApplianceConfigLoader
@@ -3423,7 +3424,7 @@ def import_dps(
     login_url = f"https://{cm_ip}:8443"
 
     logger.info("➜ Installing playwright browsers...")
-    result = subprocess.run(["playwright", "install", "chromium"], capture_output=True, text=True)
+    result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], capture_output=True, text=True)
     if result.returncode != 0:
         logger.warning(f"playwright install returned {result.returncode}: {result.stderr.strip()}")
 
