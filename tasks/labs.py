@@ -3430,6 +3430,9 @@ def import_dps(
     logger.info(f"➜ Starting DPS import from {dps_file}...")
     logger.info(f"  login_url: {login_url}, user: {demo_user}")
 
+    #import time
+    time.sleep(30)
+
     try:
         guardium_customer_upload_import(
             login_url=login_url,
