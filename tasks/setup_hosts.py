@@ -1508,4 +1508,83 @@ def configure_mssql_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def restore_adventureworks_on_ceratops(config, logger, verbose=True,
+                                        ceratops_machine: str = "ceratops",
+                                        ssh_username: str = "itzuser",
+                                        bak_file: str = r'C:\windows\software\AdventureWorks2019.bak',
+                                        debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("RESTORE ADVENTUREWORKS ON CERATOPS (MSSQL)")
+    logger.info("=" * 80)
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("✗ pwd not found in custom_variables")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            restore_sql = (
+                f"RESTORE DATABASE AdventureWorks2019 FROM DISK = N'{bak_file}' "
+                f"WITH MOVE N'AdventureWorks2019' TO N'C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA\\AdventureWorks2019.mdf', "
+                f"MOVE N'AdventureWorks2019_log' TO N'C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA\\AdventureWorks2019_log.ldf', "
+                f"REPLACE, STATS = 10"
+            )
+            cmd = f'sqlcmd -S localhost -U sa -P "{pwd}" -Q "{restore_sql}"'
+            logger.info(f"  ➜ Restoring AdventureWorks2019 from {bak_file}...")
+            result = ssh.execute_command(cmd, timeout=300, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ Restore failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                return False
+            logger.info(f"✓ AdventureWorks2019 restored on {ceratops_machine}")
+            return True
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 # Made with Bob
