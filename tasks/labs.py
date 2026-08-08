@@ -4905,3 +4905,52 @@ def install_gim_on_ceratops(config, logger, verbose=True,
     finally:
         if tmp_key_path and os.path.exists(tmp_key_path):
             os.remove(tmp_key_path)
+
+
+def install_winstap_on_ceratops(config, logger, verbose=False,
+                                 appliance_name: str = "cm",
+                                 collector_name: str = "coll1",
+                                 client_ip: Optional[str] = None,
+                                 module: str = "WINSTAP",
+                                 module_version: str = "",
+                                 debug: bool = False, **kwargs) -> bool:
+    from core.appliance_operations import install_gim_module
+    from core.appliance_config_loader import ApplianceConfigLoader
+
+    logger.info("=" * 80)
+    logger.info("INSTALL WINSTAP ON CERATOPS")
+    logger.info("=" * 80)
+
+    if not client_ip:
+        client_ip = config.get_machine_ip('ceratops', use_private=True)
+        if not client_ip:
+            logger.error("client_ip not provided and ceratops not found in machines config")
+            return False
+        logger.info(f"Auto-detected ceratops IP: {client_ip}")
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_name)
+    if not collector_config:
+        logger.error(f"Collector '{collector_name}' not found in machines_info.json")
+        return False
+
+    sqlguard_ip = collector_config.get('ip')
+    if not sqlguard_ip:
+        logger.error(f"Collector '{collector_name}' has no IP address configured")
+        return False
+
+    logger.info(f"  - Client IP (ceratops): {client_ip}")
+    logger.info(f"  - SQL Guard IP (collector '{collector_name}'): {sqlguard_ip}")
+
+    return install_gim_module(
+        config=config,
+        logger=logger,
+        appliance_name=appliance_name,
+        client_ip=client_ip,
+        module=module,
+        module_version=module_version,
+        params={"WINSTAP_SQLGUARD_IP": sqlguard_ip},
+        monitor_installation=True,
+        installation_delay=10,
+        debug=debug
+    )

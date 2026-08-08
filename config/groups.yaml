@@ -586,6 +586,17 @@ groups:
           local_ip: "ceratops.demo.guardium"
           debug: false
 
+      - name: install_winstap_on_ceratops
+        function: install_winstap_on_ceratops
+        module: tasks.labs
+        description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
+        args:
+          appliance_name: "cm"
+          collector_name: "coll1"
+          module: "WINSTAP"
+          module_version: ""
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
