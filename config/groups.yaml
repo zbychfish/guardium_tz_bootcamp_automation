@@ -117,7 +117,7 @@ groups:
         args:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
-          bak_file: 'C:\windows\software\AdventureWorks2019.bak'
+          bak_file: '/opt/guardium_tz_bootcamp_automation/upload/source_files/windows/software/AdventureWorks2019.bak'
           debug: false
 
   other_preparations:
