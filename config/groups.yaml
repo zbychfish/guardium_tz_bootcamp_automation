@@ -621,6 +621,15 @@ groups:
           installation_delay: 10
           debug: false
 
+      - name: import_fam_policy
+        function: import_fam_policy
+        module: tasks.labs
+        description: "Import FAM policy definitions from exp_fam_policy.sql to CM"
+        args:
+          cm_appliance: "cm"
+          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

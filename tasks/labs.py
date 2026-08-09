@@ -5034,3 +5034,38 @@ def configure_fam_on_raptor(config, logger, verbose=True,
 
     logger.info("✓ FAM configured on raptor")
     return True
+
+
+def import_fam_policy(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False,
+    **kwargs
+) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    logger.info("=" * 80)
+    logger.info("IMPORT FAM POLICY ON CM")
+    logger.info("=" * 80)
+
+    definition_files = ["exp_fam_policy.sql"]
+
+    logger.info(f"CM Appliance: {cm_appliance}")
+    logger.info(f"File to import: {definition_files[0]}")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=definition_files,
+        definitions_dir=definitions_dir,
+        debug=debug
+    )
+
+    if success:
+        logger.info("✓ FAM policy imported successfully")
+
+    return success
