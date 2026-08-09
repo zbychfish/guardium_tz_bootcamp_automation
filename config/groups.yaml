@@ -120,6 +120,11 @@ groups:
           bak_file: 'c:\bootcamp\software\AdventureWorks2019.bak'
           debug: false
 
+      - name: setup_fam_files_on_raptor
+        function: setup_fam_files_on_raptor
+        module: tasks.labs
+        description: "Create /FAM/{Protected,Controlled} on raptor, copy FAM files, chmod -R 2777 /FAM"
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"

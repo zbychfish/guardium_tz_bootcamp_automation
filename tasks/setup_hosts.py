@@ -1176,7 +1176,7 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
     ps_script = (
         'New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Force | Out-Null\n'
         '\n'
-        '$json = \'[{"toplevel_name":"Guardium"},{"name":"cm (guardium)","url":"https://cm.demo.guardium:8443"},{"name":"coll1 (guardium)","url":"https://coll1.demo.guardium"}]\'\n'
+        '$json = \'[{"toplevel_name":"Guardium"},{"name":"cm (guardium)","url":"https://cm.demo.guardium:8443"},{"name":"coll1 (guardium)","url":"https://coll1.demo.guardium:8443"}]\'\n'
         '\n'
         'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "ManagedFavorites" -Type String -Value $json\n'
         '\n'
