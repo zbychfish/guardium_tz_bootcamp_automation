@@ -1587,4 +1587,26 @@ def restore_adventureworks_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def setup_fam_files_on_raptor(config, logger, verbose=True, **kwargs) -> bool:
+    from core.utils import execute_commands
+
+    logger.info("=" * 80)
+    logger.info("FAM FILES SETUP ON RAPTOR")
+    logger.info("=" * 80)
+
+    commands = [
+        "mkdir -p /FAM/Protected /FAM/Controlled",
+        "cp /opt/guardium_tz_bootcamp_automation/upload/source_files/fam/customers.csv /FAM/Protected/",
+        "cp /opt/guardium_tz_bootcamp_automation/upload/source_files/fam/financial_summary.txt /FAM/Controlled/",
+        "chmod -R 2777 /FAM",
+    ]
+
+    if not execute_commands(commands, logger, verbose):
+        logger.error("FAM files setup failed")
+        return False
+
+    logger.info("✓ FAM directory structure created on raptor")
+    return True
+
+
 # Made with Bob

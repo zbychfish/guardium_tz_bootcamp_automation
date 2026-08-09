@@ -122,7 +122,7 @@ groups:
 
       - name: setup_fam_files_on_raptor
         function: setup_fam_files_on_raptor
-        module: tasks.labs
+        module: tasks.setup_hosts
         description: "Create /FAM/{Protected,Controlled} on raptor, copy FAM files, chmod -R 2777 /FAM"
 
   other_preparations:
