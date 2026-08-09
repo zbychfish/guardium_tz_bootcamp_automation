@@ -638,7 +638,7 @@ groups:
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
-    auto_execute: false
+    auto_execute: true
     dependencies: [va_basics]
     stages:
       - name: install_stap_on_sauropod
@@ -780,7 +780,7 @@ groups:
   policies_reports_part1:
     name: "Policies and Reports"
     description: "Basics - Policies and Reports"
-    auto_execute: false
+    auto_execute: true
     dependencies: [oracle_lab]
     stages:
       - name: stop_raptor_databases
@@ -836,7 +836,7 @@ groups:
   va_api:
     name: "VA API"
     description: "Import VA dashboard and Oracle security assessment definitions"
-    auto_execute: false
+    auto_execute: true
     dependencies: [policies_reports_part1]
     stages:
       - name: import_va_api_definitions
