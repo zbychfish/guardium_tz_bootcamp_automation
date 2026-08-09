@@ -606,6 +606,21 @@ groups:
           module_version: "12.2_r120202259_1"
           debug: false
 
+  fam_lab:
+    name: "FAM Lab"
+    description: "File Activity Monitoring lab - configure FAM on raptor"
+    auto_execute: false
+    dependencies: [winstap_lab]
+    stages:
+      - name: configure_fam_on_raptor
+        function: configure_fam_on_raptor
+        module: tasks.labs
+        description: "Set STAP_FAM_ENABLED, STAP_FAM_INSTALLED, STAP_UID_CHAIN_SSHD_IP, STAP_UID_CHAIN_TRACE on raptor, schedule and monitor"
+        args:
+          cm_appliance: "cm"
+          installation_delay: 10
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

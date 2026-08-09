@@ -4963,3 +4963,74 @@ def install_winstap_on_ceratops(config, logger, verbose=False,
         installation_delay=10,
         debug=debug
     )
+
+
+def configure_fam_on_raptor(config, logger, verbose=True,
+                             cm_appliance: str = "cm",
+                             installation_delay: int = 10,
+                             debug: bool = False, **kwargs) -> bool:
+    import re
+    import time
+    from core.guardium_rest_api import create_guardium_api
+
+    logger.info("=" * 80)
+    logger.info("CONFIGURE FAM ON RAPTOR")
+    logger.info("=" * 80)
+
+    stap_host = config.get_machine_ip('raptor', use_private=True)
+    if not stap_host:
+        logger.error("Raptor IP not found in machines config")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("Password 'pwd' not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    for param, value in [
+        ("STAP_FAM_ENABLED",        "1"),
+        ("STAP_FAM_INSTALLED",       "1"),
+        ("STAP_UID_CHAIN_SSHD_IP",  "1"),
+        ("STAP_UID_CHAIN_TRACE",     "1"),
+    ]:
+        if verbose:
+            logger.info(f"Setting {param}={value} on raptor ({stap_host})")
+        api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
+
+    logger.info("Scheduling GIM install on raptor...")
+    api.gim_schedule_install(client_ip=stap_host, date="now")
+    logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
+    time.sleep(installation_delay)
+
+    logger.info("Monitoring installation progress...")
+    pending = ["initial"]
+    check_count = 0
+    while pending:
+        check_count += 1
+        logger.info(f"  Check #{check_count}: Querying module status...")
+        modules = api.gim_list_client_modules(client_ip=stap_host)
+
+        if "ErrorCode" in modules or "ErrorMessage" in modules:
+            logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
+            return False
+
+        entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
+        result_mods = []
+        for entry in entries:
+            m_name  = re.search(r"NAME:\s+([A-Z0-9\-]+)", entry)
+            m_state = re.search(r"STATE:\s+([A-Z\-]+)", entry)
+            result_mods.append({"name": m_name.group(1) if m_name else "?", "state": m_state.group(1) if m_state else "?"})
+
+        pending = [m for m in result_mods if m["state"] != "INSTALLED"]
+        if pending:
+            logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
+            logger.info("  Waiting 30s before next check...")
+            time.sleep(30)
+        else:
+            logger.info("  ✓ All modules installed successfully!")
+
+    logger.info("✓ FAM configured on raptor")
+    return True
