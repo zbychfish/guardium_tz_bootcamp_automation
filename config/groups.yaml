@@ -125,6 +125,15 @@ groups:
         module: tasks.setup_hosts
         description: "Create /FAM/{Protected,Controlled} on raptor, copy FAM files, chmod -R 2777 /FAM"
 
+      - name: setup_fam_files_on_ceratops
+        function: setup_fam_files_on_ceratops
+        module: tasks.setup_hosts
+        description: "Create users tom/jerry, C:\\FAMGUARD\\{Privileged,Controlled}, upload FAM files, icacls Everyone on ceratops"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          debug: false
+
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"

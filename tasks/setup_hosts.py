@@ -1587,6 +1587,113 @@ def restore_adventureworks_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def setup_fam_files_on_ceratops(config, logger, verbose=True,
+                                 ceratops_machine: str = "ceratops",
+                                 ssh_username: str = "itzuser",
+                                 csv_src: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/fam/customers.csv",
+                                 txt_src: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/fam/financial_summary.txt",
+                                 debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("FAM FILES SETUP ON CERATOPS")
+    logger.info("=" * 80)
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("✗ pwd not found in custom_variables")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            csv_filename = os.path.basename(csv_src)
+            txt_filename = os.path.basename(txt_src)
+
+            steps = [
+                (f'net user tom "{pwd}" /add',                                         'create user tom'),
+                (f'net user jerry "{pwd}" /add',                                       'create user jerry'),
+                ('mkdir "C:\\FAMGUARD"',                                               'create C:\\FAMGUARD'),
+                ('mkdir "C:\\FAMGUARD\\Privileged"',                                   'create Privileged dir'),
+                ('mkdir "C:\\FAMGUARD\\Controlled"',                                   'create Controlled dir'),
+                ('icacls "C:\\FAMGUARD" /grant Everyone:(OI)(CI)F /T',                'set permissions on FAMGUARD'),
+            ]
+
+            for cmd, desc in steps:
+                logger.info(f"  ➜ {desc}...")
+                result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
+                if result['rc'] != 0:
+                    combined = (result['stdout'] + result['stderr']).lower()
+                    if desc.startswith('create user') and ('already' in combined or 'member' in combined):
+                        logger.info(f"  ℹ {desc} — already exists, skipping")
+                    elif desc.startswith('create') and 'already exists' in combined:
+                        logger.info(f"  ℹ {desc} — already exists, skipping")
+                    else:
+                        logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                        return False
+                else:
+                    logger.info(f"  ✓ {desc}")
+
+            # upload csv → Privileged, txt → Controlled
+            for local_src, remote_dest, desc in [
+                (csv_src, f'C:\\FAMGUARD\\Privileged\\{csv_filename}', f'upload {csv_filename} to Privileged'),
+                (txt_src, f'C:\\FAMGUARD\\Controlled\\{txt_filename}', f'upload {txt_filename} to Controlled'),
+            ]:
+                logger.info(f"  ➜ {desc}...")
+                if not ssh.upload_file(local_src, remote_dest):
+                    logger.error(f"✗ Failed to {desc}")
+                    return False
+                logger.info(f"  ✓ {desc}")
+
+            logger.info(f"✓ FAM files setup completed on {ceratops_machine}")
+            return True
+
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
+
+
 def setup_fam_files_on_raptor(config, logger, verbose=True, **kwargs) -> bool:
     from core.utils import execute_commands
 
