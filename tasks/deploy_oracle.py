@@ -1096,18 +1096,18 @@ def setup_oracle_container_on_sauropod(
 
         import time
         semanage_cmd = "semanage fcontext -a -t container_file_t '/opt/oradata(/.*)?' "
-        for attempt in range(1, 6):
+        for attempt in range(1, 11):
             result = ssh.execute_command(semanage_cmd, timeout=60, print_output=verbose)
             if result['rc'] == 0:
                 break
             if 'Resource temporarily unavailable' in result['stderr'] or 'Could not get' in result['stderr']:
-                logger.warning(f"semanage lock busy (attempt {attempt}/5), retrying in 10s...")
-                time.sleep(10)
+                logger.warning(f"semanage lock busy (attempt {attempt}/10), retrying in 30s...")
+                time.sleep(30)
             else:
                 logger.error(f"semanage failed: {result['stderr']}")
                 return False
         else:
-            logger.error("semanage failed after 5 attempts (lock busy)")
+            logger.error("semanage failed after 10 attempts (lock busy)")
             return False
 
         logger.info("✓ oradata directory configured")
