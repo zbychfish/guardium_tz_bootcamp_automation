@@ -655,6 +655,20 @@ groups:
           module_version: "12.2_r120202259_1"
           debug: false
 
+      - name: enable_fam_protect_privileged_on_raptor
+        function: enable_fam_protect_privileged_on_raptor
+        module: tasks.labs
+        description: "Set fam_protect_privileged=1 in guard_tap.ini and restart STAP on raptor"
+
+      - name: enable_fam_protect_privileged_on_ceratops
+        function: enable_fam_protect_privileged_on_ceratops
+        module: tasks.labs
+        description: "Set FAM_PROTECT_PRIVILEGED=1 in Guard_Tap.ini and restart IBM Guardium FAM for Windows on ceratops"
+        args:
+          ceratops_machine: "ceratops"
+          ssh_username: "itzuser"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"

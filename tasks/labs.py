@@ -5119,3 +5119,106 @@ def install_fammonitor_on_ceratops(config, logger, verbose=False,
         installation_delay=10,
         debug=debug
     )
+
+
+def enable_fam_protect_privileged_on_raptor(config, logger, verbose=True, **kwargs) -> bool:
+    from core.utils import execute_commands
+
+    logger.info("=" * 80)
+    logger.info("ENABLE FAM PROTECT PRIVILEGED ON RAPTOR")
+    logger.info("=" * 80)
+
+    commands = [
+        r"sed -i 's/^fam_protect_privileged[[:space:]]*=.*/fam_protect_privileged=1/' /opt/guardium/modules/STAP/current/guard_tap.ini",
+        "/opt/guardium/modules/STAP/current/guard-config-update --restart stap",
+    ]
+
+    if not execute_commands(commands, logger, verbose):
+        logger.error("Failed to enable fam_protect_privileged on raptor")
+        return False
+
+    logger.info("✓ fam_protect_privileged=1 set and STAP restarted on raptor")
+    return True
+
+
+def enable_fam_protect_privileged_on_ceratops(config, logger, verbose=True,
+                                               ceratops_machine: str = "ceratops",
+                                               ssh_username: str = "itzuser",
+                                               debug: bool = False, **kwargs) -> bool:
+    import tempfile
+    import os
+
+    logger.info("=" * 80)
+    logger.info("ENABLE FAM PROTECT PRIVILEGED ON CERATOPS")
+    logger.info("=" * 80)
+
+    ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
+    if not ceratops_ip:
+        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        return False
+
+    ssh_private_key = config.get_custom_variable('ssh_private_key')
+    key_file = None
+    tmp_key_path = None
+
+    if ssh_private_key:
+        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+        try:
+            os.write(tmp_fd, ssh_private_key.encode())
+        finally:
+            os.close(tmp_fd)
+        os.chmod(tmp_key_path, 0o600)
+        key_file = tmp_key_path
+        logger.info("  Using SSH key from custom_variables")
+    else:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+
+    ini_file = r'C:\Program Files\IBM\Windows Fam Monitor\Bin\Guard_Tap.ini'
+
+    try:
+        ssh = SSHClient(
+            host=ceratops_ip,
+            username=ssh_username,
+            key_file=key_file,
+            port=2223,
+            timeout=30
+        )
+        if not ssh.connect():
+            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            return False
+
+        try:
+            steps = [
+                (
+                    f'powershell -Command "(Get-Content \'{ini_file}\') -replace \'FAM_PROTECT_PRIVILEGED=0\', \'FAM_PROTECT_PRIVILEGED=1\' | Set-Content \'{ini_file}\'"',
+                    'set FAM_PROTECT_PRIVILEGED=1 in Guard_Tap.ini'
+                ),
+                (
+                    'net stop "IBM Guardium FAM for Windows" && net start "IBM Guardium FAM for Windows"',
+                    'restart IBM Guardium FAM for Windows'
+                ),
+            ]
+
+            for cmd, desc in steps:
+                logger.info(f"  ➜ {desc}...")
+                result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+                if result['rc'] != 0:
+                    logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                    return False
+                logger.info(f"  ✓ {desc}")
+
+            logger.info(f"✓ FAM_PROTECT_PRIVILEGED=1 set and service restarted on {ceratops_machine}")
+            return True
+
+        finally:
+            ssh.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Unexpected error: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        if tmp_key_path and os.path.exists(tmp_key_path):
+            os.remove(tmp_key_path)
