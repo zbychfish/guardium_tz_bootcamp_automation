@@ -5147,6 +5147,7 @@ def enable_fam_protect_privileged_on_ceratops(config, logger, verbose=True,
                                                debug: bool = False, **kwargs) -> bool:
     import tempfile
     import os
+    from core.ssh_client import SSHClient
 
     logger.info("=" * 80)
     logger.info("ENABLE FAM PROTECT PRIVILEGED ON CERATOPS")
