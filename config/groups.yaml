@@ -635,11 +635,22 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+      - name: install_fammonitor_on_ceratops
+        function: install_fammonitor_on_ceratops
+        module: tasks.labs
+        description: "Install FAMMONITOR module on ceratops via GIM API with FAMMONITOR_SQLGUARD_IP=coll1"
+        args:
+          appliance_name: "cm"
+          collector_name: "coll1"
+          module: "FAMMONITOR"
+          module_version: "12.2_r120202259_1"
+          debug: false
+
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
     auto_execute: true
-    dependencies: [va_basics]
+    dependencies: [winstap_lab]
     stages:
       - name: install_stap_on_sauropod
         function: install_stap_on_sauropod
@@ -860,7 +871,7 @@ groups:
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
-    auto_execute: false
+    auto_execute: true
     dependencies: [va_api]
     stages:
       - name: setup_minio_on_raptor
