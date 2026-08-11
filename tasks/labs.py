@@ -2700,27 +2700,39 @@ def register_kafka_cluster(
     import time
 
     logger.info(f"Cluster: {cluster_name}, members: {member_list}, cruise_control: {apply_cruise_control}")
-    result = api.create_kafka_cluster(
-        cluster_name=cluster_name,
-        member_list=member_list,
-        apply_cruise_control=apply_cruise_control
-    )
-    if debug:
-        logger.info(f"API response: {result}")
+
+    # Register cluster — retry up to 10 times with 30s interval if API returns an error
+    registered = False
+    for attempt in range(1, 11):
+        result = api.create_kafka_cluster(
+            cluster_name=cluster_name,
+            member_list=member_list,
+            apply_cruise_control=apply_cruise_control
+        )
+        if debug:
+            logger.info(f"API response: {result}")
+
+        if isinstance(result, dict) and result.get('ErrorCode'):
+            logger.warning(f"⚠ Registration attempt {attempt}/10 failed (ErrorCode {result['ErrorCode']}): {result.get('ErrorMessage', '')} — retrying in 30s...")
+            time.sleep(30)
+        else:
+            logger.info(f"✓ Cluster registration accepted (attempt {attempt}/10)")
+            registered = True
+            break
+
+    if not registered:
+        logger.error(f"✗ Kafka cluster registration failed after 10 attempts")
+        return False
 
     logger.info("➜ Verifying cluster exists via GET /restAPI/kafka_cluster (max 6 attempts, 60s interval)...")
     for attempt in range(1, 7):
         clusters = api.get_kafka_clusters()
         logger.info(f"GET kafka_cluster response: {clusters}")
 
-        # flatten whatever structure Guardium returns into a list of dicts
         if isinstance(clusters, list):
             items = clusters
         elif isinstance(clusters, dict):
-            items = next(
-                (v for k, v in clusters.items() if isinstance(v, list)),
-                []
-            )
+            items = next((v for k, v in clusters.items() if isinstance(v, list)), [])
         else:
             items = []
 
