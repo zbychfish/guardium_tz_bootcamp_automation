@@ -1028,8 +1028,8 @@ def setup_minio_on_raptor(
     podman_run_command = f"podman run -d --name minio --restart=always -p 0.0.0.0:9000:9000 -p 0.0.0.0:9001:9001 -v /home/data/minio:/data:Z -v /home/minio/certs:/root/.minio/certs:Z -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD='{minio_password}' quay.io/minio/minio server /data --console-address ':9001'"
     
     commands_after_podman = [
-        f"mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{minio_password}'",
-        "mc mb myminio/guardium-ltr",
+        f"/usr/local/bin/mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{minio_password}'",
+        "/usr/local/bin/mc mb myminio/guardium-ltr",
     ]
 
     for command in commands_before_podman:
