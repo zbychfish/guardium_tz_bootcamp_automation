@@ -1694,6 +1694,41 @@ def setup_fam_files_on_ceratops(config, logger, verbose=True,
             os.remove(tmp_key_path)
 
 
+def RDP_relay_setup(config, logger, verbose=True, **kwargs) -> bool:
+    from core.utils import execute_commands
+
+    service_content = """[Unit]
+Description=Port forward 8443 -> ceratops:51124
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP-LISTEN:8443,fork,reuseaddr TCP:ceratops.demo.guardium:51124
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+"""
+    service_path = "/etc/systemd/system/socat-RDP.service"
+
+    logger.info("Creating socat-RDP systemd service")
+    try:
+        with open(service_path, "w") as f:
+            f.write(service_content)
+    except Exception as e:
+        logger.error(f"✗ Failed to write service file: {e}")
+        return False
+
+    if not execute_commands(["systemctl daemon-reload"], logger, verbose):
+        logger.error("✗ systemctl daemon-reload failed")
+        return False
+
+    logger.info("✓ socat-RDP service created and daemon reloaded")
+    return True
+
+
 def setup_fam_files_on_raptor(config, logger, verbose=True, **kwargs) -> bool:
     from core.utils import execute_commands
 

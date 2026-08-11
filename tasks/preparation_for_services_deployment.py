@@ -29,7 +29,7 @@ def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -
     if verbose:
         logger.info("Step 5: Installing required packages on raptor")
     if not execute_commands(
-        ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel"],
+        ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat"],
         logger, verbose
     ):
         logger.error("Package installation failed")
