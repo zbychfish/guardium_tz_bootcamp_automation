@@ -766,6 +766,7 @@ groups:
         function: register_kafka_cluster
         module: tasks.labs
         description: "Register Kafka cluster via REST API"
+        pre_delay_seconds: 30
         args:
           cm_appliance: "cm"
           cluster_name: "kafka_cluster_1"

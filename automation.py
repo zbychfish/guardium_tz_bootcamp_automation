@@ -111,6 +111,11 @@ class AutomationOrchestrator:
         else:
             self.logger.info(f"➤  {stage_name}")
         
+        pre_delay = stage_info.get('pre_delay_seconds', 0)
+        if pre_delay:
+            self.logger.info(f"⌛ Waiting {pre_delay}s before {stage_name}...")
+            time.sleep(pre_delay)
+
         start_time = time.time()
         
         try:
