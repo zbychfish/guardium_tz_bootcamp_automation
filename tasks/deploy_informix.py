@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import sys
@@ -80,7 +80,9 @@ def deploy_informix(
     jdbc_jars: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/jdbc-15.0.1.3.jar:/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/bson-4.11.1.jar",
     **kwargs
 ) -> bool:
-    logger.info("=" * 80)`n        logger.info("DEPLOY INFORMIX")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("DEPLOY INFORMIX")
         logger.info("=" * 80)
 
     password = config.get_custom_variable('pwd')
@@ -369,7 +371,9 @@ scenario:
         return False
     logger.info(f"✓ dbtraffic config written: {dbtraffic_config}")
 
-    logger.info("=" * 80)`n        logger.info("✓ INFORMIX DEPLOYED")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("✓ INFORMIX DEPLOYED")
         logger.info("=" * 80)
     return True
 

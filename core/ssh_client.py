@@ -91,42 +91,92 @@ class SSHClient:
         self,
         command: str,
         timeout: Optional[int] = None,
-        print_output: bool = False
+        print_output: bool = True
     ) -> Dict[str, Any]:
+        """
+        Execute a single command on remote host.
+        
+        Args:
+            command: Command to execute
+            timeout: Command timeout in seconds (None = no timeout)
+            print_output: Whether to print output to console
+            
+        Returns:
+            Dictionary with keys: cmd, rc (return code), stdout, stderr
+        """
         if not self.client:
             raise RuntimeError("Not connected. Call connect() first.")
+        
         self.logger.debug(f"Executing: {command}")
+        
         try:
-            stdin, stdout, stderr = self.client.exec_command(command, timeout=timeout)
+            stdin, stdout, stderr = self.client.exec_command(
+                command,
+                timeout=timeout
+            )
+            
             rc = stdout.channel.recv_exit_status()
             out = stdout.read().decode('utf-8', errors='replace')
             err = stderr.read().decode('utf-8', errors='replace')
-            if rc == 0:
+            
+            if print_output:
                 if out:
-                    self.logger.info(out.strip())
-            else:
-                self.logger.warning(f"Command failed (rc={rc}): {command}")
+                    print(out)
                 if err:
-                    self.logger.warning(err.strip())
-            return {'cmd': command, 'rc': rc, 'stdout': out, 'stderr': err}
+                    print(err)
+            
+            result = {
+                'cmd': command,
+                'rc': rc,
+                'stdout': out,
+                'stderr': err
+            }
+            
+            if rc == 0:
+                self.logger.debug(f"Command succeeded (rc={rc})")
+            else:
+                self.logger.warning(f"Command failed (rc={rc})")
+            
+            return result
+            
         except Exception as e:
             self.logger.error(f"Command execution failed: {e}")
-            return {'cmd': command, 'rc': -1, 'stdout': '', 'stderr': str(e)}
-
+            return {
+                'cmd': command,
+                'rc': -1,
+                'stdout': '',
+                'stderr': str(e)
+            }
+    
     def execute_commands(
         self,
         commands: List[str],
         timeout: Optional[int] = None,
-        print_output: bool = False,
+        print_output: bool = True,
         stop_on_error: bool = False
     ) -> List[Dict[str, Any]]:
+        """
+        Execute multiple commands sequentially.
+        
+        Args:
+            commands: List of commands to execute
+            timeout: Command timeout in seconds
+            print_output: Whether to print output to console
+            stop_on_error: Stop execution if a command fails
+            
+        Returns:
+            List of result dictionaries
+        """
         results = []
+        
         for cmd in commands:
-            result = self.execute_command(cmd, timeout)
+            result = self.execute_command(cmd, timeout, print_output)
             results.append(result)
+            
             if stop_on_error and result['rc'] != 0:
                 self.logger.error(f"Stopping due to error in: {cmd}")
                 break
+        
         return results
     
     def upload_file(

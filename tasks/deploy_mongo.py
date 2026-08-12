@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 MongoDB Deployment Task
@@ -27,8 +27,9 @@ def create_mongodb_repo_file(logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-logger.info("Creating MongoDB Enterprise repository file")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating MongoDB Enterprise repository file")
         logger.info("=" * 80)
     
     repo_file_path = "/etc/yum.repos.d/mongodb-enterprise-8.3.repo"
@@ -41,12 +42,15 @@ gpgkey=https://pgp.mongodb.com/server-8.0.asc
 """
     
     try:
-        logger.info(f"Writing repository configuration to: {repo_file_path}")
-# Write the repository file using core function
+        if verbose:
+            logger.info(f"Writing repository configuration to: {repo_file_path}")
+        
+        # Write the repository file using core function
         write_file(repo_file_path, repo_content)
         
-        logger.info(f"✓ Created {repo_file_path}")
-logger.info("=" * 80)
+        if verbose:
+            logger.info(f"✓ Created {repo_file_path}")
+            logger.info("=" * 80)
         
         return True
         
@@ -67,8 +71,9 @@ def create_mongodb_admin_user(password: str, logger, verbose: bool = True) -> bo
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-logger.info("Creating MongoDB admin user")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating MongoDB admin user")
         logger.info("=" * 80)
     
     # Escape single quotes in password for JavaScript
@@ -83,11 +88,14 @@ logger.info("Creating MongoDB admin user")
 }})
 """
     
-    logger.info("Executing user creation command...")
-result = execute_mongo_js(
+    if verbose:
+        logger.info("Executing user creation command...")
+    
+    result = execute_mongo_js(
         js_commands=js_commands,
         database="admin",
-        logger=logger
+        logger=logger,
+        verbose=verbose
     )
     
     if result['rc'] != 0:
@@ -99,18 +107,24 @@ result = execute_mongo_js(
         return False
     
     # Verify user was created
-    logger.info("Verifying user creation...")
-verify_js = """db.getUsers()"""
+    if verbose:
+        logger.info("Verifying user creation...")
+    
+    verify_js = """db.getUsers()"""
     verify_result = execute_mongo_js(
         js_commands=verify_js,
         database="admin",
-        logger=logger
+        logger=logger,
+        verbose=verbose
     )
     
     if verify_result['rc'] == 0:
-        logger.info(f"Users in admin database: {verify_result['stdout']}")
-logger.info("✓ MongoDB admin user created successfully")
-logger.info("=" * 80)
+        if verbose:
+            logger.info(f"Users in admin database: {verify_result['stdout']}")
+    
+    if verbose:
+        logger.info("✓ MongoDB admin user created successfully")
+        logger.info("=" * 80)
     
     return True
 
@@ -127,8 +141,9 @@ def enable_mongodb_authorization(logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-logger.info("Enabling MongoDB authorization")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Enabling MongoDB authorization")
         logger.info("=" * 80)
     
     mongod_conf_path = "/etc/mongod.conf"
@@ -136,8 +151,10 @@ logger.info("Enabling MongoDB authorization")
   authorization: enabled
 """
     
-    logger.info(f"Adding authorization config to: {mongod_conf_path}")
-# Append security configuration to the end of file
+    if verbose:
+        logger.info(f"Adding authorization config to: {mongod_conf_path}")
+    
+    # Append security configuration to the end of file
     success = modify_config_file(
         path=mongod_conf_path,
         content=security_config,
@@ -150,8 +167,9 @@ logger.info("Enabling MongoDB authorization")
         logger.error("Failed to enable MongoDB authorization")
         return False
     
-    logger.info(f"✓ Added authorization configuration")
-logger.info("=" * 80)
+    if verbose:
+        logger.info(f"✓ Added authorization configuration")
+        logger.info("=" * 80)
     
     return True
 
@@ -169,8 +187,9 @@ def create_mongo_env_file(password: str, logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-logger.info("Creating MongoDB environment file")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Creating MongoDB environment file")
         logger.info("=" * 80)
     
     # URL-encode password to handle special characters
@@ -181,22 +200,28 @@ logger.info("Creating MongoDB environment file")
     mongo_env_content = f"export MONGO_URI='mongodb://admin:{encoded_password}@localhost:27017/admin'\n"
     
     try:
-        logger.info(f"Writing MongoDB environment file to: {mongo_env_path}")
-# Write the .mongo_env file
+        if verbose:
+            logger.info(f"Writing MongoDB environment file to: {mongo_env_path}")
+        
+        # Write the .mongo_env file
         write_file(mongo_env_path, mongo_env_content)
         
         # Set secure permissions (readable only by owner)
-        result = execute_local_command(f"chmod 600 {mongo_env_path}", logger)
+        result = execute_local_command(f"chmod 600 {mongo_env_path}", logger, verbose=False)
         if result['rc'] != 0:
             logger.error(f"Failed to set permissions on {mongo_env_path}")
             return False
         
-        logger.info(f"✓ Created {mongo_env_path}")
-# Update .bashrc to source .mongo_env (without checking if exists)
+        if verbose:
+            logger.info(f"✓ Created {mongo_env_path}")
+        
+        # Update .bashrc to source .mongo_env (without checking if exists)
         bashrc_path = "/root/.bashrc"
         
-        logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
-# Use heredoc to append multi-line content to .bashrc
+        if verbose:
+            logger.info(f"Adding .mongo_env sourcing to {bashrc_path}")
+        
+        # Use heredoc to append multi-line content to .bashrc
         append_cmd = f"""cat >> {bashrc_path} << 'EOF'
 
 # Load MongoDB environment variables
@@ -207,18 +232,22 @@ EOF"""
         
         append_result = execute_local_command(
             append_cmd,
-            logger
+            logger,
+            verbose=False
         )
         
         if append_result['rc'] == 0:
-            logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
-else:
+            if verbose:
+                logger.info(f"✓ Updated {bashrc_path} to source .mongo_env")
+        else:
             # Non-critical - MongoDB is already configured and working
             if verbose:
                 logger.debug(f"Note: Could not update {bashrc_path} (non-critical)")
         
-        logger.info("=" * 80)
-return True
+        if verbose:
+            logger.info("=" * 80)
+        
+        return True
         
     except Exception as e:
         logger.error(f"Failed to create MongoDB environment file: {e}")
@@ -237,8 +266,9 @@ def import_mongodb_sample_data(logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-logger.info("Importing MongoDB sample data")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Importing MongoDB sample data")
         logger.info("=" * 80)
     
     archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/mongo/sampledata.archive.gz"
@@ -246,7 +276,8 @@ logger.info("Importing MongoDB sample data")
     # Check if archive exists
     check_result = execute_local_command(
         f"test -f {archive_path}",
-        logger
+        logger,
+        verbose=False
     )
     
     if check_result['rc'] != 0:
@@ -254,8 +285,9 @@ logger.info("Importing MongoDB sample data")
         logger.warning("Skipping data import")
         return True  # Not a critical error
     
-    logger.info(f"Found sample data archive: {archive_path}")
-logger.info("Importing data using mongorestore...")
+    if verbose:
+        logger.info(f"Found sample data archive: {archive_path}")
+        logger.info("Importing data using mongorestore...")
     
     # Build mongorestore command with --quiet flag if not verbose
     quiet_flag = "--quiet" if not verbose else ""
@@ -265,7 +297,7 @@ logger.info("Importing data using mongorestore...")
     # Use single quotes around the bash -c command to avoid escaping issues
     full_command = f"bash -c '. /root/.mongo_env && gunzip -c {archive_path} | mongorestore --archive --uri=\"$MONGO_URI\" --nsInclude=\"*\" {quiet_flag}'"
     
-    result = execute_local_command(full_command, logger)
+    result = execute_local_command(full_command, logger, verbose=verbose)
     
     if result['rc'] != 0:
         logger.error("Failed to import MongoDB sample data")
@@ -273,8 +305,9 @@ logger.info("Importing data using mongorestore...")
             logger.error(f"Error: {result['stderr']}")
         return False
     
-    logger.info("✓ Sample data imported successfully")
-logger.info("=" * 80)
+    if verbose:
+        logger.info("✓ Sample data imported successfully")
+        logger.info("=" * 80)
     
     return True
 
@@ -294,8 +327,9 @@ def configure_ssl_for_mongo(logger, verbose: bool = True) -> bool:
     import re
     from pathlib import Path
     
-    logger.info("=" * 80)
-logger.info("Configuring SSL/TLS for MongoDB")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Configuring SSL/TLS for MongoDB")
         logger.info("=" * 80)
     
     # Create certificates
@@ -313,10 +347,14 @@ logger.info("Configuring SSL/TLS for MongoDB")
         logger.error("Failed to create SSL certificates")
         return False
     
-    logger.info("✓ SSL certificates created")
-# Modify mongod.conf to add TLS configuration
-    logger.info("Updating MongoDB configuration for TLS...")
-conf = Path("/etc/mongod.conf")
+    if verbose:
+        logger.info("✓ SSL certificates created")
+    
+    # Modify mongod.conf to add TLS configuration
+    if verbose:
+        logger.info("Updating MongoDB configuration for TLS...")
+    
+    conf = Path("/etc/mongod.conf")
     lines = []
     tls_added = False
     
@@ -339,15 +377,20 @@ conf = Path("/etc/mongod.conf")
     
     conf.write_text("".join(lines))
     
-    logger.info("✓ MongoDB configuration updated")
-# Restart MongoDB to apply TLS settings
-    logger.info("Restarting MongoDB to apply TLS settings...")
-if not execute_commands(["systemctl restart mongod"], logger, verbose):
+    if verbose:
+        logger.info("✓ MongoDB configuration updated")
+    
+    # Restart MongoDB to apply TLS settings
+    if verbose:
+        logger.info("Restarting MongoDB to apply TLS settings...")
+    
+    if not execute_commands(["systemctl restart mongod"], logger, verbose):
         logger.error("Failed to restart MongoDB")
         return False
     
-    logger.info("✓ SSL/TLS configured for MongoDB")
-logger.info("=" * 80)
+    if verbose:
+        logger.info("✓ SSL/TLS configured for MongoDB")
+        logger.info("=" * 80)
     
     return True
 
@@ -364,8 +407,9 @@ def deploy_mongo_on_raptor(config, logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    logger.info("=" * 80)
-logger.info("Starting MongoDB deployment on raptor")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("Starting MongoDB deployment on raptor")
         logger.info("=" * 80)
     
     password = config.get_custom_variable('pwd')
@@ -387,8 +431,9 @@ logger.info("Starting MongoDB deployment on raptor")
         return False
     
     # Verify MongoDB is running
-    logger.info("Verifying MongoDB is running...")
-verify_result = execute_local_command("systemctl is-active mongod", logger)
+    if verbose:
+        logger.info("Verifying MongoDB is running...")
+    verify_result = execute_local_command("systemctl is-active mongod", logger, verbose=False)
     if verify_result['rc'] != 0:
         logger.error("MongoDB service is not running")
         return False
@@ -404,8 +449,10 @@ verify_result = execute_local_command("systemctl is-active mongod", logger)
         return False
     
     # Restart MongoDB to apply authorization settings
-    logger.info("Restarting MongoDB to apply authorization settings...")
-commands = [
+    if verbose:
+        logger.info("Restarting MongoDB to apply authorization settings...")
+    
+    commands = [
         "systemctl restart mongod",
         "sleep 5",  # Wait for MongoDB to be ready
     ]
@@ -428,8 +475,9 @@ commands = [
         logger.error("Failed to configure SSL/TLS for MongoDB")
         return False
 
-    logger.info("=" * 80)
-logger.info("MongoDB deployment completed successfully")
+    if verbose:
+        logger.info("=" * 80)
+        logger.info("MongoDB deployment completed successfully")
         logger.info("=" * 80)
     
     return True

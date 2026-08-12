@@ -31,11 +31,24 @@ class AutomationOrchestrator:
                  groups_file: str = "config/groups.yaml",
                  state_file: str = "state.json",
                  machines_info_file: str = "/root/machines_info.json",
+                 verbose: bool = False,
                  skip_deps: bool = False):
+        """
+        Initialize the orchestrator.
+        
+        Args:
+            config_file: Path to configuration file
+            groups_file: Path to groups configuration file
+            state_file: Path to state tracking file
+            machines_info_file: Path to JSON file containing machine information
+            verbose: Enable verbose logging
+            skip_deps: Skip dependency checks (default: False)
+        """
         self.logger = setup_logger("AutomationOrchestrator")
         self.config = ConfigLoader(config_file, machines_info_file)
         self.group_manager = GroupManager(Path(groups_file))
         self.state = StateManager(state_file)
+        self.verbose = verbose
         self.skip_deps = skip_deps
         
         self.logger.info("Automation Orchestrator initialized")
@@ -101,7 +114,7 @@ class AutomationOrchestrator:
             if not isinstance(stage_args, dict):
                 stage_args = {}
 
-            result = stage_fn(self.config, self.logger, **stage_args)
+            result = stage_fn(self.config, self.logger, self.verbose, **stage_args)
             elapsed_time = time.time() - start_time
             time_str = self._format_time(elapsed_time)
 
@@ -470,6 +483,13 @@ def main():
     )
     
     parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="Enable verbose output"
+    )
+    
+    parser.add_argument(
         "--skip-deps",
         action="store_true",
         help="Skip dependency checks when executing groups (use with caution)"
@@ -484,6 +504,7 @@ def main():
             groups_file=args.groups_config,
             state_file=args.state,
             machines_info_file=args.machines_info,
+            verbose=args.verbose,
             skip_deps=args.skip_deps
         )
     except Exception as e:
