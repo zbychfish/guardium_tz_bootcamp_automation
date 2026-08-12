@@ -17,42 +17,37 @@ from core.ssh_client import SSHClient
 
 
 def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    logger.info("Updating system packages (excluding kernel)")
+    logger.info("Updating system packages on raptor (excluding kernel)")
     if not execute_commands(["dnf update --exclude=kernel* -y"], logger):
-        logger.error("System update failed")
+        logger.error("✗ System update failed")
         return False
-    logger.info("✓ System packages updated successfully")
+    logger.info("✓ System packages updated")
 
     logger.info("Installing required packages on raptor")
     if not execute_commands(
         ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat"],
         logger
     ):
-        logger.error("Package installation failed")
+        logger.error("✗ Package installation failed")
         return False
-    logger.info("✓ Required packages installed on raptor")
+    logger.info("✓ Required packages installed")
     return True
 
 
 def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    logger.info("=" * 80)
-    logger.info("Preparing upload content")
-    logger.info("=" * 80)
-    logger.info("Creating necessary directories")
-
+    logger.info("Creating upload directory")
     if not execute_commands(["mkdir -p /opt/guardium_tz_bootcamp_automation/upload"], logger):
-        logger.error("Failed to create upload directory")
+        logger.error("✗ Failed to create upload directory")
         return False
-    logger.info("✓ Directories created successfully")
-    logger.info("Downloading source_files from IBM COS")
 
+    logger.info("Downloading source_files from IBM COS")
     api_id   = config.get_custom_variable('s3_source_api_id')
     api_key  = config.get_custom_variable('s3_source_api_key')
     endpoint = config.get_custom_variable('s3_source_endpoint')
     bucket   = config.get_custom_variable('s3_source_bucket')
 
     if not all([api_id, api_key, endpoint, bucket]):
-        logger.error("Missing COS credentials in custom_variables (s3_source_api_id/key/endpoint/bucket)")
+        logger.error("✗ Missing COS credentials in custom_variables (s3_source_api_id/key/endpoint/bucket)")
         return False
 
     try:
@@ -81,27 +76,28 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
                 cos.download_file(bucket, key, local_path)
                 downloaded += 1
 
-        logger.info(f"✓ Downloaded {downloaded} file(s) from COS to {local_base}")
+        logger.info(f"✓ Downloaded {downloaded} file(s) from COS")
     except Exception as e:
-        logger.error(f"Failed to download from IBM COS: {e}")
+        logger.error(f"✗ Failed to download from IBM COS: {e}")
         return False
+
     logger.info("Cloning guardium_notes_dbtraffic repository")
     if not execute_commands(
         ["cd /opt/guardium_tz_bootcamp_automation/upload && rm -rf guardium_notes_dbtraffic && git clone https://github.com/zbychfish/guardium_notes_dbtraffic.git"],
         logger
     ):
-        logger.error("Failed to clone guardium_notes_dbtraffic repository")
+        logger.error("✗ Failed to clone guardium_notes_dbtraffic")
         return False
-    logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
+    logger.info("✓ guardium_notes_dbtraffic cloned")
     return True
 
 
 def configure_dbtraffic(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    logger.info("Configuring guardium_notes_dbtraffic")
+    logger.info("Configuring guardium_notes_dbtraffic (venv, yaml configs, deps)")
 
     root_password = config.get_custom_variable("pwd")
     if not root_password:
-        logger.error("Custom variable 'pwd' not found")
+        logger.error("✗ Custom variable 'pwd' not found")
         return False
 
     dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
@@ -157,15 +153,15 @@ EOF""",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install -r requirements.txt",
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Failed to configure guardium_notes_dbtraffic")
+        logger.error("✗ Failed to configure guardium_notes_dbtraffic")
         return False
 
-    logger.info("✓ guardium_notes_dbtraffic configured on raptor")
+    logger.info("✓ guardium_notes_dbtraffic configured")
     return True
 
 
 def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    logger.info("Configuring swap file on raptor")
+    logger.info("Configuring 8G swap file on raptor")
     commands = [
         "fallocate -l 8G /home/swapfile",
         "chmod 600 /home/swapfile",
@@ -174,18 +170,18 @@ def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
         r"grep -q '^/home/swapfile[[:space:]]\+swap[[:space:]]\+swap[[:space:]]\+defaults[[:space:]]\+0[[:space:]]\+0$' /etc/fstab || echo '/home/swapfile swap swap defaults 0 0' >> /etc/fstab",
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Swap file configuration failed")
+        logger.error("✗ Swap file configuration failed")
         return False
-        logger.info("✓ Swap file configured on raptor")
+    logger.info("✓ Swap file configured (8G, /home/swapfile)")
     return True
 
 
 def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    logger.info("Step 7: Installing Java 11 on sauropod")
+    logger.info("Installing kernel-devel, Java 11 and podman on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
-        logger.warning("Could not find sauropod machine in configuration, skipping Java installation")
+        logger.warning("sauropod not found in configuration — skipping")
         return True
 
     ssh_config = config.get('ssh', {})
@@ -194,48 +190,40 @@ def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = T
 
     root_password = config.get_custom_variable('pwd')
     if not root_password:
-        logger.error("Root password (pwd) not found in custom_variables")
+        logger.error("✗ pwd not found in custom_variables")
         return False
 
-    logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
-
-    ssh = SSHClient(
-        host=sauropod_ip,
-        port=ssh_port,
-        username=ssh_username,
-        password=root_password,
-        timeout=60
-    )
+    logger.info(f"  Connecting to sauropod ({sauropod_ip}:{ssh_port})")
+    ssh = SSHClient(host=sauropod_ip, port=ssh_port, username=ssh_username, password=root_password, timeout=60)
 
     if not ssh.connect():
-        logger.error("Failed to connect to sauropod via SSH")
+        logger.error("✗ Failed to connect to sauropod via SSH")
         return False
 
     try:
         install_cmd = "dnf install -y kernel-devel-$(uname -r) java-11-openjdk podman"
-        logger.info("Installing kernel-devel, Java 11 and podman")
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
 
         if result['rc'] != 0:
             if 'rhel-8-for-x86_64-appstream-eus-rpms' in result['stderr'] or '404' in result['stderr']:
-                logger.warning("EUS repository error detected, applying workaround...")
+                logger.warning("  EUS repository error — applying workaround")
                 result = ssh.execute_command('subscription-manager repos --disable="*eus*"', timeout=60, print_output=verbose)
                 if result['rc'] != 0:
-                    logger.warning(f"Failed to disable EUS repos (rc={result['rc']}), continuing anyway")
+                    logger.warning(f"  Failed to disable EUS repos (rc={result['rc']}), continuing")
                 result = ssh.execute_command('subscription-manager repos --enable=rhel-8-for-x86_64-baseos-rpms --enable=rhel-8-for-x86_64-appstream-rpms', timeout=60, print_output=verbose)
                 if result['rc'] != 0:
-                    logger.error("Failed to enable standard repositories")
+                    logger.error("✗ Failed to enable standard repositories")
                     return False
-                logger.info("✓ Repository configuration updated, retrying installation")
+                logger.info("  ✓ Repositories updated, retrying installation")
                 result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
                 if result['rc'] != 0:
-                    logger.error("Failed to install packages on sauropod after workaround")
+                    logger.error("✗ Package installation failed after workaround")
                     return False
             else:
-                logger.error("Failed to install packages on sauropod")
+                logger.error("✗ Package installation failed on sauropod")
                 return False
 
-        logger.info("✓ kernel-devel, Java 11 and podman installed successfully on sauropod")
+        logger.info("✓ kernel-devel, Java 11 and podman installed on sauropod")
 
     finally:
         ssh.disconnect()

@@ -143,9 +143,9 @@ groups:
         module: tasks.setup_hosts
         description: "Create /etc/systemd/system/socat-RDP.service forwarding 8443 -> ceratops:51124, daemon-reload"
 
-  other_preparations:
-    name: "Other general tasks, standard database installation"
-    description: "Bootcamp machines preparation"
+  database_preparations:
+    name: "Standard databases installation"
+    description: "setup DB engines on bootcamp machines"
     deployed_with: [init2]
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
@@ -207,7 +207,7 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     deployed_with: [appliances]
-    dependencies: [initial_preparation, other_preparations]  # Requires initial_preparation to be completed
+    dependencies: [initial_preparation, database_preparations]
     stages:
       - name: reset_cli_password_all
         function: reset_cli_password_all

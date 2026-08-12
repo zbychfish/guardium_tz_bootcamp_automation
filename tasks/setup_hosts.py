@@ -43,6 +43,12 @@ def _tmp_ssh_key(ssh_private_key: str, logger):
             os.remove(tmp_path)
 
 
+def _header(logger, title: str):
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
 @contextmanager
 def _ceratops_ssh(config, logger, ceratops_machine: str = "ceratops", ssh_username: str = "itzuser"):
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
@@ -523,57 +529,41 @@ def setup_hosts_locally(config, logger, verbose: bool = True,
     root_password = config.get_custom_variable('pwd')
     timezone = config.get_custom_variable('timezone')
 
-    logger.info(f"Setting up local machine ({machine_name})")
-    
-    # Set hostname
     hostname = f"{machine_name}.demo.guardium"
     logger.info(f"Setting hostname to {hostname}")
-    hostname_success = set_hostname_local(hostname, logger)
-    if not hostname_success:
-        logger.error("Failed to set hostname")
+    if not set_hostname_local(hostname, logger):
+        logger.error("✗ Failed to set hostname")
         return False
-    
-    # Set timezone if provided
+
     if timezone:
         logger.info(f"Setting timezone to {timezone}")
-        timezone_success = set_timezone_local(timezone, logger)
-        if not timezone_success:
-            logger.error("Failed to set timezone")
+        if not set_timezone_local(timezone, logger):
+            logger.error("✗ Failed to set timezone")
             return False
-    
-    # Setup /etc/hosts
+
     logger.info("Configuring /etc/hosts")
     hosts_content = generate_hosts_content(all_machines)
-    logger.debug(f"Generated /etc/hosts content:\n{hosts_content}")
-    
-    hosts_success = update_hosts_file_local(hosts_content, logger)
-    if not hosts_success:
-        logger.error("Failed to update /etc/hosts")
+    if not update_hosts_file_local(hosts_content, logger):
+        logger.error("✗ Failed to update /etc/hosts")
         return False
-    
-    # Configure SSHD if requested
+
     if configure_sshd:
         logger.info("Configuring SSHD")
-        sshd_success = configure_sshd_local(logger)
-        if not sshd_success:
-            logger.error("Failed to configure SSHD")
+        if not configure_sshd_local(logger):
+            logger.error("✗ Failed to configure SSHD")
             return False
-    
-    # Set root password if provided
+
     if root_password:
         logger.info("Setting root password")
-        pwd_success = set_root_password_local(root_password, logger)
-        if not pwd_success:
-            logger.error("Failed to set root password")
+        if not set_root_password_local(root_password, logger):
+            logger.error("✗ Failed to set root password")
             return False
-    
-    # Configure firewall to open database ports
+
     logger.info("Configuring firewall for database ports")
-    firewall_success = configure_firewall_local(logger)
-    if not firewall_success:
+    if not configure_firewall_local(logger):
         logger.warning("Failed to configure firewall (non-critical)")
-    
-    logger.info("Local machine setup completed successfully")
+
+    logger.info(f"✓ {machine_name} local setup completed")
     return True
 
 
@@ -597,57 +587,53 @@ def setup_hosts_on_remote_machine(config, logger, verbose: bool = True,
 
     for machine_name in remote_machines:
         if config.is_appliance(machine_name):
-            logger.info(f"Skipping appliance: {machine_name}")
+            logger.info(f"  Skipping appliance: {machine_name}")
             continue
         if machine_name in windows_machines:
-            logger.info(f"Skipping Windows machine: {machine_name}")
+            logger.info(f"  Skipping Windows machine: {machine_name}")
             continue
 
         machine_info = config.get_machine(machine_name)
         if not machine_info:
-            logger.warning(f"Machine {machine_name} not found in configuration")
+            logger.warning(f"  {machine_name} not found in configuration — skipping")
             continue
-
-        if verbose:
-            logger.info(f"Setting up remote machine: {machine_name}")
 
         username = credentials.get('username', 'root')
         host = machine_info.get('private_ip') if use_private_ip else machine_info.get('host')
         if not host and use_private_ip:
             host = machine_info.get('host')
         if not host:
-            logger.error(f"No IP address for {machine_name}")
+            logger.error(f"✗ No IP address for {machine_name}")
             return False
 
+        logger.info(f"  Setting up {machine_name} ({host})")
         try:
             with SSHClient(host=host, username=username, port=ssh_port) as ssh:
-                logger.info(f"Connected to {machine_name}")
-
                 hostname = f"{machine_name}.demo.guardium"
                 if not set_hostname_remote(ssh, hostname, logger):
-                    logger.error("Failed to set hostname")
+                    logger.error(f"✗ Failed to set hostname on {machine_name}")
                     return False
 
                 if timezone and not set_timezone_remote(ssh, timezone, logger):
-                    logger.error("Failed to set timezone")
+                    logger.error(f"✗ Failed to set timezone on {machine_name}")
                     return False
 
                 if not update_hosts_file_remote(ssh, hosts_content, logger):
-                    logger.error("Failed to update /etc/hosts")
+                    logger.error(f"✗ Failed to update /etc/hosts on {machine_name}")
                     return False
 
                 if configure_sshd and not configure_sshd_remote(ssh, logger):
-                    logger.error("Failed to configure SSHD")
+                    logger.error(f"✗ Failed to configure SSHD on {machine_name}")
                     return False
 
                 if root_password and not set_root_password_remote(ssh, root_password, logger):
-                    logger.error("Failed to set root password")
+                    logger.error(f"✗ Failed to set root password on {machine_name}")
                     return False
 
-                logger.info(f"✓ {machine_name} setup completed")
+                logger.info(f"  ✓ {machine_name} setup completed")
 
         except Exception as e:
-            logger.error(f"Failed to setup {machine_name}: {str(e)}")
+            logger.error(f"✗ Failed to setup {machine_name}: {str(e)}")
             return False
 
     return True
