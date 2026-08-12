@@ -5,205 +5,112 @@ MySQL Deployment Task
 Handles MySQL installation and configuration on local machine (raptor)
 """
 
+import os
 import sys
 from pathlib import Path
 
-# Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from core import execute_local_command, execute_commands, execute_mysql_sql, write_file, ConfigLoader
-import re
+
+
+def _header(logger, title: str):
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
+def _mysql_error(result, msg, logger) -> bool:
+    logger.error(f"✗ {msg}")
+    if result.get('stderr'):
+        logger.error(f"  MySQL error: {result['stderr']}")
+    return False
 
 
 def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> bool:
-    """
-    Set MySQL root password by extracting temporary password and changing it.
-    Also creates root@'%' user with the same password for remote access.
-    
-    Args:
-        new_password: New password to set for root user
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Setting MySQL root password")
-        logger.info("=" * 80)
-    
-    if verbose:
-        logger.info("Extracting temporary password from /var/log/mysqld.log")
+    _header(logger, "Setting MySQL root password")
+
+    logger.info("  ➜ grep temporary password /var/log/mysqld.log")
     result = execute_local_command(
         "grep 'temporary password' /var/log/mysqld.log | sed 's/.*: //'",
-        logger,
-        verbose
+        logger, verbose
     )
-    
     if result['rc'] != 0:
-        logger.error("Failed to extract temporary password from mysqld.log")
-        return False
-    
+        return _mysql_error(result, "Failed to extract temporary password from mysqld.log", logger)
+
     temp_password = result['stdout'].strip()
-    
     if not temp_password:
-        logger.error("Could not parse temporary password from log")
+        logger.error("✗ Could not parse temporary password from log")
         return False
-    
-    if verbose:
-        logger.info("Temporary password extracted successfully")
-    
-    if verbose:
-        logger.info("Step 2: Changing root@localhost password and creating root@'%' user")
-    
-    sql_commands = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{new_password}';
+    logger.info("  ✓ Temporary password extracted")
+
+    logger.info("  ➜ ALTER USER root@localhost / CREATE USER root@'%' / GRANT ALL / FLUSH PRIVILEGES")
+    sql = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{new_password}';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '{new_password}';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 """
-    
     result = execute_mysql_sql(
-        sql_commands=sql_commands,
+        sql_commands=sql,
         username="root",
         password=temp_password,
         additional_options="--connect-expired-password",
         logger=logger,
         verbose=verbose
     )
-    
     if result['rc'] != 0:
-        logger.error("Failed to change MySQL root password")
-        if result['stderr']:
-            logger.error(f"MySQL error: {result['stderr']}")
-        return False
-    
-    if verbose:
-        logger.info("✓ MySQL root password changed successfully")
-        logger.info("✓ Created root@'%' user for remote access")
-        logger.info("=" * 80)
-    
+        return _mysql_error(result, "Failed to change MySQL root password", logger)
+
+    logger.info("✓ MySQL root password set, root@'%' created")
     return True
 
 
 def create_mysql_superadmins(password: str, logger, verbose: bool = True) -> bool:
-    """
-    Create MySQL superadmin users 'tom' and 'jerry' with full privileges.
-    
-    Args:
-        password: Password to set for both users
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Creating MySQL superadmin users (tom, jerry)")
-        logger.info("=" * 80)
-    
-    sql_commands = f"""CREATE USER IF NOT EXISTS 'tom'@'%' IDENTIFIED BY '{password}';
+    _header(logger, "Creating MySQL superadmin users (tom, jerry)")
+
+    logger.info("  ➜ CREATE USER tom@'%', jerry@'%' / GRANT ALL / FLUSH PRIVILEGES")
+    sql = f"""CREATE USER IF NOT EXISTS 'tom'@'%' IDENTIFIED BY '{password}';
 CREATE USER IF NOT EXISTS 'jerry'@'%' IDENTIFIED BY '{password}';
 GRANT ALL PRIVILEGES ON *.* TO 'tom'@'%' WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON *.* TO 'jerry'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 """
-    
     result = execute_mysql_sql(
-        sql_commands=sql_commands,
+        sql_commands=sql,
         username="root",
         password=password,
         logger=logger,
         verbose=verbose
     )
-    
     if result['rc'] != 0:
-        logger.error("Failed to create MySQL superadmin users")
-        if result['stderr']:
-            logger.error(f"MySQL error: {result['stderr']}")
-        return False
-    
-    if verbose:
-        logger.info("✓ Created superadmin user 'tom'@'%'")
-        logger.info("✓ Created superadmin user 'jerry'@'%'")
-        logger.info("=" * 80)
-    
+        return _mysql_error(result, "Failed to create MySQL superadmin users", logger)
+
+    logger.info("✓ Superadmin users tom, jerry created")
     return True
 
 
 def create_mysql_config_file(password: str, logger, verbose: bool = True) -> bool:
-    """
-    Create ~/.my.cnf file for root user with MySQL credentials.
-    This allows passwordless MySQL access for root user.
-    
-    Args:
-        password: MySQL root password
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Creating ~/.my.cnf configuration file")
-        logger.info("=" * 80)
-    
-    import os
-    
-    # Get root home directory
-    home_dir = os.path.expanduser("~")
-    my_cnf_path = os.path.join(home_dir, ".my.cnf")
-    
-    # Create .my.cnf content
-    my_cnf_content = f"""[client]
-user=root
-password={password}
-"""
-    
+    _header(logger, "Creating ~/.my.cnf configuration file")
+
+    my_cnf_path = os.path.join(os.path.expanduser("~"), ".my.cnf")
+    my_cnf_content = f"[client]\nuser=root\npassword={password}\n"
+
     try:
-        # Write .my.cnf file using core function
-        if verbose:
-            logger.info(f"Writing configuration to: {my_cnf_path}")
-        
         write_file(my_cnf_path, my_cnf_content)
-        
-        # Set permissions to 600 (read/write for owner only)
         os.chmod(my_cnf_path, 0o600)
-        
-        if verbose:
-            logger.info(f"✓ Created {my_cnf_path}")
-            logger.info("✓ Set permissions to 600")
-            logger.info("=" * 80)
-        
+        logger.info(f"✓ Created {my_cnf_path} (mode 600)")
         return True
-        
     except Exception as e:
-        logger.error(f"Failed to create .my.cnf file: {e}")
+        logger.error(f"✗ Failed to create .my.cnf: {e}")
         return False
 
 
 def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
-    """
-    Deploy MySQL on local machine (raptor).
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Starting MySQL deployment on raptor")
-        logger.info("=" * 80)
-    
+    _header(logger, "MySQL deployment on raptor")
+
     password = config.get_custom_variable('pwd')
 
-    # Install MySQL server
+    logger.info("  ➜ Installing mysql-community-server via dnf")
     commands = [
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
         "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
@@ -213,48 +120,34 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
         "dnf config-manager --enable mysql-tools-8.4-lts-community",
         "dnf install -y mysql-community-server",
         "systemctl start mysqld",
-        "systemctl enable mysqld"
+        "systemctl enable mysqld",
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("MySQL installation failed")
+        logger.error("✗ MySQL installation failed")
         return False
-    
-    # Set root password
+    logger.info("  ✓ mysqld installed and started")
+
     if not set_mysql_root_password(password, logger, verbose):
-        logger.error("Failed to set MySQL root password")
-        return False
-    
-    # Create ~/.my.cnf configuration file for passwordless access
-    if not create_mysql_config_file(password, logger, verbose):
-        logger.error("Failed to create MySQL configuration file")
-        return False
-    
-    # Create superadmin users
-    if not create_mysql_superadmins(password, logger, verbose):
-        logger.error("Failed to create MySQL superadmin users")
         return False
 
-    # Import salesDB database
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Importing salesDB database")
-        logger.info("=" * 80)
-    
+    if not create_mysql_config_file(password, logger, verbose):
+        return False
+
+    if not create_mysql_superadmins(password, logger, verbose):
+        return False
+
+    _header(logger, "Importing salesDB database")
+    logger.info("  ➜ CREATE DATABASE salesDB + import salesDB.sql")
     commands = [
         'mysql -u root -e "CREATE DATABASE IF NOT EXISTS salesDB"',
-        "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/mysql/salesDB.sql"
+        "mysql -u root salesDB < /opt/guardium_tz_bootcamp_automation/upload/source_files/mysql/salesDB.sql",
     ]
     if not execute_commands(commands, logger, verbose):
-        logger.error("Failed to import salesDB database")
+        logger.error("✗ Failed to import salesDB")
         return False
-    
-    if verbose:
-        logger.info("✓ salesDB database imported successfully")
 
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("MySQL deployment completed successfully")
-        logger.info("=" * 80)
+    logger.info("✓ MySQL deployment completed")
     return True
+
 
 # Made with Bob
