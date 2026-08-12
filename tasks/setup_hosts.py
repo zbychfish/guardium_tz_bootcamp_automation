@@ -597,27 +597,14 @@ fi
         return False
 
 
-def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
+def setup_hosts_locally(config, logger, verbose: bool = True,
                         machine_name: str = "raptor",
                         configure_sshd: bool = True,
-                        root_password: Optional[str] = None,
-                        timezone: Optional[str] = None,
-                        verbose: bool = True) -> bool:
-    """
-    Setup /etc/hosts, hostname, timezone, SSHD, and root password on local machine (raptor).
-    
-    Args:
-        all_machines: All machines in the deployment
-        logger: Logger instance
-        machine_name: Name of the local machine (default: raptor)
-        configure_sshd: Whether to configure SSHD (default: True)
-        root_password: Root password to set (optional)
-        timezone: Timezone to set (optional)
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
+                        **kwargs) -> bool:
+    all_machines = config.get_machines()
+    root_password = config.get_custom_variable('pwd')
+    timezone = config.get_custom_variable('timezone')
+
     logger.info(f"Setting up local machine ({machine_name})")
     
     # Set hostname
@@ -672,194 +659,80 @@ def setup_hosts_locally(all_machines: Dict[str, Dict[str, Any]], logger,
     return True
 
 
-def setup_hosts_on_remote_machine(machine_name: str, machine_info: Dict[str, Any],
-                                  all_machines: Dict[str, Dict[str, Any]],
-                                  credentials: Dict[str, Any], logger,
+def setup_hosts_on_remote_machine(config, logger, verbose: bool = True,
                                   use_private_ip: bool = True,
                                   ssh_port: int = 2223,
                                   configure_sshd: bool = True,
-                                  root_password: Optional[str] = None,
-                                  timezone: Optional[str] = None,
-                                  verbose: bool = True) -> bool:
-    """
-    Setup hostname, timezone, /etc/hosts, SSHD, and root password on a remote machine via SSH.
-    
-    Args:
-        machine_name: Name of the machine
-        machine_info: Machine configuration
-        all_machines: All machines in the deployment
-        credentials: SSH credentials
-        logger: Logger instance
-        use_private_ip: Use private IP instead of public (default: True)
-        ssh_port: SSH port (default: 2223)
-        configure_sshd: Whether to configure SSHD (default: True)
-        root_password: Root password to set (optional)
-        timezone: Timezone to set (optional)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if use_private_ip:
-        host = machine_info.get('private_ip')
-        if not host:
-            logger.warning(f"No private IP for {machine_name}, using public IP")
-            host = machine_info.get('host')
-    else:
-        host = machine_info.get('host')
-    
-    if not host:
-        logger.error(f"No IP address for {machine_name}")
-        return False
-    
-    logger.info(f"Setting up remote machine {machine_name} ({host}:{ssh_port})")
-    
-    hosts_content = generate_hosts_content(all_machines)
-    username = credentials.get('username', 'root')
-    
-    try:
-        with SSHClient(host=host, username=username, port=ssh_port) as ssh:
-            logger.info(f"Connected to {machine_name}")
-            
-            # Set hostname
-            hostname = f"{machine_name}.demo.guardium"
-            logger.info(f"Setting hostname to {hostname}")
-            hostname_success = set_hostname_remote(ssh, hostname, logger)
-            if not hostname_success:
-                logger.error("Failed to set hostname")
-                return False
-            
-            # Set timezone if provided
-            if timezone:
-                logger.info(f"Setting timezone to {timezone}")
-                timezone_success = set_timezone_remote(ssh, timezone, logger)
-                if not timezone_success:
-                    logger.error("Failed to set timezone")
-                    return False
-            
-            # Setup /etc/hosts
-            logger.info("Configuring /etc/hosts")
-            hosts_success = update_hosts_file_remote(ssh, hosts_content, logger)
-            if not hosts_success:
-                logger.error("Failed to update /etc/hosts")
-                return False
-            
-            # Configure SSHD if requested
-            if configure_sshd:
-                logger.info("Configuring SSHD")
-                sshd_success = configure_sshd_remote(ssh, logger)
-                if not sshd_success:
-                    logger.error("Failed to configure SSHD")
-                    return False
-            
-            # Set root password if provided
-            if root_password:
-                logger.info("Setting root password")
-                pwd_success = set_root_password_remote(ssh, root_password, logger)
-                if not pwd_success:
-                    logger.error("Failed to set root password")
-                    return False
-            
-            logger.info(f"Remote machine {machine_name} setup completed successfully")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Failed to setup {machine_name}: {str(e)}")
-        return False
-
-def setup_hosts_task(config, logger, verbose: bool = True) -> bool:
-    """
-    Wrapper function for group-based execution.
-    Sets up hostname, timezone, /etc/hosts, SSHD, and root password on all machines.
-    Automatically excludes appliances (cm, appnodeX, collX).
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    # Get ALL machines for /etc/hosts generation (including appliances)
+                                  **kwargs) -> bool:
     all_machines = config.get_machines()
-    
-    # Get only regular machines for configuration (exclude appliances)
-    regular_machines = config.get_regular_machines()
-    
-    logger.info(f"Total machines: {len(all_machines)}")
-    logger.info(f"Regular machines to configure: {len(regular_machines)}")
-    logger.info(f"Appliances (excluded from configuration): {len(all_machines) - len(regular_machines)}")
-    
-    # Get credentials from custom_variables (new JSON format)
     credentials = {
         'username': config.get_custom_variable('username', 'root'),
         'password': config.get_custom_variable('password'),
         'ssh_key': config.get_custom_variable('ssh_private_key')
     }
-    
     root_password = config.get_custom_variable('pwd')
     timezone = config.get_custom_variable('timezone')
-    
-    # Setup local machine (raptor) - use ALL machines for /etc/hosts
-    if verbose:
-        logger.info("Setting up local machine (raptor)")
-    
-    success = setup_hosts_locally(
-        all_machines=all_machines,  # Include appliances in /etc/hosts
-        logger=logger,
-        machine_name="raptor",
-        configure_sshd=True,
-        root_password=root_password,
-        timezone=timezone,
-        verbose=verbose
-    )
-    
-    if not success:
-        logger.error("Failed to setup local machine")
-        return False
-    
-    # Setup remote machines - only regular machines, exclude Windows
     remote_machines = config.get('tasks', {}).get('remote_machines', [])
     windows_machines = config.get('tasks', {}).get('windows_machines', [])
-    
+
+    hosts_content = generate_hosts_content(all_machines)
+
     for machine_name in remote_machines:
-        # Skip if it's an appliance
         if config.is_appliance(machine_name):
-            logger.info(f"Skipping appliance: {machine_name} (appliances are not configured by setup_hosts)")
+            logger.info(f"Skipping appliance: {machine_name}")
             continue
-        
-        # Skip if it's a Windows machine
         if machine_name in windows_machines:
-            logger.info(f"Skipping Windows machine: {machine_name} (only added to /etc/hosts)")
+            logger.info(f"Skipping Windows machine: {machine_name}")
             continue
-        
+
         machine_info = config.get_machine(machine_name)
         if not machine_info:
             logger.warning(f"Machine {machine_name} not found in configuration")
             continue
-        
+
         if verbose:
             logger.info(f"Setting up remote machine: {machine_name}")
-        
-        success = setup_hosts_on_remote_machine(
-            machine_name=machine_name,
-            machine_info=machine_info,
-            all_machines=all_machines,  # Include appliances in /etc/hosts
-            credentials=credentials,
-            logger=logger,
-            use_private_ip=True,
-            configure_sshd=True,
-            root_password=root_password,
-            timezone=timezone,
-            verbose=verbose
-        )
-        
-        if not success:
-            logger.error(f"Failed to setup remote machine: {machine_name}")
-            return False
-    
-    return True
 
+        username = credentials.get('username', 'root')
+        host = machine_info.get('private_ip') if use_private_ip else machine_info.get('host')
+        if not host and use_private_ip:
+            host = machine_info.get('host')
+        if not host:
+            logger.error(f"No IP address for {machine_name}")
+            return False
+
+        try:
+            with SSHClient(host=host, username=username, port=ssh_port) as ssh:
+                logger.info(f"Connected to {machine_name}")
+
+                hostname = f"{machine_name}.demo.guardium"
+                if not set_hostname_remote(ssh, hostname, logger):
+                    logger.error("Failed to set hostname")
+                    return False
+
+                if timezone and not set_timezone_remote(ssh, timezone, logger):
+                    logger.error("Failed to set timezone")
+                    return False
+
+                if not update_hosts_file_remote(ssh, hosts_content, logger):
+                    logger.error("Failed to update /etc/hosts")
+                    return False
+
+                if configure_sshd and not configure_sshd_remote(ssh, logger):
+                    logger.error("Failed to configure SSHD")
+                    return False
+
+                if root_password and not set_root_password_remote(ssh, root_password, logger):
+                    logger.error("Failed to set root password")
+                    return False
+
+                logger.info(f"✓ {machine_name} setup completed")
+
+        except Exception as e:
+            logger.error(f"Failed to setup {machine_name}: {str(e)}")
+            return False
+
+    return True
 
 
 def create_demo_user_on_ceratops(config, logger, verbose=True,

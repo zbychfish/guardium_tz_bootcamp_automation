@@ -42,15 +42,11 @@ def setup_logger(
         fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
-    simple_formatter = logging.Formatter(
-        fmt='%(levelname)s - %(message)s'
-    )
-    
-    # Console handler (stdout)
+
+    # Console handler — only WARNING and above (errors visible on screen)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_handler.setFormatter(simple_formatter)
+    console_handler.setLevel(logging.WARNING)
+    console_handler.setFormatter(logging.Formatter(fmt='%(levelname)s - %(message)s'))
     logger.addHandler(console_handler)
     
     # File handler (if log directory exists or can be created)

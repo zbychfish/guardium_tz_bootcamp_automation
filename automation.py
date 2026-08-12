@@ -87,64 +87,51 @@ class AutomationOrchestrator:
         """
         stage_name = stage_info.get('name', 'unknown')
         stage_key = f"{group_name}.{stage_name}"
-        
-        # Check if stage is already completed
+
         if self.state.is_completed(stage_key):
-            if self.verbose:
-                self.logger.info(f"⏭  Skipping (already completed): {stage_name}")
-            else:
-                self.logger.info(f"⏭  {stage_name}")
+            print(f"  ⏭  {stage_name}")
+            self.logger.info(f"Skipping (already completed): {stage_key}")
             return True
-        
-        # Load and execute stage function
+
         stage_fn = self.group_manager.load_stage_function(stage_info)
         if not stage_fn:
             self.logger.error(f"Failed to load stage function: {stage_name}")
             return False
-        
-        description = stage_info.get('description', '')
-        
-        if self.verbose:
-            self.logger.info(f"➤  Running: {stage_name}")
-            if description:
-                self.logger.info(f"   Description: {description}")
-        else:
-            self.logger.info(f"➤  {stage_name}")
-        
+
+        print(f"  ➤  {stage_name}")
+        self.logger.info(f"Running stage: {stage_key}")
+
         pre_delay = stage_info.get('pre_delay_seconds', 0)
         if pre_delay:
-            self.logger.info(f"⌛ Waiting {pre_delay}s before {stage_name}...")
+            print(f"  ⌛ Waiting {pre_delay}s...")
+            self.logger.info(f"Pre-delay {pre_delay}s before {stage_name}")
             time.sleep(pre_delay)
 
         start_time = time.time()
-        
+
         try:
-            # Get stage args if provided
             stage_args = stage_info.get('args', {})
             if not isinstance(stage_args, dict):
                 stage_args = {}
-            
-            # Call stage function with config, logger, verbose, and any additional args
+
             result = stage_fn(self.config, self.logger, self.verbose, **stage_args)
             elapsed_time = time.time() - start_time
-            
+            time_str = self._format_time(elapsed_time)
+
             if result:
                 self.state.mark_completed(stage_key)
-                time_str = self._format_time(elapsed_time)
-                
-                if self.verbose:
-                    self.logger.info(f"✓  Completed: {stage_name} (took {time_str})")
-                else:
-                    self.logger.info(f"✓  {stage_name} ({time_str})")
+                print(f"  ✓  {stage_name} ({time_str})")
+                self.logger.info(f"Stage completed: {stage_key} ({time_str})")
                 return True
             else:
-                self.logger.error(f"✗  Failed: {stage_name} (returned False)")
+                print(f"  ✗  {stage_name} — FAILED")
+                self.logger.error(f"Stage failed: {stage_key} (returned False)")
                 return False
-            
+
         except Exception as e:
             elapsed_time = time.time() - start_time
-            self.logger.error(f"✗  Failed: {stage_name} (after {elapsed_time:.1f}s)")
-            self.logger.error(f"   Error: {str(e)}", exc_info=self.verbose)
+            print(f"  ✗  {stage_name} — ERROR ({elapsed_time:.1f}s)")
+            self.logger.error(f"Stage error: {stage_key} after {elapsed_time:.1f}s — {str(e)}", exc_info=True)
             return False
     
     def run_group(self, group_name: str, skip_dependency_check: Optional[bool] = None) -> bool:
@@ -175,64 +162,36 @@ class AutomationOrchestrator:
                 break
         
         if all_stages_completed and not self.state.is_group_completed(group_name):
-            self.logger.info(f"All stages in group '{group_name}' are already completed. Marking group as completed.")
+            self.logger.info(f"All stages already completed for group '{group_name}', marking done.")
             self.state.mark_group_completed(group_name)
-        
-        # Determine if we should skip dependency check
+
         should_skip = skip_dependency_check if skip_dependency_check is not None else self.skip_deps
-        
-        # Check dependencies unless explicitly skipped
+
         if not should_skip:
             completed_groups = self.state.get_completed_groups()
             deps_satisfied, missing_deps = self.group_manager.check_dependencies(group_name, completed_groups)
-            
+
             if not deps_satisfied:
-                self.logger.info("=" * 80)
-                self.logger.info(f"DEPENDENCY CHECK: Group '{group_name}' requires dependencies")
-                self.logger.info("=" * 80)
-                self.logger.info(f"Missing dependency groups: {', '.join(missing_deps)}")
-                self.logger.info(f"These groups will be executed automatically before '{group_name}'")
-                self.logger.info("=" * 80)
-                
-                # Execute missing dependency groups recursively
+                self.logger.info(f"Resolving dependencies for '{group_name}': {', '.join(missing_deps)}")
                 for dep_group in missing_deps:
-                    self.logger.info(f"\n▶ Executing dependency group: {dep_group}")
-                    success = self.run_group(dep_group, skip_dependency_check=False)
-                    if not success:
-                        self.logger.error(f"✗ Failed to execute dependency group '{dep_group}'")
-                        self.logger.error(f"Cannot proceed with group '{group_name}'")
+                    self.logger.info(f"Executing dependency group: {dep_group}")
+                    if not self.run_group(dep_group, skip_dependency_check=False):
+                        self.logger.error(f"Dependency group '{dep_group}' failed")
                         return False
-                    self.logger.info(f"✓ Dependency group '{dep_group}' completed successfully\n")
-                
-                self.logger.info("=" * 80)
-                self.logger.info(f"All dependencies satisfied for group '{group_name}'")
-                self.logger.info(f"Proceeding with group execution...")
-                self.logger.info("=" * 80)
-        
-        self.logger.info("=" * 80)
-        self.logger.info(f"GROUP: {group_info.get('name', group_name)}")
-        if self.verbose and group_info.get('description'):
-            self.logger.info(f"Description: {group_info.get('description')}")
-        
-        # Show dependencies info
-        dependencies = self.group_manager.get_group_dependencies(group_name)
-        if dependencies:
-            self.logger.info(f"Dependencies: {', '.join(dependencies)}")
-        
-        self.logger.info("=" * 80)
+
+        group_display = group_info.get('name', group_name)
+        print(f"\n▶ GROUP: {group_display}")
+        self.logger.info(f"Starting group: {group_name} ({group_display})")
         
         stages = self.group_manager.get_group_stages(group_name)
-        
+
         for stage_info in stages:
-            success = self.run_stage(group_name, stage_info)
-            if not success:
+            if not self.run_stage(group_name, stage_info):
                 self.logger.error(f"Group '{group_name}' execution failed")
                 return False
-        
-        # Mark group as completed
+
         self.state.mark_group_completed(group_name)
-        
-        self.logger.info(f"✓ Group '{group_name}' completed successfully")
+        self.logger.info(f"Group completed: {group_name}")
         return True
     
     def run_single_stage(self, stage_name: str) -> bool:
@@ -330,41 +289,27 @@ class AutomationOrchestrator:
             if not has_pending:
                 continue  # Skip this group entirely
             
-            # Execute this group
-            self.logger.info("=" * 80)
-            self.logger.info(f"GROUP: {group_info.get('name', group_name)}")
-            self.logger.info("=" * 80)
-            
+            print(f"\n▶ GROUP: {group_info.get('name', group_name)}")
+
             for stage_info in stages:
                 stage_name = stage_info.get('name')
                 stage_key = f"{group_name}.{stage_name}"
-                
+
                 if self.state.is_completed(stage_key):
-                    if self.verbose:
-                        self.logger.info(f"⏭  Skipping (already completed): {stage_name}")
-                    else:
-                        self.logger.info(f"⏭  {stage_name}")
+                    print(f"  ⏭  {stage_name}")
                     total_skipped += 1
                     continue
-                
-                success = self.run_stage(group_name, stage_info)
-                if not success:
+
+                if not self.run_stage(group_name, stage_info):
                     total_time = time.time() - start_time
-                    self.logger.error(f"Stage '{stage_name}' failed. Stopping.")
-                    self.logger.error(f"Total execution time: {self._format_time(total_time)}")
+                    self.logger.error(f"Stage '{stage_name}' failed after {self._format_time(total_time)}")
                     return False
-                
+
                 total_executed += 1
-            
-            self.logger.info(f"✓ Group '{group_name}' completed")
-        
+
         total_time = time.time() - start_time
-        self.logger.info("=" * 80)
-        self.logger.info("CONTINUE MODE: All remaining stages completed successfully")
-        self.logger.info(f"Executed: {total_executed} stages")
-        self.logger.info(f"Skipped: {total_skipped} stages (already completed)")
-        self.logger.info(f"Total execution time: {self._format_time(total_time)}")
-        self.logger.info("=" * 80)
+        print(f"\n✓ Done — {total_executed} executed, {total_skipped} skipped ({self._format_time(total_time)})")
+        self.logger.info(f"Continue mode done: {total_executed} executed, {total_skipped} skipped, {self._format_time(total_time)}")
         
         return True
     
@@ -392,25 +337,18 @@ class AutomationOrchestrator:
             groups_to_run = self.group_manager.get_groups_for_deployment(deployment_type)
             mode = f"DEPLOYMENT TYPE: {deployment_type} ({len(groups_to_run)} groups)"
         
-        self.logger.info("=" * 80)
-        self.logger.info("Starting automation execution")
-        self.logger.info(f"Mode: {mode}")
-        self.logger.info(f"Groups to execute: {len(groups_to_run)}")
-        self.logger.info("=" * 80)
-        
+        print(f"▶ {mode}")
+        self.logger.info(f"Starting execution: {mode}")
+
         for group_name in groups_to_run:
-            success = self.run_group(group_name)
-            if not success:
+            if not self.run_group(group_name):
                 total_time = time.time() - start_time
-                self.logger.error("Group execution failed. Stopping.")
-                self.logger.error(f"Total execution time: {self._format_time(total_time)}")
+                self.logger.error(f"Execution failed at group '{group_name}' after {self._format_time(total_time)}")
                 return False
-        
+
         total_time = time.time() - start_time
-        self.logger.info("=" * 80)
-        self.logger.info("Automation execution completed successfully")
-        self.logger.info(f"Total execution time: {self._format_time(total_time)}")
-        self.logger.info("=" * 80)
+        print(f"\n✓ Completed ({self._format_time(total_time)})")
+        self.logger.info(f"Execution completed: {self._format_time(total_time)}")
         return True
     
     def _format_time(self, seconds: float) -> str:
@@ -442,8 +380,8 @@ class AutomationOrchestrator:
             if not group_info:
                 continue
             
-            auto = "AUTO" if group_info.get('auto_execute') else "MANUAL"
-            print(f"\n[{auto}] {group_name}: {group_info.get('name')}")
+            deployed_with = group_info.get('deployed_with', [])
+            print(f"\n[{', '.join(deployed_with) or 'manual'}] {group_name}: {group_info.get('name')}")
             print(f"  {group_info.get('description')}")
             
             stages = self.group_manager.get_group_stages(group_name)

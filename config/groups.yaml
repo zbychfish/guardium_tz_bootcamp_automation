@@ -9,10 +9,15 @@ groups:
     deployed_with: [init]
     dependencies: []  # No dependencies - this is the first group
     stages:
-      - name: setup_hosts
-        function: setup_hosts_task
+      - name: setup_hosts_local
+        function: setup_hosts_locally
         module: tasks.setup_hosts
-        description: "Configure /etc/hosts, SSHD, and root password on all machines"
+        description: "Configure /etc/hosts, SSHD, and root password on raptor (local)"
+
+      - name: setup_hosts_remote
+        function: setup_hosts_on_remote_machine
+        module: tasks.setup_hosts
+        description: "Configure /etc/hosts, SSHD, and root password on all remote machines"
         
       - name: update_system_packages
         function: update_system_packages
