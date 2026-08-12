@@ -985,7 +985,7 @@ groups:
   edge_lab:
     name: "Edge Lab"
     description: "Install Edge patch on CM and configure Edge features"
-    auto_execute: true
+    auto_execute: false
     dependencies: [ltr_lab]
     stages:
       - name: prepare_cm_for_edge_patching  
