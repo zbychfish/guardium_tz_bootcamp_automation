@@ -99,11 +99,10 @@ groups:
       - name: configure_timezone_on_ceratops
         function: configure_timezone_on_ceratops
         module: tasks.setup_hosts
-        description: "Set timezone to GMT Standard Time on ceratops via SSH (tzutil /s) and verify"
+        description: "Set timezone on ceratops via SSH (tzutil /s) and verify"
         args:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
-          timezone: "GMT Standard Time"
           debug: false
 
       - name: configure_mssql_on_ceratops

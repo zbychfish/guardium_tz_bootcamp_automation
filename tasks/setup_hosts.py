@@ -942,10 +942,27 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
             return False
 
 
+_IANA_TO_WINDOWS_TZ = {
+    "Europe/London":       "GMT Standard Time",
+    "Europe/Warsaw":       "Central European Standard Time",
+    "Europe/Berlin":       "W. Europe Standard Time",
+    "Europe/Paris":        "Romance Standard Time",
+    "Europe/Moscow":       "Russian Standard Time",
+    "America/New_York":    "Eastern Standard Time",
+    "America/Chicago":     "Central Standard Time",
+    "America/Denver":      "Mountain Standard Time",
+    "America/Los_Angeles": "Pacific Standard Time",
+    "Asia/Tokyo":          "Tokyo Standard Time",
+    "Asia/Shanghai":       "China Standard Time",
+    "Asia/Kolkata":        "India Standard Time",
+    "Australia/Sydney":    "AUS Eastern Standard Time",
+    "UTC":                 "UTC",
+}
+
+
 def configure_timezone_on_ceratops(config, logger, verbose=True,
                                     ceratops_machine: str = "ceratops",
                                     ssh_username: str = "itzuser",
-                                    timezone: str = "GMT Standard Time",
                                     debug: bool = False, **kwargs) -> bool:
 
     logger.info("=" * 80)
@@ -956,6 +973,13 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
     if not ceratops_ip:
         logger.error(f"✗ IP not found for machine: {ceratops_machine}")
         return False
+
+    iana_tz = config.get_custom_variable('timezone') or 'Europe/London'
+    windows_tz = _IANA_TO_WINDOWS_TZ.get(iana_tz)
+    if not windows_tz:
+        logger.error(f"✗ No Windows timezone mapping for '{iana_tz}'")
+        return False
+    logger.info(f"  Timezone: {iana_tz} → {windows_tz}")
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
 
@@ -973,8 +997,8 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
                 return False
 
             try:
-                logger.info(f"  ➜ Setting timezone: tzutil /s \"{timezone}\"")
-                result = ssh.execute_command(f'tzutil /s "{timezone}"', print_output=verbose)
+                logger.info(f"  ➜ Setting timezone: tzutil /s \"{windows_tz}\"")
+                result = ssh.execute_command(f'tzutil /s "{windows_tz}"', print_output=verbose)
                 if result['rc'] != 0:
                     logger.error(f"✗ tzutil /s failed (rc={result['rc']}): {result['stderr'].strip()}")
                     return False
@@ -986,8 +1010,8 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
                     logger.error(f"✗ tzutil /g failed (rc={result['rc']}): {result['stderr'].strip()}")
                     return False
                 current_tz = result['stdout'].strip()
-                if current_tz != timezone:
-                    logger.error(f"✗ Timezone mismatch: expected '{timezone}', got '{current_tz}'")
+                if current_tz != windows_tz:
+                    logger.error(f"✗ Timezone mismatch: expected '{windows_tz}', got '{current_tz}'")
                     return False
                 logger.info(f"  ✓ Verified: {current_tz}")
 
