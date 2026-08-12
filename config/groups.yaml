@@ -54,8 +54,8 @@ groups:
           demo_username: "demo"
           debug: false
 
-      - name: copy_agent_files_to_ceratops
-        function: copy_agent_files_to_ceratops
+      - name: copy_files_to_ceratops
+        function: copy_files_to_ceratops
         module: tasks.setup_hosts
         description: "Create bootcamp desktop dir and SCP gim + shell agent dirs from raptor to ceratops"
         args:

@@ -702,7 +702,7 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
             return False
 
 
-def copy_agent_files_to_ceratops(config, logger, verbose=True,
+def copy_files_to_ceratops(config, logger, verbose=True,
                                   ceratops_machine: str = "ceratops",
                                   ssh_username: str = "itzuser",
                                   dest_dir: str = r'C:\bootcamp',
