@@ -644,9 +644,7 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
                                   ssh_username: str = "itzuser",
                                   demo_username: str = "demo",
                                   debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("CREATE DEMO USER ON CERATOPS (WINDOWS)")
-    logger.info("=" * 80)
+    _header(logger, "CREATE DEMO USER ON CERATOPS (WINDOWS)")
 
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
@@ -688,9 +686,7 @@ def copy_files_to_ceratops(config, logger, verbose=True,
                            dest_dir: str = r'C:\bootcamp',
                            source_dirs: list = None,
                            debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("COPY AGENT FILES TO CERATOPS")
-    logger.info("=" * 80)
+    _header(logger, "COPY AGENT FILES TO CERATOPS")
 
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
     ssh_private_key = config.get_custom_variable('ssh_private_key')
@@ -742,9 +738,7 @@ def configure_hosts_on_ceratops(config, logger, verbose=True,
                                  ceratops_machine: str = "ceratops",
                                  ssh_username: str = "itzuser",
                                  debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("CONFIGURE HOSTS RESOLVING ON CERATOPS (WINDOWS)")
-    logger.info("=" * 80)
+    _header(logger, "CONFIGURE HOSTS RESOLVING ON CERATOPS (WINDOWS)")
 
     all_machines = config.get_machines()
     if not all_machines:
@@ -794,9 +788,7 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
                                   ceratops_machine: str = "ceratops",
                                   ssh_username: str = "itzuser",
                                   debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("CREATE EDGE BOOKMARKS ON CERATOPS (WINDOWS REGISTRY)")
-    logger.info("=" * 80)
+    _header(logger, "CREATE EDGE BOOKMARKS ON CERATOPS (WINDOWS REGISTRY)")
 
     ps_script = (
         'New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Force | Out-Null\n'
@@ -874,9 +866,7 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
                                     ceratops_machine: str = "ceratops",
                                     ssh_username: str = "itzuser",
                                     debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("CONFIGURE TIMEZONE ON CERATOPS (WINDOWS)")
-    logger.info("=" * 80)
+    _header(logger, "CONFIGURE TIMEZONE ON CERATOPS (WINDOWS)")
 
     iana_tz = config.get_custom_variable('timezone') or 'Europe/London'
     windows_tz = _IANA_TO_WINDOWS_TZ.get(iana_tz)
@@ -921,9 +911,7 @@ def install_edge_on_ceratops(config, logger, verbose=True,
                               ssh_username: str = "itzuser",
                               msi_path: str = r'C:\bootcamp\software\MicrosoftEdgeEnterpriseX64.msi',
                               debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("INSTALL EDGE ON CERATOPS (WINDOWS)")
-    logger.info("=" * 80)
+    _header(logger, "INSTALL EDGE ON CERATOPS (WINDOWS)")
 
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
@@ -960,9 +948,7 @@ def configure_mssql_on_ceratops(config, logger, verbose=True,
                                  ceratops_machine: str = "ceratops",
                                  ssh_username: str = "itzuser",
                                  debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("CONFIGURE MSSQL ON CERATOPS (WINDOWS)")
-    logger.info("=" * 80)
+    _header(logger, "CONFIGURE MSSQL ON CERATOPS (WINDOWS)")
 
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
@@ -1019,9 +1005,7 @@ def restore_adventureworks_on_ceratops(config, logger, verbose=True,
                                         ssh_username: str = "itzuser",
                                         bak_file: str = r'C:\windows\software\AdventureWorks2019.bak',
                                         debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("RESTORE ADVENTUREWORKS ON CERATOPS (MSSQL)")
-    logger.info("=" * 80)
+    _header(logger, "RESTORE ADVENTUREWORKS ON CERATOPS (MSSQL)")
 
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
@@ -1059,9 +1043,7 @@ def setup_fam_files_on_ceratops(config, logger, verbose=True,
                                  csv_src: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/fam/customers.csv",
                                  txt_src: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/fam/financial_summary.txt",
                                  debug: bool = False, **kwargs) -> bool:
-    logger.info("=" * 80)
-    logger.info("FAM FILES SETUP ON CERATOPS")
-    logger.info("=" * 80)
+    _header(logger, "FAM FILES SETUP ON CERATOPS")
 
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
@@ -1156,9 +1138,7 @@ WantedBy=multi-user.target
 def setup_fam_files_on_raptor(config, logger, verbose=True, **kwargs) -> bool:
     from core.utils import execute_commands
 
-    logger.info("=" * 80)
-    logger.info("FAM FILES SETUP ON RAPTOR")
-    logger.info("=" * 80)
+    _header(logger, "FAM FILES SETUP ON RAPTOR")
 
     commands = [
         "mkdir -p /FAM/Protected /FAM/Controlled",
