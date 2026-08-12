@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 PostgreSQL Deployment Task
@@ -32,9 +32,7 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
     Returns:
         True if successful, False otherwise
     """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("PostgreSQL 16 deployment on raptor (local)")
+    logger.info("=" * 80)`n        logger.info("PostgreSQL 16 deployment on raptor (local)")
         logger.info("=" * 80)
     
     # Get password from custom_variables
@@ -54,9 +52,7 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
     
     try:
         # Step 1: Install and initialize PostgreSQL
-        if verbose:
-            logger.info("Step 1: Installing and initializing PostgreSQL 16")
-        
+        logger.info("Step 1: Installing and initializing PostgreSQL 16")`n        
         commands = [
             (["dnf", "-qy", "install", "@postgresql:16"], 600, "install"),
             (["dnf", "-qy", "install", "postgresql-contrib"], 600, "install postgresql-contrib"),
@@ -76,13 +72,9 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
                 logger.error(f"Failed to {desc}: {result.stderr}")
                 return False
         
-        if verbose:
-            logger.info("✓ PostgreSQL 16 installed and initialized")
-        
+        logger.info("✓ PostgreSQL 16 installed and initialized")`n        
         # Step 2: Create and configure SSL certificate
-        if verbose:
-            logger.info("Step 2: Configuring SSL certificate")
-        
+        logger.info("Step 2: Configuring SSL certificate")`n        
         # Create SSL certificate with SAN for localhost and IP addresses
         ssl_config = """[req]
 distinguished_name = req_distinguished_name
@@ -120,13 +112,9 @@ IP.1 = 127.0.0.1
                 logger.error(f"SSL configuration failed: {result.stderr}")
                 return False
         
-        if verbose:
-            logger.info("✓ SSL certificate configured")
-        
+        logger.info("✓ SSL certificate configured")`n        
         # Step 3: Configure postgresql.conf
-        if verbose:
-            logger.info("Step 3: Configuring postgresql.conf")
-        
+        logger.info("Step 3: Configuring postgresql.conf")`n        
         conf_path = Path("/var/lib/pgsql/data/postgresql.conf")
         if not conf_path.exists():
             logger.error(f"postgresql.conf not found")
@@ -147,13 +135,9 @@ IP.1 = 127.0.0.1
         
         conf_path.write_text("".join(lines))
         
-        if verbose:
-            logger.info("✓ postgresql.conf configured")
-        
+        logger.info("✓ postgresql.conf configured")`n        
         # Step 4: Configure pg_hba.conf
-        if verbose:
-            logger.info("Step 4: Configuring pg_hba.conf")
-        
+        logger.info("Step 4: Configuring pg_hba.conf")`n        
         hba_path = Path("/var/lib/pgsql/data/pg_hba.conf")
         if not hba_path.exists():
             logger.error(f"pg_hba.conf not found")
@@ -202,13 +186,9 @@ IP.1 = 127.0.0.1
         
         hba_path.write_text("".join(lines))
         
-        if verbose:
-            logger.info("✓ pg_hba.conf configured")
-        
+        logger.info("✓ pg_hba.conf configured")`n        
         # Step 5: Start PostgreSQL service
-        if verbose:
-            logger.info("Step 5: Starting PostgreSQL service")
-        
+        logger.info("Step 5: Starting PostgreSQL service")`n        
         for cmd in [["systemctl", "start", "postgresql.service"],
                     ["systemctl", "enable", "postgresql.service"]]:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -216,13 +196,9 @@ IP.1 = 127.0.0.1
                 logger.error(f"Service command failed: {result.stderr}")
                 return False
         
-        if verbose:
-            logger.info("✓ PostgreSQL service started and enabled")
-        
+        logger.info("✓ PostgreSQL service started and enabled")`n        
         # Step 6: Configure database users
-        if verbose:
-            logger.info("Step 6: Configuring database users")
-        
+        logger.info("Step 6: Configuring database users")`n        
         users = ["postgres", "tom", "jerry"]
         
         for user in users:
@@ -242,13 +218,9 @@ IP.1 = 127.0.0.1
                 logger.error(f"Failed to configure user {user}: {result.stderr}")
                 return False
         
-        if verbose:
-            logger.info(f"✓ Database users configured: {', '.join(users)}")
-        
+        logger.info(f"✓ Database users configured: {', '.join(users)}")`n        
         # Step 7: Create required PostgreSQL extensions
-        if verbose:
-            logger.info('Step 7: Creating PostgreSQL extension "uuid-ossp"')
-        
+        logger.info('Step 7: Creating PostgreSQL extension "uuid-ossp"')`n        
         result = subprocess.run(
             ["sudo", "-u", "postgres", "psql", "-d", "postgres", "-U", "postgres", "-c", 'CREATE EXTENSION "uuid-ossp";'],
             capture_output=True,
@@ -260,12 +232,8 @@ IP.1 = 127.0.0.1
             logger.error(f'Failed to create extension "uuid-ossp": {result.stderr}')
             return False
         
-        if verbose:
-            logger.info('✓ PostgreSQL extension "uuid-ossp" created')
-        
-        if verbose:
-            logger.info("=" * 80)
-            logger.info("PostgreSQL 16 installation completed successfully!")
+        logger.info('✓ PostgreSQL extension "uuid-ossp" created')`n        
+        logger.info("=" * 80)`n            logger.info("PostgreSQL 16 installation completed successfully!")
             logger.info(f"Users: {', '.join(users)} (password: {password})")
             logger.info(f"Network: {network}")
             logger.info("SSL: Enabled | Authentication: scram-sha-256")

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Preparation for Services Deployment Task
@@ -17,49 +17,33 @@ from core.ssh_client import SSHClient
 
 
 def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Updating system packages (excluding kernel)")
-    if not execute_commands(["dnf update --exclude=kernel* -y"], logger, verbose):
+    logger.info("Updating system packages (excluding kernel)")`n    if not execute_commands(["dnf update --exclude=kernel* -y"], logger, verbose):
         logger.error("System update failed")
         return False
-    if verbose:
-        logger.info("✓ System packages updated successfully")
-
+    logger.info("✓ System packages updated successfully")`n
     # Step 5: Install required packages on raptor
-    if verbose:
-        logger.info("Step 5: Installing required packages on raptor")
-    if not execute_commands(
+    logger.info("Step 5: Installing required packages on raptor")`n    if not execute_commands(
         ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat"],
         logger, verbose
     ):
         logger.error("Package installation failed")
         return False
-    if verbose:
-        logger.info("✓ Required packages installed on raptor")
-    return True
+    logger.info("✓ Required packages installed on raptor")`n    return True
 
 
 def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Preparing upload content")
+    logger.info("=" * 80)`n        logger.info("Preparing upload content")
         logger.info("=" * 80)
 
     # Step 2: Create necessary directories
-    if verbose:
-        logger.info("Step 2: Creating necessary directories")
-
+    logger.info("Step 2: Creating necessary directories")`n
     if not execute_commands(["mkdir -p /opt/guardium_tz_bootcamp_automation/upload"], logger, verbose):
         logger.error("Failed to create upload directory")
         return False
 
-    if verbose:
-        logger.info("✓ Directories created successfully")
-
+    logger.info("✓ Directories created successfully")`n
     # Step 3: Download source_files from IBM COS
-    if verbose:
-        logger.info("Step 3: Downloading source_files from IBM COS")
-
+    logger.info("Step 3: Downloading source_files from IBM COS")`n
     api_id   = config.get_custom_variable('s3_source_api_id')
     api_key  = config.get_custom_variable('s3_source_api_key')
     endpoint = config.get_custom_variable('s3_source_endpoint')
@@ -90,22 +74,16 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
                 key = obj["Key"]
                 local_path = os.path.join(local_base, key)
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                if verbose:
-                    logger.info(f"  ↓ {key}")
-                cos.download_file(bucket, key, local_path)
+                logger.info(f"  ↓ {key}")`n                cos.download_file(bucket, key, local_path)
                 downloaded += 1
 
-        if verbose:
-            logger.info(f"✓ Downloaded {downloaded} file(s) from COS to {local_base}")
-
+        logger.info(f"✓ Downloaded {downloaded} file(s) from COS to {local_base}")`n
     except Exception as e:
         logger.error(f"Failed to download from IBM COS: {e}")
         return False
 
     # Step 4: Clone guardium_notes_dbtraffic repository
-    if verbose:
-        logger.info("Step 4: Cloning guardium_notes_dbtraffic repository")
-
+    logger.info("Step 4: Cloning guardium_notes_dbtraffic repository")`n
     if not execute_commands(
         ["cd /opt/guardium_tz_bootcamp_automation/upload && rm -rf guardium_notes_dbtraffic && git clone https://github.com/zbychfish/guardium_notes_dbtraffic.git"],
         logger, verbose
@@ -113,16 +91,12 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
         logger.error("Failed to clone guardium_notes_dbtraffic repository")
         return False
 
-    if verbose:
-        logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
-
+    logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")`n
     return True
 
 
 def configure_dbtraffic(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Step 6: Configuring guardium_notes_dbtraffic")
-
+    logger.info("Step 6: Configuring guardium_notes_dbtraffic")`n
     root_password = config.get_custom_variable("pwd")
     if not root_password:
         logger.error("Custom variable 'pwd' not found")
@@ -184,15 +158,11 @@ EOF""",
         logger.error("Failed to configure guardium_notes_dbtraffic")
         return False
 
-    if verbose:
-        logger.info("✓ guardium_notes_dbtraffic configured on raptor")
-    return True
+    logger.info("✓ guardium_notes_dbtraffic configured on raptor")`n    return True
 
 
 def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Configuring swap file on raptor")
-    commands = [
+    logger.info("Configuring swap file on raptor")`n    commands = [
         "fallocate -l 8G /home/swapfile",
         "chmod 600 /home/swapfile",
         "mkswap /home/swapfile",
@@ -202,15 +172,11 @@ def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
     if not execute_commands(commands, logger, verbose):
         logger.error("Swap file configuration failed")
         return False
-    if verbose:
-        logger.info("✓ Swap file configured on raptor")
-    return True
+    logger.info("✓ Swap file configured on raptor")`n    return True
 
 
 def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Step 7: Installing Java 11 on sauropod")
-
+    logger.info("Step 7: Installing Java 11 on sauropod")`n
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
         logger.warning("Could not find sauropod machine in configuration, skipping Java installation")
@@ -225,9 +191,7 @@ def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True)
         logger.error("Root password (pwd) not found in custom_variables")
         return False
 
-    if verbose:
-        logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
-
+    logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")`n
     ssh = SSHClient(
         host=sauropod_ip,
         port=ssh_port,
@@ -242,9 +206,7 @@ def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True)
 
     try:
         install_cmd = "dnf install -y kernel-devel-$(uname -r) java-11-openjdk podman"
-        if verbose:
-            logger.info("Installing kernel-devel, Java 11 and podman")
-        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        logger.info("Installing kernel-devel, Java 11 and podman")`n        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
 
         if result['rc'] != 0:
             if 'rhel-8-for-x86_64-appstream-eus-rpms' in result['stderr'] or '404' in result['stderr']:
@@ -265,9 +227,7 @@ def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True)
                 logger.error("Failed to install packages on sauropod")
                 return False
 
-        if verbose:
-            logger.info("✓ kernel-devel, Java 11 and podman installed successfully on sauropod")
-
+        logger.info("✓ kernel-devel, Java 11 and podman installed successfully on sauropod")`n
     finally:
         ssh.disconnect()
 

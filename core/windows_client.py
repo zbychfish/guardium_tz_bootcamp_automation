@@ -77,89 +77,41 @@ class WindowsClient:
         )
     
     def execute_powershell(self, command: str, verbose: bool = True) -> Dict[str, Any]:
-        """
-        Execute PowerShell command on remote Windows machine.
-        
-        Args:
-            command: PowerShell command to execute
-            verbose: Enable verbose logging
-            
-        Returns:
-            Dictionary with 'rc' (return code), 'stdout', and 'stderr'
-        """
-        if verbose:
-            logger.info(f"Executing PowerShell on {self.host}: {command[:100]}...")
-        
-        # Suppress progress and verbose output
+        logger.info(f"Executing PowerShell on {self.host}: {command[:100]}...")
         prolog = (
             "$ProgressPreference = 'SilentlyContinue'\n"
             "$VerbosePreference  = 'SilentlyContinue'\n"
             "$DebugPreference    = 'SilentlyContinue'\n"
             "$InformationPreference = 'SilentlyContinue'\n"
         )
-        ps_script = prolog + command
-        
         try:
-            result = self.session.run_ps(ps_script)
+            result = self.session.run_ps(prolog + command)
             stdout = (result.std_out or b"").decode("utf-8", errors="replace")
             stderr = (result.std_err or b"").decode("utf-8", errors="replace")
-            
-            if verbose and stdout:
+            if stdout:
                 logger.info(f"Output: {stdout[:500]}")
             if stderr:
                 logger.warning(f"Stderr: {stderr[:500]}")
-            
-            return {
-                'rc': result.status_code,
-                'stdout': stdout,
-                'stderr': stderr
-            }
+            return {'rc': result.status_code, 'stdout': stdout, 'stderr': stderr}
         except Exception as e:
             logger.error(f"PowerShell execution failed: {str(e)}")
-            return {
-                'rc': -1,
-                'stdout': '',
-                'stderr': str(e)
-            }
-    
+            return {'rc': -1, 'stdout': '', 'stderr': str(e)}
+
     def execute_cmd(self, command: str, args: Optional[Sequence[str]] = None, verbose: bool = True) -> Dict[str, Any]:
-        """
-        Execute CMD command on remote Windows machine.
-        
-        Args:
-            command: CMD command to execute
-            args: Command arguments (optional)
-            verbose: Enable verbose logging
-            
-        Returns:
-            Dictionary with 'rc' (return code), 'stdout', and 'stderr'
-        """
         full_cmd = " ".join([command] + list(args or []))
-        if verbose:
-            logger.info(f"Executing CMD on {self.host}: {full_cmd}")
-        
+        logger.info(f"Executing CMD on {self.host}: {full_cmd}")
         try:
             result = self.session.run_cmd(command, args or [])
             stdout = (result.std_out or b"").decode("utf-8", errors="replace")
             stderr = (result.std_err or b"").decode("utf-8", errors="replace")
-            
-            if verbose and stdout:
+            if stdout:
                 logger.info(f"Output: {stdout[:500]}")
             if stderr:
                 logger.warning(f"Stderr: {stderr[:500]}")
-            
-            return {
-                'rc': result.status_code,
-                'stdout': stdout,
-                'stderr': stderr
-            }
+            return {'rc': result.status_code, 'stdout': stdout, 'stderr': stderr}
         except Exception as e:
             logger.error(f"CMD execution failed: {str(e)}")
-            return {
-                'rc': -1,
-                'stdout': '',
-                'stderr': str(e)
-            }
+            return {'rc': -1, 'stdout': '', 'stderr': str(e)}
     
     def test_connection(self) -> bool:
         """

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Utilities Module
@@ -427,111 +427,46 @@ def run_local_command(
 
 
 def execute_local_command(command: str, logger=None, verbose: bool = True) -> dict:
-    """
-    Execute a command locally as root and return detailed result.
-    
-    This is a higher-level wrapper around run_local_command() that:
-    - Logs command execution
-    - Returns dict with rc, stdout, stderr
-    - Logs output and errors
-    
-    Args:
-        command: Command to execute
-        logger: Logger instance (uses module logger if None)
-        verbose: If True, log command and output; if False, only log errors
-        
-    Returns:
-        Dictionary with 'rc' (return code), 'stdout', and 'stderr'
-    """
     log = logger if logger else globals()['logger']
-    
-    if verbose:
-        log.info(f"Executing: {command}")
-    
+    log.info(f"Executing: {command}")
     try:
         process = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            command, shell=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         stdout, stderr = process.communicate()
-        
-        result = {
-            'rc': process.returncode,
-            'stdout': stdout.strip(),
-            'stderr': stderr.strip()
-        }
-        
+        result = {'rc': process.returncode, 'stdout': stdout.strip(), 'stderr': stderr.strip()}
         if result['rc'] == 0:
-            if verbose and result['stdout']:
+            if result['stdout']:
                 log.info(f"Output: {result['stdout']}")
         else:
             log.error(f"Command failed with return code {result['rc']}")
             if result['stderr']:
                 log.error(f"Error: {result['stderr']}")
-        
         return result
-        
     except Exception as e:
         log.error(f"Exception executing command: {e}")
-        return {
-            'rc': 1,
-            'stdout': '',
-            'stderr': str(e)
-        }
+        return {'rc': 1, 'stdout': '', 'stderr': str(e)}
 
 
 def execute_commands(commands: list, logger=None, verbose: bool = True, stop_on_error: bool = True) -> bool:
-    """
-    Execute a list of shell commands sequentially.
-    
-    Args:
-        commands: List of command strings to execute
-        logger: Logger instance (uses module logger if None)
-        verbose: Enable verbose logging (default: True)
-        stop_on_error: Stop execution if a command fails (default: True)
-        
-    Returns:
-        True if all commands succeeded, False if any failed
-        
-    Example:
-        >>> commands = [
-        ...     "dnf update -y",
-        ...     "dnf install -y mysql-server",
-        ...     "systemctl start mysqld"
-        ... ]
-        >>> execute_commands(commands, logger)
-    """
     log = logger if logger else globals()['logger']
-    
     total = len(commands)
     failed_commands = []
-    
     for i, command in enumerate(commands, 1):
-        if verbose:
-            log.info(f"Step {i}/{total}: {command}")
-        
-        result = execute_local_command(command, log, verbose)
-        
+        log.info(f"Step {i}/{total}: {command}")
+        result = execute_local_command(command, log)
         if result['rc'] != 0:
             log.error(f"Command failed: {command}")
             failed_commands.append(command)
-            
             if stop_on_error:
-                log.error(f"Stopping execution due to error")
                 return False
-    
     if failed_commands:
         log.error(f"Failed commands: {len(failed_commands)}/{total}")
         for cmd in failed_commands:
             log.error(f"  - {cmd}")
         return False
-    
-    if verbose:
-        log.info(f"✓ All {total} commands executed successfully")
-    
+    log.info(f"✓ All {total} commands executed successfully")
     return True
 
 
@@ -572,8 +507,6 @@ def execute_mysql_sql(
     import os
     
     log = logger if logger else globals()['logger']
-    
-    if verbose:
         log.info(f"Executing SQL commands as {username}@{host}")
     
     # Create temporary SQL file
@@ -664,8 +597,6 @@ def execute_mongo_js(
     import os
     
     log = logger if logger else globals()['logger']
-    
-    if verbose:
         log.info(f"Executing MongoDB JavaScript commands on {host}:{port}/{database}")
     
     # Create temporary JS file
@@ -712,8 +643,6 @@ def configure_local_disk(
     verbose: bool = True
 ) -> bool:
     log = logger if logger else globals()['logger']
-
-    if verbose:
         log.info(
             f"Configuring local disk {device} with filesystem {filesystem} "
             f"mounted at {mount_point}"
@@ -815,7 +744,6 @@ def download_file(url: str, destination: str, logger=None, verbose: bool = True)
     log = logger if logger else globals()['logger']
     
     try:
-        if verbose:
             log.info(f"Downloading file from: {url}")
             log.info(f"Destination: {destination}")
         
@@ -841,14 +769,12 @@ def download_file(url: str, destination: str, logger=None, verbose: bool = True)
                     f.write(chunk)
                     downloaded += len(chunk)
 
-                    if verbose and total_size > 0:
+                    if total_size > 0:
                         pct = int((downloaded / total_size) * 100)
                         milestone = (pct // 5) * 5
                         if milestone > last_reported:
                             last_reported = milestone
                             log.info(f"⬇  Downloading... {milestone}% ({downloaded // 1024 // 1024} MB / {total_size // 1024 // 1024} MB)")
-        
-        if verbose:
             log.info(f"✓ File downloaded successfully: {destination}")
             log.info(f"  Size: {downloaded} bytes")
         
@@ -878,7 +804,6 @@ def extract_zip(zip_path: str, extract_to: str, logger=None, verbose: bool = Tru
     log = logger if logger else globals()['logger']
     
     try:
-        if verbose:
             log.info(f"Extracting ZIP archive: {zip_path}")
             log.info(f"Extract to: {extract_to}")
         
@@ -890,22 +815,17 @@ def extract_zip(zip_path: str, extract_to: str, logger=None, verbose: bool = Tru
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             file_list = zip_ref.namelist()
             total_files = len(file_list)
-
-            if verbose:
                 log.info(f"Archive contains {total_files} file(s)")
 
             last_reported = -1
             for i, name in enumerate(file_list, 1):
                 zip_ref.extract(name, extract_to)
-                if verbose:
-                    pct = int((i / total_files) * 100)
-                    milestone = (pct // 5) * 5
-                    if milestone > last_reported:
-                        last_reported = milestone
-                        log.info(f"📦  Extracting... {milestone}% ({i}/{total_files} files)")
-
-            if verbose:
-                log.info(f"✓ ZIP archive extracted successfully ({total_files} file(s) to: {extract_to})")
+                pct = int((i / total_files) * 100)
+                milestone = (pct // 5) * 5
+                if milestone > last_reported:
+                    last_reported = milestone
+                    log.info(f"📦  Extracting... {milestone}% ({i}/{total_files} files)")
+            log.info(f"✓ ZIP archive extracted successfully ({total_files} file(s) to: {extract_to})")
         
         return True
         
@@ -963,7 +883,6 @@ def download_and_extract(url: str, extract_to: str, logger=None, verbose: bool =
             # Clean up temporary file
             if os.path.exists(temp_zip):
                 os.remove(temp_zip)
-                if verbose:
                     log.info("Cleaned up temporary ZIP file")
         
     except Exception as e:

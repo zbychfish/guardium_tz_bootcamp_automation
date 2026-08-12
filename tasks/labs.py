@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Lab Setup Tasks
@@ -457,9 +457,7 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
         return False
     api.get_token(username='demo', password=pwd)
     
-    if verbose:
-        logger.info(f"Deleting MySQL IE for {stap_host} on collector {api_target_host}")
-    api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1", api_target_host=api_target_host)
+    logger.info(f"Deleting MySQL IE for {stap_host} on collector {api_target_host}")`n    api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1", api_target_host=api_target_host)
     
     ie_configs = [
         {"port_min": "3306", "port_max": "3306", "ktap_db_port": "3306", "unix_socket_marker": "mysql.sock"},
@@ -469,9 +467,7 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
     ]
     
     for i, ie_config in enumerate(ie_configs, 1):
-        if verbose:
-            logger.info(f"Creating MySQL IE {i}/4: port {ie_config['port_min']}, socket {ie_config['unix_socket_marker']}")
-        api.create_inspection_engine(
+        logger.info(f"Creating MySQL IE {i}/4: port {ie_config['port_min']}, socket {ie_config['unix_socket_marker']}")`n        api.create_inspection_engine(
             stap_host=stap_host,
             protocol="mysql",
             db_user="mysqld",
@@ -483,9 +479,7 @@ def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collecto
             **ie_config
         )
 
-    if verbose:
-        logger.info(f"Setting STAP_DISCOVERY_ENABLED=0 on raptor ({stap_host})")
-    api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_ENABLED", param_value="0")
+    logger.info(f"Setting STAP_DISCOVERY_ENABLED=0 on raptor ({stap_host})")`n    api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_ENABLED", param_value="0")
     api.gim_schedule_install(client_ip=stap_host, date="now")
 
     logger.info("✓ MySQL IE corrected")
@@ -561,13 +555,9 @@ def configure_db2_exit_ie(config, logger, verbose=True, cm_appliance="cm02", col
         return False
     api.get_token(username='demo', password=pwd)
     
-    if verbose:
-        logger.info(f"Deleting DB2 IE for {stap_host} on collector {api_target_host}")
-    api.delete_inspection_engine(stap_host=stap_host, type="Db2", wait_for_response="1", api_target_host=api_target_host)
+    logger.info(f"Deleting DB2 IE for {stap_host} on collector {api_target_host}")`n    api.delete_inspection_engine(stap_host=stap_host, type="Db2", wait_for_response="1", api_target_host=api_target_host)
     
-    if verbose:
-        logger.info(f"Creating DB2 Exit IE for {stap_host} on collector {api_target_host}")
-    api.create_inspection_engine(
+    logger.info(f"Creating DB2 Exit IE for {stap_host} on collector {api_target_host}")`n    api.create_inspection_engine(
         stap_host=stap_host,
         protocol="Db2 Exit",
         db_user="db2inst1",
@@ -596,9 +586,7 @@ def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
     """
     from core.utils import execute_commands
     
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Configuring DB2 exit for Guardium monitoring")
+    logger.info("=" * 80)`n        logger.info("Configuring DB2 exit for Guardium monitoring")
         logger.info("=" * 80)
     
     commands = [
@@ -614,9 +602,7 @@ def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
         logger.error("DB2 exit configuration failed")
         return False
     
-    if verbose:
-        logger.info("✓ DB2 exit configured successfully")
-        logger.info("=" * 80)
+    logger.info("✓ DB2 exit configured successfully")`n        logger.info("=" * 80)
     
     return True
 
@@ -2598,9 +2584,7 @@ def run_uc_and_setup_kafka_node(
         return False
 
     result = client.execute_command("grdapi run_universal_connector", timeout=120)
-    if verbose:
-        logger.info(f"Output: {result}")
-    logger.info("✓ run_universal_connector executed")
+    logger.info(f"Output: {result}")`n    logger.info("✓ run_universal_connector executed")
 
     status = client.execute_command("grdapi get_universal_connector_status", timeout=60)
     if "Guardium Universal Connector is running" not in status:
@@ -2995,14 +2979,11 @@ def enable_vulnerability_management(
         cmd = f"grdapi enable_disable_feature_flag flagName={flag_name} action=enable"
         logger.info(f"➜ {cmd}")
         result = client.execute_command(cmd, timeout=30)
-        if verbose:
-            logger.info(f"Response: {result}")
-
+        logger.info(f"Response: {result}")`n
         # ── 2. Verify flag is ENABLED ────────────────────────────────────────
         logger.info("➜ Verifying flag state via grdapi list_feature_flags...")
         flags_output = client.execute_command("grdapi list_feature_flags", timeout=30)
-        if verbose or debug:
-            logger.info(f"Feature flags:\n{flags_output}")
+        logger.info(f"Feature flags:\n{flags_output}")
 
         for line in flags_output.splitlines():
             if flag_name in line:
@@ -3226,9 +3207,7 @@ def create_va_api_key(
         cmd = f"grdapi create_api_key name={key_name}"
         logger.info(f"➜ {cmd}")
         output = client.execute_command(cmd, timeout=30)
-        if verbose:
-            logger.info(f"Response:\n{output}")
-
+        logger.info(f"Response:\n{output}")`n
         # parse "Encoded API key: <value>"
         api_key = None
         for line in output.splitlines():
@@ -3544,9 +3523,7 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
     api.get_token(username='demo', password=pwd)
 
     for param, value in [("STAP_FIREWALL_INSTALLED", "1"), ("STAP_FIREWALL_DEFAULT_STATE", "1")]:
-        if verbose:
-            logger.info(f"Setting {param}={value} on raptor ({stap_host})")
-        api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
+        logger.info(f"Setting {param}={value} on raptor ({stap_host})")`n        api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
 
     logger.info("Scheduling GIM install on raptor...")
     api.gim_schedule_install(client_ip=stap_host, date="now")
@@ -3617,9 +3594,7 @@ def configure_engine_on_raptor(config, logger, verbose=True,
         return False
     api.get_token(username='demo', password=pwd)
 
-    if verbose:
-        logger.info(f"Configuring Inspection Engine (api_target_host={collector_ip})")
-        logger.info(f"  compute_average={compute_average}, inspect_data={inspect_data}, "
+    logger.info(f"Configuring Inspection Engine (api_target_host={collector_ip})")`n        logger.info(f"  compute_average={compute_average}, inspect_data={inspect_data}, "
                     f"log_records={log_records}, record_empty={record_empty}")
 
     api.engine_config(
@@ -3673,9 +3648,7 @@ def add_postgres_app_profile_member(config, logger, verbose=True,
         return False
     api.get_token(username='demo', password=pwd)
 
-    if verbose:
-        logger.info(f"Adding member to group '{group_desc}'")
-        logger.info(f"  member: {member}")
+    logger.info(f"Adding member to group '{group_desc}'")`n        logger.info(f"  member: {member}")
 
     api.create_group_member(desc=group_desc, member=member)
 
@@ -4073,9 +4046,7 @@ def register_edge_gateway(config, logger, verbose=True,
             logger.error(traceback.format_exc())
         return False
 
-    if verbose:
-        logger.info(f"  API response: {result}")
-    if result.get('ErrorCode') or result.get('errorCode'):
+    logger.info(f"  API response: {result}")`n    if result.get('ErrorCode') or result.get('errorCode'):
         logger.error(f"✗ register_edge returned error: {result}")
         return False
 
@@ -4431,10 +4402,9 @@ def deploy_edge_gateway(config, logger, verbose=True,
                 if chunk:
                     buf += chunk
                     last_activity = time.time()
-                    if verbose:
-                        for line in chunk.splitlines():
-                            if line.strip():
-                                logger.info(f"  {line}")
+                    for line in chunk.splitlines():
+                        if line.strip():
+                            logger.info(f"  {line}")
                     # respond to each [y/N]? prompt with 'y'
                     while buf.count('[y/N]?') > answers_sent:
                         time.sleep(0.3)
@@ -4453,10 +4423,9 @@ def deploy_edge_gateway(config, logger, verbose=True,
                         if not tail:
                             break
                         buf += tail
-                        if verbose:
-                            for line in tail.splitlines():
-                                if line.strip():
-                                    logger.info(f"  {line}")
+                        for line in tail.splitlines():
+                            if line.strip():
+                                logger.info(f"  {line}")
                 except socket.timeout:
                     pass
                 break
@@ -5008,9 +4977,7 @@ def configure_fam_on_raptor(config, logger, verbose=True,
         ("STAP_UID_CHAIN_SSHD_IP",  "1"),
         ("STAP_UID_CHAIN_TRACE",     "1"),
     ]:
-        if verbose:
-            logger.info(f"Setting {param}={value} on raptor ({stap_host})")
-        api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
+        logger.info(f"Setting {param}={value} on raptor ({stap_host})")`n        api.gim_client_params(client_ip=stap_host, param_name=param, param_value=value)
 
     logger.info("Scheduling GIM install on raptor...")
     api.gim_schedule_install(client_ip=stap_host, date="now")

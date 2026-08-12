@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 MySQL Deployment Task
@@ -28,14 +28,10 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
     Returns:
         True if successful, False otherwise
     """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Setting MySQL root password")
+    logger.info("=" * 80)`n        logger.info("Setting MySQL root password")
         logger.info("=" * 80)
     
-    if verbose:
-        logger.info("Extracting temporary password from /var/log/mysqld.log")
-    result = execute_local_command(
+    logger.info("Extracting temporary password from /var/log/mysqld.log")`n    result = execute_local_command(
         "grep 'temporary password' /var/log/mysqld.log | sed 's/.*: //'",
         logger,
         verbose
@@ -51,12 +47,8 @@ def set_mysql_root_password(new_password: str, logger, verbose: bool = True) -> 
         logger.error("Could not parse temporary password from log")
         return False
     
-    if verbose:
-        logger.info("Temporary password extracted successfully")
-    
-    if verbose:
-        logger.info("Step 2: Changing root@localhost password and creating root@'%' user")
-    
+    logger.info("Temporary password extracted successfully")`n    
+    logger.info("Step 2: Changing root@localhost password and creating root@'%' user")`n    
     sql_commands = f"""ALTER USER 'root'@'localhost' IDENTIFIED BY '{new_password}';
 CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '{new_password}';
 GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
@@ -78,9 +70,7 @@ FLUSH PRIVILEGES;
             logger.error(f"MySQL error: {result['stderr']}")
         return False
     
-    if verbose:
-        logger.info("✓ MySQL root password changed successfully")
-        logger.info("✓ Created root@'%' user for remote access")
+    logger.info("✓ MySQL root password changed successfully")`n        logger.info("✓ Created root@'%' user for remote access")
         logger.info("=" * 80)
     
     return True
@@ -98,9 +88,7 @@ def create_mysql_superadmins(password: str, logger, verbose: bool = True) -> boo
     Returns:
         True if successful, False otherwise
     """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Creating MySQL superadmin users (tom, jerry)")
+    logger.info("=" * 80)`n        logger.info("Creating MySQL superadmin users (tom, jerry)")
         logger.info("=" * 80)
     
     sql_commands = f"""CREATE USER IF NOT EXISTS 'tom'@'%' IDENTIFIED BY '{password}';
@@ -124,9 +112,7 @@ FLUSH PRIVILEGES;
             logger.error(f"MySQL error: {result['stderr']}")
         return False
     
-    if verbose:
-        logger.info("✓ Created superadmin user 'tom'@'%'")
-        logger.info("✓ Created superadmin user 'jerry'@'%'")
+    logger.info("✓ Created superadmin user 'tom'@'%'")`n        logger.info("✓ Created superadmin user 'jerry'@'%'")
         logger.info("=" * 80)
     
     return True
@@ -145,9 +131,7 @@ def create_mysql_config_file(password: str, logger, verbose: bool = True) -> boo
     Returns:
         True if successful, False otherwise
     """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Creating ~/.my.cnf configuration file")
+    logger.info("=" * 80)`n        logger.info("Creating ~/.my.cnf configuration file")
         logger.info("=" * 80)
     
     import os
@@ -164,17 +148,13 @@ password={password}
     
     try:
         # Write .my.cnf file using core function
-        if verbose:
-            logger.info(f"Writing configuration to: {my_cnf_path}")
-        
+        logger.info(f"Writing configuration to: {my_cnf_path}")`n        
         write_file(my_cnf_path, my_cnf_content)
         
         # Set permissions to 600 (read/write for owner only)
         os.chmod(my_cnf_path, 0o600)
         
-        if verbose:
-            logger.info(f"✓ Created {my_cnf_path}")
-            logger.info("✓ Set permissions to 600")
+        logger.info(f"✓ Created {my_cnf_path}")`n            logger.info("✓ Set permissions to 600")
             logger.info("=" * 80)
         
         return True
@@ -196,9 +176,7 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Starting MySQL deployment on raptor")
+    logger.info("=" * 80)`n        logger.info("Starting MySQL deployment on raptor")
         logger.info("=" * 80)
     
     password = config.get_custom_variable('pwd')
@@ -235,9 +213,7 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
         return False
 
     # Import salesDB database
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Importing salesDB database")
+    logger.info("=" * 80)`n        logger.info("Importing salesDB database")
         logger.info("=" * 80)
     
     commands = [
@@ -248,12 +224,8 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
         logger.error("Failed to import salesDB database")
         return False
     
-    if verbose:
-        logger.info("✓ salesDB database imported successfully")
-
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("MySQL deployment completed successfully")
+    logger.info("✓ salesDB database imported successfully")`n
+    logger.info("=" * 80)`n        logger.info("MySQL deployment completed successfully")
         logger.info("=" * 80)
     return True
 

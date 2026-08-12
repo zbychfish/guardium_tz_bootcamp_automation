@@ -1,11 +1,5 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Setup /etc/hosts and SSHD configuration on machines
-Generates and deploys /etc/hosts with machine entries
-Configures SSHD for password authentication
-Sets root password
-"""
 
 import sys
 import os
@@ -690,9 +684,7 @@ def setup_hosts_on_remote_machine(config, logger, verbose: bool = True,
             logger.warning(f"Machine {machine_name} not found in configuration")
             continue
 
-        if verbose:
-            logger.info(f"Setting up remote machine: {machine_name}")
-
+        logger.info(f"Setting up remote machine: {machine_name}")`n
         username = credentials.get('username', 'root')
         host = machine_info.get('private_ip') if use_private_ip else machine_info.get('host')
         if not host and use_private_ip:
