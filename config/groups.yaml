@@ -899,7 +899,7 @@ groups:
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
-    auto_execute: true
+    auto_execute: false
     dependencies: [va_api]
     stages:
       - name: setup_minio_on_raptor
