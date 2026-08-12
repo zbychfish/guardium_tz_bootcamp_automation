@@ -680,7 +680,7 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
                     result = ssh.execute_command(cmd, print_output=verbose)
                     if result['rc'] != 0:
                         combined = (result['stdout'] + result['stderr']).lower()
-                        if "already" in combined or "member" in combined:
+                        if "already" in combined or "member" in combined or result['rc'] == 128:
                             logger.info(f"  ℹ Already exists, skipping")
                         else:
                             logger.error(f"✗ Command failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
@@ -1047,7 +1047,7 @@ def install_edge_on_ceratops(config, logger, verbose=True,
                     return True
 
                 logger.info("  ➜ Edge not found — installing...")
-                cmd = f'msiexec /i "{msi_path}" /qn /norestart'
+                cmd = f'start /wait msiexec /i "{msi_path}" /qn /norestart'
                 logger.info(f"  ➜ {cmd}")
                 result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
                 if result['rc'] != 0:
