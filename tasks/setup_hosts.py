@@ -710,12 +710,6 @@ def copy_agent_files_to_ceratops(config, logger, verbose=True,
     logger.info("COPY AGENT FILES TO CERATOPS")
     logger.info("=" * 80)
 
-    if source_dirs is None:
-        source_dirs = [
-            "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim",
-            "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell",
-        ]
-
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
     if not ceratops_ip:
         logger.error(f"✗ IP not found for machine: {ceratops_machine}")
