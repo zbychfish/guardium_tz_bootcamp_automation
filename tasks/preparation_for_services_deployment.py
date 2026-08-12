@@ -165,8 +165,7 @@ EOF""",
 
 
 def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Configuring swap file on raptor")
+    logger.info("Configuring swap file on raptor")
     commands = [
         "fallocate -l 8G /home/swapfile",
         "chmod 600 /home/swapfile",
@@ -177,14 +176,12 @@ def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
     if not execute_commands(commands, logger, verbose):
         logger.error("Swap file configuration failed")
         return False
-    if verbose:
         logger.info("✓ Swap file configured on raptor")
     return True
 
 
-def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Step 7: Installing Java 11 on sauropod")
+def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+    logger.info("Step 7: Installing Java 11 on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
@@ -200,8 +197,7 @@ def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True)
         logger.error("Root password (pwd) not found in custom_variables")
         return False
 
-    if verbose:
-        logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
+    logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
 
     ssh = SSHClient(
         host=sauropod_ip,
@@ -217,8 +213,7 @@ def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True)
 
     try:
         install_cmd = "dnf install -y kernel-devel-$(uname -r) java-11-openjdk podman"
-        if verbose:
-            logger.info("Installing kernel-devel, Java 11 and podman")
+        logger.info("Installing kernel-devel, Java 11 and podman")
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
 
         if result['rc'] != 0:
@@ -240,13 +235,9 @@ def install_java_on_sauropod(config: ConfigLoader, logger, verbose: bool = True)
                 logger.error("Failed to install packages on sauropod")
                 return False
 
-        if verbose:
-            logger.info("✓ kernel-devel, Java 11 and podman installed successfully on sauropod")
+        logger.info("✓ kernel-devel, Java 11 and podman installed successfully on sauropod")
 
     finally:
         ssh.disconnect()
 
     return True
-
-
-# Made with Bob

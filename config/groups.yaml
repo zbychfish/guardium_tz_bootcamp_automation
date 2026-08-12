@@ -39,8 +39,8 @@ groups:
         module: tasks.preparation_for_services_deployment
         description: "Configure 8G swap file on raptor"
 
-      - name: install_java_on_sauropod
-        function: install_java_on_sauropod
+      - name: install_packages_on_sauropod
+        function: install_packages_on_sauropod
         module: tasks.preparation_for_services_deployment
         description: "Install kernel-devel, Java 11 and podman on sauropod via SSH"
 
