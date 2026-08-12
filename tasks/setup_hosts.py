@@ -10,6 +10,8 @@ Sets root password
 import sys
 import os
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -19,6 +21,26 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 from core.ssh_client import SSHClient
 from core.logger import setup_logger
 from core import modify_config_file
+
+
+@contextmanager
+def _tmp_ssh_key(ssh_private_key: str, logger):
+    if not ssh_private_key:
+        logger.info("  No SSH key in custom_variables — using agent/default keys")
+        yield None
+        return
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    try:
+        os.write(tmp_fd, ssh_private_key.encode())
+    finally:
+        os.close(tmp_fd)
+    os.chmod(tmp_path, 0o600)
+    logger.info("  Using SSH key from custom_variables")
+    try:
+        yield tmp_path
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 def generate_hosts_content(machines: Dict[str, Dict[str, Any]]) -> str:
@@ -634,66 +656,50 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
+            )
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+                return False
 
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
-        try:
-            commands = [
-                f'net user {demo_username} "{pwd}" /add',
-                f'net localgroup Administrators {demo_username} /add',
-            ]
-            for cmd in commands:
-                logger.info(f"  ➜ {cmd}")
-                result = ssh.execute_command(cmd, print_output=verbose)
-                if result['rc'] != 0:
-                    combined = (result['stdout'] + result['stderr']).lower()
-                    if "already" in combined or "member" in combined:
-                        logger.info(f"  ℹ Already exists, skipping")
+            try:
+                commands = [
+                    f'net user {demo_username} "{pwd}" /add',
+                    f'net localgroup Administrators {demo_username} /add',
+                ]
+                for cmd in commands:
+                    logger.info(f"  ➜ {cmd}")
+                    result = ssh.execute_command(cmd, print_output=verbose)
+                    if result['rc'] != 0:
+                        combined = (result['stdout'] + result['stderr']).lower()
+                        if "already" in combined or "member" in combined:
+                            logger.info(f"  ℹ Already exists, skipping")
+                        else:
+                            logger.error(f"✗ Command failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                            return False
                     else:
-                        logger.error(f"✗ Command failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
-                        return False
-                else:
-                    logger.info("  ✓ OK")
+                        logger.info("  ✓ OK")
 
-            logger.info(f"✓ User '{demo_username}' created and added to Administrators on {ceratops_machine}")
-            return True
+                logger.info(f"✓ User '{demo_username}' created and added to Administrators on {ceratops_machine}")
+                return True
 
-        finally:
-            ssh.disconnect()
+            finally:
+                ssh.disconnect()
 
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def copy_agent_files_to_ceratops(config, logger, verbose=True,
@@ -716,86 +722,68 @@ def copy_agent_files_to_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
-
-    try:
-        # ── Step 1: create dest_dir on ceratops via SSH ──────────────────────────
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
-        try:
-            mkdir_cmd = f'mkdir "{dest_dir}"'
-            logger.info(f"  ➜ {mkdir_cmd}")
-            result = ssh.execute_command(mkdir_cmd, print_output=verbose)
-            if result['rc'] != 0:
-                combined = (result['stdout'] + result['stderr']).lower()
-                if "already exists" in combined or "file exists" in combined:
-                    logger.info("  ℹ Directory already exists, skipping")
-                else:
-                    logger.error(f"✗ mkdir failed (rc={result['rc']}): {result['stderr'].strip()}")
-                    return False
-            else:
-                logger.info(f"  ✓ Created {dest_dir}")
-        finally:
-            ssh.disconnect()
-
-        # ── Step 2: SCP each source_dir to ceratops ──────────────────────────────
-        scp_base = ["scp", "-r", "-P", "2223", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
-        if key_file:
-            scp_base += ["-i", key_file]
-
-        for src in source_dirs:
-            dir_name = os.path.basename(src.rstrip("/"))
-            remote_dest = f"{ssh_username}@{ceratops_ip}:{dest_dir}\\{dir_name}"
-            cmd = scp_base + [src, remote_dest]
-            logger.info(f"  ➜ scp {src} → {remote_dest}")
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            if proc.returncode != 0:
-                logger.error(f"✗ scp failed (rc={proc.returncode}): {proc.stderr.strip()}")
+            # ── Step 1: create dest_dir on ceratops via SSH ──────────────────────────
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
+            )
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
                 return False
-            logger.info(f"  ✓ Copied {dir_name}")
 
-        logger.info(f"✓ Agent files copied to {ceratops_machine}:{dest_dir}")
-        return True
+            try:
+                mkdir_cmd = f'mkdir "{dest_dir}"'
+                logger.info(f"  ➜ {mkdir_cmd}")
+                result = ssh.execute_command(mkdir_cmd, print_output=verbose)
+                if result['rc'] != 0:
+                    combined = (result['stdout'] + result['stderr']).lower()
+                    if "already exists" in combined or "file exists" in combined:
+                        logger.info("  ℹ Directory already exists, skipping")
+                    else:
+                        logger.error(f"✗ mkdir failed (rc={result['rc']}): {result['stderr'].strip()}")
+                        return False
+                else:
+                    logger.info(f"  ✓ Created {dest_dir}")
+            finally:
+                ssh.disconnect()
 
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+            # ── Step 2: SCP each source_dir to ceratops ──────────────────────────────
+            scp_base = ["scp", "-r", "-P", "2223", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
+            if key_file:
+                scp_base += ["-i", key_file]
+
+            for src in source_dirs:
+                dir_name = os.path.basename(src.rstrip("/"))
+                remote_dest = f"{ssh_username}@{ceratops_ip}:{dest_dir}\\{dir_name}"
+                cmd = scp_base + [src, remote_dest]
+                logger.info(f"  ➜ scp {src} → {remote_dest}")
+                proc = subprocess.run(cmd, capture_output=True, text=True)
+                if proc.returncode != 0:
+                    logger.error(f"✗ scp failed (rc={proc.returncode}): {proc.stderr.strip()}")
+                    return False
+                logger.info(f"  ✓ Copied {dir_name}")
+
+            logger.info(f"✓ Agent files copied to {ceratops_machine}:{dest_dir}")
+            return True
+
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def configure_hosts_on_ceratops(config, logger, verbose=True,
                                  ceratops_machine: str = "ceratops",
                                  ssh_username: str = "itzuser",
                                  debug: bool = False, **kwargs) -> bool:
-    import tempfile
-    import os
 
     logger.info("=" * 80)
     logger.info("CONFIGURE HOSTS RESOLVING ON CERATOPS (WINDOWS)")
@@ -815,81 +803,63 @@ def configure_hosts_on_ceratops(config, logger, verbose=True,
     logger.info(f"  Generated {len(all_machines)} host entries")
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
+            )
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+                return False
 
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
-        try:
-            hosts_file   = r'C:\Windows\System32\drivers\etc\hosts'
-            tmp_remote   = r'C:\Windows\Temp\hosts_automation'
-
-            # write hosts content to a local temp file, then upload via SFTP
-            tmp_local_fd, tmp_local_path = tempfile.mkstemp(prefix="hosts_", suffix=".txt")
             try:
-                os.write(tmp_local_fd, hosts_content.encode('ascii', errors='replace'))
+                hosts_file   = r'C:\Windows\System32\drivers\etc\hosts'
+                tmp_remote   = r'C:\Windows\Temp\hosts_automation'
+
+                # write hosts content to a local temp file, then upload via SFTP
+                tmp_local_fd, tmp_local_path = tempfile.mkstemp(prefix="hosts_", suffix=".txt")
+                try:
+                    os.write(tmp_local_fd, hosts_content.encode('ascii', errors='replace'))
+                finally:
+                    os.close(tmp_local_fd)
+
+                logger.info(f"  ➜ Uploading hosts content to {ceratops_machine}:{tmp_remote}...")
+                if not ssh.upload_file(tmp_local_path, tmp_remote):
+                    logger.error("✗ SFTP upload of hosts file failed")
+                    return False
+                os.remove(tmp_local_path)
+
+                # append temp file content to the real hosts file
+                cmd = f'powershell -Command "Get-Content \'{tmp_remote}\' | Add-Content -Path \'{hosts_file}\' -Encoding ASCII; Remove-Item \'{tmp_remote}\' -Force"'
+                logger.info(f"  ➜ Appending entries to {hosts_file}...")
+                result = ssh.execute_command(cmd, print_output=verbose)
+                if result['rc'] != 0:
+                    logger.error(f"✗ Failed to update hosts (rc={result['rc']}): {result['stderr'].strip()}")
+                    return False
+
+                logger.info(f"✓ Hosts resolving configured on {ceratops_machine}")
+                return True
+
             finally:
-                os.close(tmp_local_fd)
+                ssh.disconnect()
 
-            logger.info(f"  ➜ Uploading hosts content to {ceratops_machine}:{tmp_remote}...")
-            if not ssh.upload_file(tmp_local_path, tmp_remote):
-                logger.error("✗ SFTP upload of hosts file failed")
-                return False
-            os.remove(tmp_local_path)
-
-            # append temp file content to the real hosts file
-            cmd = f'powershell -Command "Get-Content \'{tmp_remote}\' | Add-Content -Path \'{hosts_file}\' -Encoding ASCII; Remove-Item \'{tmp_remote}\' -Force"'
-            logger.info(f"  ➜ Appending entries to {hosts_file}...")
-            result = ssh.execute_command(cmd, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ Failed to update hosts (rc={result['rc']}): {result['stderr'].strip()}")
-                return False
-
-            logger.info(f"✓ Hosts resolving configured on {ceratops_machine}")
-            return True
-
-        finally:
-            ssh.disconnect()
-
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def create_bookmarks_on_ceratops(config, logger, verbose=True,
                                   ceratops_machine: str = "ceratops",
                                   ssh_username: str = "itzuser",
                                   debug: bool = False, **kwargs) -> bool:
-    import tempfile
-    import os
 
     logger.info("=" * 80)
     logger.info("CREATE EDGE BOOKMARKS ON CERATOPS (WINDOWS REGISTRY)")
@@ -901,20 +871,6 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
-
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
-        try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
 
     ps_script = (
         'New-Item -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Force | Out-Null\n'
@@ -926,66 +882,64 @@ def create_bookmarks_on_ceratops(config, logger, verbose=True,
         'Set-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge" -Name "FavoritesBarEnabled" -Type DWord -Value 1\n'
     )
 
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            tmp_ps_remote = r'C:\Windows\Temp\set_bookmarks.ps1'
-
-            # write script to local temp file, upload via SFTP
-            tmp_ps_fd, tmp_ps_local = tempfile.mkstemp(prefix="bookmarks_", suffix=".ps1")
-            try:
-                os.write(tmp_ps_fd, ps_script.encode('utf-8'))
-            finally:
-                os.close(tmp_ps_fd)
-
-            logger.info(f"  ➜ Uploading set_bookmarks.ps1 to {ceratops_machine}...")
-            ok = ssh.upload_file(tmp_ps_local, tmp_ps_remote)
-            os.remove(tmp_ps_local)
-            if not ok:
-                logger.error("✗ SFTP upload failed")
-                return False
-
-            logger.info("  ➜ Running set_bookmarks.ps1")
-            result = ssh.execute_command(
-                f'powershell -ExecutionPolicy Bypass -File "{tmp_ps_remote}"',
-                print_output=verbose
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
             )
-            ssh.execute_command(f'del /f "{tmp_ps_remote}"', print_output=False)
-            if result['rc'] != 0:
-                logger.error(f"✗ Script failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
                 return False
-            logger.info("  ✓ OK")
 
-            logger.info("  ➜ Kill msedge.exe (non-fatal if not running)")
-            result = ssh.execute_command('taskkill /IM msedge.exe /F', print_output=verbose)
-            if result['rc'] not in (0, 128):
-                logger.info(f"  ℹ taskkill rc={result['rc']} — msedge.exe probably not running")
+            try:
+                tmp_ps_remote = r'C:\Windows\Temp\set_bookmarks.ps1'
 
-            logger.info(f"✓ Edge bookmarks created on {ceratops_machine}")
-            return True
+                # write script to local temp file, upload via SFTP
+                tmp_ps_fd, tmp_ps_local = tempfile.mkstemp(prefix="bookmarks_", suffix=".ps1")
+                try:
+                    os.write(tmp_ps_fd, ps_script.encode('utf-8'))
+                finally:
+                    os.close(tmp_ps_fd)
 
-        finally:
-            ssh.disconnect()
+                logger.info(f"  ➜ Uploading set_bookmarks.ps1 to {ceratops_machine}...")
+                ok = ssh.upload_file(tmp_ps_local, tmp_ps_remote)
+                os.remove(tmp_ps_local)
+                if not ok:
+                    logger.error("✗ SFTP upload failed")
+                    return False
 
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+                logger.info("  ➜ Running set_bookmarks.ps1")
+                result = ssh.execute_command(
+                    f'powershell -ExecutionPolicy Bypass -File "{tmp_ps_remote}"',
+                    print_output=verbose
+                )
+                ssh.execute_command(f'del /f "{tmp_ps_remote}"', print_output=False)
+                if result['rc'] != 0:
+                    logger.error(f"✗ Script failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                    return False
+                logger.info("  ✓ OK")
+
+                logger.info("  ➜ Kill msedge.exe (non-fatal if not running)")
+                result = ssh.execute_command('taskkill /IM msedge.exe /F', print_output=verbose)
+                if result['rc'] not in (0, 128):
+                    logger.info(f"  ℹ taskkill rc={result['rc']} — msedge.exe probably not running")
+
+                logger.info(f"✓ Edge bookmarks created on {ceratops_machine}")
+                return True
+
+            finally:
+                ssh.disconnect()
+
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def configure_timezone_on_ceratops(config, logger, verbose=True,
@@ -993,8 +947,6 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
                                     ssh_username: str = "itzuser",
                                     timezone: str = "GMT Standard Time",
                                     debug: bool = False, **kwargs) -> bool:
-    import tempfile
-    import os
 
     logger.info("=" * 80)
     logger.info("CONFIGURE TIMEZONE ON CERATOPS (WINDOWS)")
@@ -1006,67 +958,51 @@ def configure_timezone_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
+            )
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+                return False
 
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            try:
+                logger.info(f"  ➜ Setting timezone: tzutil /s \"{timezone}\"")
+                result = ssh.execute_command(f'tzutil /s "{timezone}"', print_output=verbose)
+                if result['rc'] != 0:
+                    logger.error(f"✗ tzutil /s failed (rc={result['rc']}): {result['stderr'].strip()}")
+                    return False
+                logger.info("  ✓ Timezone set")
+
+                logger.info("  ➜ Verifying: tzutil /g")
+                result = ssh.execute_command('tzutil /g', print_output=verbose)
+                if result['rc'] != 0:
+                    logger.error(f"✗ tzutil /g failed (rc={result['rc']}): {result['stderr'].strip()}")
+                    return False
+                current_tz = result['stdout'].strip()
+                if current_tz != timezone:
+                    logger.error(f"✗ Timezone mismatch: expected '{timezone}', got '{current_tz}'")
+                    return False
+                logger.info(f"  ✓ Verified: {current_tz}")
+
+                logger.info(f"✓ Timezone configured on {ceratops_machine}")
+                return True
+
+            finally:
+                ssh.disconnect()
+
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
             return False
-
-        try:
-            logger.info(f"  ➜ Setting timezone: tzutil /s \"{timezone}\"")
-            result = ssh.execute_command(f'tzutil /s "{timezone}"', print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ tzutil /s failed (rc={result['rc']}): {result['stderr'].strip()}")
-                return False
-            logger.info("  ✓ Timezone set")
-
-            logger.info("  ➜ Verifying: tzutil /g")
-            result = ssh.execute_command('tzutil /g', print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ tzutil /g failed (rc={result['rc']}): {result['stderr'].strip()}")
-                return False
-            current_tz = result['stdout'].strip()
-            if current_tz != timezone:
-                logger.error(f"✗ Timezone mismatch: expected '{timezone}', got '{current_tz}'")
-                return False
-            logger.info(f"  ✓ Verified: {current_tz}")
-
-            logger.info(f"✓ Timezone configured on {ceratops_machine}")
-            return True
-
-        finally:
-            ssh.disconnect()
-
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
 
 
 def install_edge_on_ceratops(config, logger, verbose=True,
@@ -1074,8 +1010,6 @@ def install_edge_on_ceratops(config, logger, verbose=True,
                               ssh_username: str = "itzuser",
                               msi_path: str = r'C:\bootcamp\software\MicrosoftEdgeEnterpriseX64.msi',
                               debug: bool = False, **kwargs) -> bool:
-    import tempfile
-    import os
 
     logger.info("=" * 80)
     logger.info("INSTALL EDGE ON CERATOPS (WINDOWS)")
@@ -1087,75 +1021,57 @@ def install_edge_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
-
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
-        try:
-            # ── check if Edge is already installed ──────────────────────────────
-            logger.info("  ➜ Checking if Microsoft Edge is already installed...")
-            result = ssh.execute_command(
-                'wmic product where "name like \'%%Edge%%\'" get Name,Version',
-                print_output=verbose
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
             )
-            if 'Microsoft Edge' in result['stdout']:
-                logger.info("  ℹ Microsoft Edge already installed — skipping")
-                return True
-
-            logger.info("  ➜ Edge not found — installing...")
-            cmd = f'msiexec /i "{msi_path}" /qn /norestart'
-            logger.info(f"  ➜ {cmd}")
-            result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ Edge installation failed (rc={result['rc']}): {result['stderr'].strip()}")
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
                 return False
 
-            logger.info(f"✓ Edge installed on {ceratops_machine}")
-            return True
+            try:
+                # ── check if Edge is already installed ──────────────────────────────
+                logger.info("  ➜ Checking if Microsoft Edge is already installed...")
+                result = ssh.execute_command(
+                    'wmic product where "name like \'%%Edge%%\'" get Name,Version',
+                    print_output=verbose
+                )
+                if 'Microsoft Edge' in result['stdout']:
+                    logger.info("  ℹ Microsoft Edge already installed — skipping")
+                    return True
 
-        finally:
-            ssh.disconnect()
+                logger.info("  ➜ Edge not found — installing...")
+                cmd = f'msiexec /i "{msi_path}" /qn /norestart'
+                logger.info(f"  ➜ {cmd}")
+                result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
+                if result['rc'] != 0:
+                    logger.error(f"✗ Edge installation failed (rc={result['rc']}): {result['stderr'].strip()}")
+                    return False
 
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+                logger.info(f"✓ Edge installed on {ceratops_machine}")
+                return True
+
+            finally:
+                ssh.disconnect()
+
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def configure_mssql_on_ceratops(config, logger, verbose=True,
                                  ceratops_machine: str = "ceratops",
                                  ssh_username: str = "itzuser",
                                  debug: bool = False, **kwargs) -> bool:
-    import tempfile
-    import os
 
     logger.info("=" * 80)
     logger.info("CONFIGURE MSSQL ON CERATOPS (WINDOWS)")
@@ -1172,83 +1088,67 @@ def configure_mssql_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
-
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
-        try:
-            # ── check if MSSQLSERVER is Running ─────────────────────────────────
-            logger.info("  ➜ Checking MSSQLSERVER service state...")
-            result = ssh.execute_command(
-                'wmic service where "name like \'MSSQL%%\' or name=\'MSSQLSERVER\'" get Name,State',
-                print_output=verbose
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
             )
-            if result['rc'] != 0:
-                logger.error(f"✗ wmic failed (rc={result['rc']}): {result['stderr'].strip()}")
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
                 return False
 
-            if 'Running' not in result['stdout']:
-                logger.info("  ℹ MSSQLSERVER not Running — skipping configuration")
+            try:
+                # ── check if MSSQLSERVER is Running ─────────────────────────────────
+                logger.info("  ➜ Checking MSSQLSERVER service state...")
+                result = ssh.execute_command(
+                    'wmic service where "name like \'MSSQL%%\' or name=\'MSSQLSERVER\'" get Name,State',
+                    print_output=verbose
+                )
+                if result['rc'] != 0:
+                    logger.error(f"✗ wmic failed (rc={result['rc']}): {result['stderr'].strip()}")
+                    return False
+
+                if 'Running' not in result['stdout']:
+                    logger.info("  ℹ MSSQLSERVER not Running — skipping configuration")
+                    return True
+
+                logger.info("  ✓ MSSQLSERVER is Running")
+
+                # ── restart in single-user mode and configure SA ─────────────────────
+                steps = [
+                    ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
+                    ('net start mssqlserver /mSQLCMD',                                             'start in single-user mode'),
+                    (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa ENABLE"',                         'enable SA login'),
+                    (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa WITH PASSWORD = \'{pwd}\'"',       'set SA password'),
+                    ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
+                    ('net start mssqlserver',                                                      'start MSSQLSERVER'),
+                ]
+
+                for cmd, desc in steps:
+                    logger.info(f"  ➜ {desc}...")
+                    result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
+                    if result['rc'] != 0:
+                        logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip()}")
+                        return False
+                    logger.info(f"  ✓ {desc}")
+
+                logger.info(f"✓ MSSQL SA login configured on {ceratops_machine}")
                 return True
 
-            logger.info("  ✓ MSSQLSERVER is Running")
+            finally:
+                ssh.disconnect()
 
-            # ── restart in single-user mode and configure SA ─────────────────────
-            steps = [
-                ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
-                ('net start mssqlserver /mSQLCMD',                                             'start in single-user mode'),
-                (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa ENABLE"',                         'enable SA login'),
-                (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa WITH PASSWORD = \'{pwd}\'"',       'set SA password'),
-                ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
-                ('net start mssqlserver',                                                      'start MSSQLSERVER'),
-            ]
-
-            for cmd, desc in steps:
-                logger.info(f"  ➜ {desc}...")
-                result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
-                if result['rc'] != 0:
-                    logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip()}")
-                    return False
-                logger.info(f"  ✓ {desc}")
-
-            logger.info(f"✓ MSSQL SA login configured on {ceratops_machine}")
-            return True
-
-        finally:
-            ssh.disconnect()
-
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def restore_adventureworks_on_ceratops(config, logger, verbose=True,
@@ -1256,8 +1156,6 @@ def restore_adventureworks_on_ceratops(config, logger, verbose=True,
                                         ssh_username: str = "itzuser",
                                         bak_file: str = r'C:\windows\software\AdventureWorks2019.bak',
                                         debug: bool = False, **kwargs) -> bool:
-    import tempfile
-    import os
 
     logger.info("=" * 80)
     logger.info("RESTORE ADVENTUREWORKS ON CERATOPS (MSSQL)")
@@ -1274,60 +1172,44 @@ def restore_adventureworks_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
-
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
-
-        try:
-            restore_sql = (
-                f"RESTORE DATABASE AdventureWorks2019 FROM DISK = N'{bak_file}' "
-                f"WITH MOVE N'AdventureWorks2019' TO N'C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA\\AdventureWorks2019.mdf', "
-                f"MOVE N'AdventureWorks2019_log' TO N'C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA\\AdventureWorks2019_log.ldf', "
-                f"REPLACE, STATS = 10"
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
             )
-            cmd = f'sqlcmd -S localhost -U sa -P "{pwd}" -Q "{restore_sql}"'
-            logger.info(f"  ➜ Restoring AdventureWorks2019 from {bak_file}...")
-            result = ssh.execute_command(cmd, timeout=300, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ Restore failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
                 return False
-            logger.info(f"✓ AdventureWorks2019 restored on {ceratops_machine}")
-            return True
-        finally:
-            ssh.disconnect()
 
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+            try:
+                restore_sql = (
+                    f"RESTORE DATABASE AdventureWorks2019 FROM DISK = N'{bak_file}' "
+                    f"WITH MOVE N'AdventureWorks2019' TO N'C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA\\AdventureWorks2019.mdf', "
+                    f"MOVE N'AdventureWorks2019_log' TO N'C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA\\AdventureWorks2019_log.ldf', "
+                    f"REPLACE, STATS = 10"
+                )
+                cmd = f'sqlcmd -S localhost -U sa -P "{pwd}" -Q "{restore_sql}"'
+                logger.info(f"  ➜ Restoring AdventureWorks2019 from {bak_file}...")
+                result = ssh.execute_command(cmd, timeout=300, print_output=verbose)
+                if result['rc'] != 0:
+                    logger.error(f"✗ Restore failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                    return False
+                logger.info(f"✓ AdventureWorks2019 restored on {ceratops_machine}")
+                return True
+            finally:
+                ssh.disconnect()
+
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def setup_fam_files_on_ceratops(config, logger, verbose=True,
@@ -1354,87 +1236,71 @@ def setup_fam_files_on_ceratops(config, logger, verbose=True,
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
-    key_file = None
-    tmp_key_path = None
 
-    if ssh_private_key:
-        tmp_fd, tmp_key_path = tempfile.mkstemp(prefix="itz_key_", suffix=".pem")
+    with _tmp_ssh_key(ssh_private_key, logger) as key_file:
         try:
-            os.write(tmp_fd, ssh_private_key.encode())
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_key_path, 0o600)
-        key_file = tmp_key_path
-        logger.info("  Using SSH key from custom_variables")
-    else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+            ssh = SSHClient(
+                host=ceratops_ip,
+                username=ssh_username,
+                key_file=key_file,
+                port=2223,
+                timeout=30
+            )
+            if not ssh.connect():
+                logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+                return False
 
-    try:
-        ssh = SSHClient(
-            host=ceratops_ip,
-            username=ssh_username,
-            key_file=key_file,
-            port=2223,
-            timeout=30
-        )
-        if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
-            return False
+            try:
+                csv_filename = os.path.basename(csv_src)
+                txt_filename = os.path.basename(txt_src)
 
-        try:
-            csv_filename = os.path.basename(csv_src)
-            txt_filename = os.path.basename(txt_src)
+                steps = [
+                    (f'net user tom "{pwd}" /add',                                         'create user tom'),
+                    (f'net user jerry "{pwd}" /add',                                       'create user jerry'),
+                    ('mkdir "C:\\FAMGUARD"',                                               'create C:\\FAMGUARD'),
+                    ('mkdir "C:\\FAMGUARD\\Privileged"',                                   'create Privileged dir'),
+                    ('mkdir "C:\\FAMGUARD\\Controlled"',                                   'create Controlled dir'),
+                    ('icacls "C:\\FAMGUARD" /grant Everyone:(OI)(CI)F /T',                'set permissions on FAMGUARD'),
+                ]
 
-            steps = [
-                (f'net user tom "{pwd}" /add',                                         'create user tom'),
-                (f'net user jerry "{pwd}" /add',                                       'create user jerry'),
-                ('mkdir "C:\\FAMGUARD"',                                               'create C:\\FAMGUARD'),
-                ('mkdir "C:\\FAMGUARD\\Privileged"',                                   'create Privileged dir'),
-                ('mkdir "C:\\FAMGUARD\\Controlled"',                                   'create Controlled dir'),
-                ('icacls "C:\\FAMGUARD" /grant Everyone:(OI)(CI)F /T',                'set permissions on FAMGUARD'),
-            ]
-
-            for cmd, desc in steps:
-                logger.info(f"  ➜ {desc}...")
-                result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
-                if result['rc'] != 0:
-                    combined = (result['stdout'] + result['stderr']).lower()
-                    if desc.startswith('create user') and ('already' in combined or 'member' in combined):
-                        logger.info(f"  ℹ {desc} — already exists, skipping")
-                    elif desc.startswith('create') and 'already exists' in combined:
-                        logger.info(f"  ℹ {desc} — already exists, skipping")
+                for cmd, desc in steps:
+                    logger.info(f"  ➜ {desc}...")
+                    result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
+                    if result['rc'] != 0:
+                        combined = (result['stdout'] + result['stderr']).lower()
+                        if desc.startswith('create user') and ('already' in combined or 'member' in combined):
+                            logger.info(f"  ℹ {desc} — already exists, skipping")
+                        elif desc.startswith('create') and 'already exists' in combined:
+                            logger.info(f"  ℹ {desc} — already exists, skipping")
+                        else:
+                            logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                            return False
                     else:
-                        logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                        logger.info(f"  ✓ {desc}")
+
+                # upload csv → Privileged, txt → Controlled
+                for local_src, remote_dest, desc in [
+                    (csv_src, f'C:\\FAMGUARD\\Privileged\\{csv_filename}', f'upload {csv_filename} to Privileged'),
+                    (txt_src, f'C:\\FAMGUARD\\Controlled\\{txt_filename}', f'upload {txt_filename} to Controlled'),
+                ]:
+                    logger.info(f"  ➜ {desc}...")
+                    if not ssh.upload_file(local_src, remote_dest):
+                        logger.error(f"✗ Failed to {desc}")
                         return False
-                else:
                     logger.info(f"  ✓ {desc}")
 
-            # upload csv → Privileged, txt → Controlled
-            for local_src, remote_dest, desc in [
-                (csv_src, f'C:\\FAMGUARD\\Privileged\\{csv_filename}', f'upload {csv_filename} to Privileged'),
-                (txt_src, f'C:\\FAMGUARD\\Controlled\\{txt_filename}', f'upload {txt_filename} to Controlled'),
-            ]:
-                logger.info(f"  ➜ {desc}...")
-                if not ssh.upload_file(local_src, remote_dest):
-                    logger.error(f"✗ Failed to {desc}")
-                    return False
-                logger.info(f"  ✓ {desc}")
+                logger.info(f"✓ FAM files setup completed on {ceratops_machine}")
+                return True
 
-            logger.info(f"✓ FAM files setup completed on {ceratops_machine}")
-            return True
+            finally:
+                ssh.disconnect()
 
-        finally:
-            ssh.disconnect()
-
-    except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        if tmp_key_path and os.path.exists(tmp_key_path):
-            os.remove(tmp_key_path)
+        except Exception as e:
+            logger.error(f"✗ Unexpected error: {e}")
+            if debug:
+                import traceback
+                logger.error(traceback.format_exc())
+            return False
 
 
 def RDP_relay_setup(config, logger, verbose=True, **kwargs) -> bool:
