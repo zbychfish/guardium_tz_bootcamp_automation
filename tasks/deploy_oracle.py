@@ -5,169 +5,108 @@ Oracle Deployment Task
 Handles Oracle installation and configuration on remote machine (sauropod)
 """
 
+import os
 import sys
+import time
 from pathlib import Path
 
-# Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from core import ConfigLoader
 from core.ssh_client import SSHClient
 
 
+def _header(logger, title: str):
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
+def _ssh_cmd(ssh, cmd, logger, desc: str, timeout: int = 60, warning: bool = False) -> bool:
+    result = ssh.execute_command(cmd, timeout=timeout, print_output=False)
+    if result['rc'] != 0:
+        msg = f"{'⚠' if warning else '✗'} Failed to {desc}: {result['stderr'].strip()}"
+        if warning:
+            logger.warning(msg)
+        else:
+            logger.error(msg)
+        return False
+    return True
+
+
+def _ssh_upload(ssh, src, dest, logger, desc: str) -> bool:
+    logger.info(f"  ➜ upload {src} → {dest}")
+    if not ssh.upload_file(str(src), str(dest)):
+        logger.error(f"✗ Failed to upload {desc}")
+        return False
+    logger.info(f"  ✓ {desc} uploaded")
+    return True
+
+
+def _ssh_cmds(ssh, commands, logger, desc: str, timeout: int = 60, stop_on_error: bool = True) -> bool:
+    results = ssh.execute_commands(commands=commands, timeout=timeout, print_output=False, stop_on_error=stop_on_error)
+    failed = [r for r in results if r['rc'] != 0]
+    if failed:
+        logger.error(f"✗ Failed to {desc}: {failed[0]['stderr'].strip()}")
+        return False
+    return True
+
+
 def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    """
-    Deploy Oracle Database 21c on remote machine (sauropod).
-    
-    This function:
-    1. Connects to sauropod machine via SSH
-    2. Copies Oracle installation files from raptor to sauropod
-    3. Installs Oracle preinstall package
-    4. Installs Oracle database software
-    
-    Args:
-        config: ConfigLoader instance with machine information
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Oracle Database 21c deployment on sauropod")
-        logger.info("=" * 80)
-    
-    # Get sauropod machine IP (use private IP for internal communication)
+    _header(logger, "Oracle Database 21c deployment on sauropod")
+
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
-        logger.error("Could not find sauropod machine in configuration")
+        logger.error("✗ sauropod IP not found in configuration")
         return False
-    
-    # Get SSH configuration
+
     ssh_config = config.get('ssh', {})
     ssh_port = ssh_config.get('port', 2223)
     ssh_username = ssh_config.get('username', 'root')
-    
-    # Get root password from custom_variables
+
     root_password = config.get_custom_variable('pwd')
     if not root_password:
-        logger.error("Root password (pwd) not found in custom_variables")
+        logger.error("✗ pwd not found in custom_variables")
         return False
-    
-    if verbose:
-        logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
-    
+
+    logger.info(f"  ➜ SSH {ssh_username}@{sauropod_ip}:{ssh_port}")
+
     try:
-        # Connect to sauropod
-        with SSHClient(
-            host=sauropod_ip,
-            username=ssh_username,
-            password=root_password,
-            port=ssh_port,
-            timeout=60
-        ) as ssh:
-            
-            if verbose:
-                logger.info("✓ Connected to sauropod")
-            
-            # Step 1: Copy Oracle installation files from raptor to sauropod
-            if verbose:
-                logger.info("Step 1: Copying Oracle installation files from raptor to sauropod")
-            
-            # File 1: Oracle preinstall RPM
-            preinstall_source = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm"
+        with SSHClient(host=sauropod_ip, username=ssh_username, password=root_password,
+                       port=ssh_port, timeout=60) as ssh:
+            logger.info("  ✓ Connected to sauropod")
+
+            # ── upload Oracle files ───────────────────────────────────────────
+            preinstall_src  = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm"
             preinstall_dest = "/tmp/oracle-database-preinstall-21c-1.0-1.el8.x86_64.rpm"
-            
-            if verbose:
-                logger.info(f"Uploading oracle-database-preinstall RPM to sauropod")
-            
-            upload_success = ssh.upload_file(preinstall_source, preinstall_dest)
-            
-            if not upload_success:
-                logger.error("Failed to upload oracle-database-preinstall RPM")
-                return False
-            
-            if verbose:
-                logger.info("✓ Oracle preinstall RPM uploaded")
-            
-            # File 2: Oracle database installation archive
-            db_archive_source = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/LINUX.X64_213000_db_home.zip"
+            db_archive_src  = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/LINUX.X64_213000_db_home.zip"
             db_archive_dest = "/tmp/LINUX.X64_213000_db_home.zip"
-            
-            if verbose:
-                logger.info(f"Uploading Oracle database installation archive to sauropod")
-            
-            upload_success = ssh.upload_file(db_archive_source, db_archive_dest)
-            
-            if not upload_success:
-                logger.error("Failed to upload Oracle database installation archive")
+
+            if not _ssh_upload(ssh, preinstall_src, preinstall_dest, logger, "oracle-database-preinstall RPM"):
                 return False
-            
-            # Set ownership to oracle user (will be created by preinstall package)
-            result = ssh.execute_command(
-                f"chown oracle:oinstall {db_archive_dest} 2>/dev/null || true",
-                timeout=30,
-                print_output=verbose
-            )
-            
-            if verbose:
-                logger.info("✓ Oracle database installation archive uploaded")
-                logger.info("✓ All Oracle installation files copied to sauropod")
-            
-            # Step 2: Install Oracle prerequisites
-            if verbose:
-                logger.info("Step 2: Installing Oracle prerequisites")
-            
-            prereq_commands = [
-                f"dnf install -y --nogpgcheck {preinstall_dest}"
-            ]
-            
-            results = ssh.execute_commands(
-                commands=prereq_commands,
-                timeout=600,
-                print_output=verbose,
-                stop_on_error=True
-            )
-            
-            failed = [r for r in results if r['rc'] != 0]
-            if failed:
-                logger.error("Failed to install Oracle prerequisites")
+            if not _ssh_upload(ssh, db_archive_src, db_archive_dest, logger, "Oracle db_home.zip"):
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle prerequisites installed")
-            
-            # Step 3: Create Oracle directories
-            if verbose:
-                logger.info("Step 3: Creating Oracle directories")
-            
-            dir_commands = [
+
+            ssh.execute_command(f"chown oracle:oinstall {db_archive_dest} 2>/dev/null || true", timeout=30, print_output=False)
+
+            # ── prerequisites ─────────────────────────────────────────────────
+            logger.info(f"  ➜ dnf install --nogpgcheck {preinstall_dest}")
+            if not _ssh_cmds(ssh, [f"dnf install -y --nogpgcheck {preinstall_dest}"], logger, "install Oracle prerequisites", timeout=600):
+                return False
+            logger.info("  ✓ Oracle prerequisites installed")
+
+            # ── directories ───────────────────────────────────────────────────
+            logger.info("  ➜ mkdir /u01/app/oracle/product/21c/dbhome_1 + chown/chmod")
+            if not _ssh_cmds(ssh, [
                 "mkdir -p /u01/app/oracle/product/21c/dbhome_1",
                 "chown -R oracle:oinstall /u01",
-                "chmod -R 775 /u01"
-            ]
-            
-            results = ssh.execute_commands(
-                commands=dir_commands,
-                timeout=60,
-                print_output=verbose,
-                stop_on_error=True
-            )
-            
-            failed = [r for r in results if r['rc'] != 0]
-            if failed:
-                logger.error("Failed to create Oracle directories")
+                "chmod -R 775 /u01",
+            ], logger, "create Oracle directories"):
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle directories created")
-            
-            # Step 4: Configure oracle user environment
-            if verbose:
-                logger.info("Step 4: Configuring oracle user environment")
-            
-            # Configure all environment variables in one place
+            logger.info("  ✓ Oracle directories created")
+
+            # ── oracle user environment ───────────────────────────────────────
+            logger.info("  ➜ append ORACLE_BASE/HOME/SID/PATH to oracle ~/.bashrc")
             bashrc_cmd = """su - oracle -c "cat >> ~/.bashrc << 'EOF'
 
 # Oracle environment variables
@@ -187,82 +126,40 @@ alias sqlnolog='sql /nolog'
 export SQLPATH=\\$HOME/.sqlcl
 EOF
 " """
-            
-            result = ssh.execute_command(
-                bashrc_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error("Failed to configure oracle user environment")
+            if not _ssh_cmd(ssh, bashrc_cmd, logger, "configure oracle user environment"):
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle user environment configured")
-            
-            # Step 5: Unzip Oracle installation archive as oracle user
-            if verbose:
-                logger.info("Step 5: Extracting Oracle installation archive")
-            
-            unzip_cmd = "su - oracle -c 'unzip -q /tmp/LINUX.X64_213000_db_home.zip -d $ORACLE_HOME'"
-            
-            result = ssh.execute_command(
-                unzip_cmd,
-                timeout=1800,  # 30 minutes for extraction
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to extract Oracle installation archive: {result['stderr']}")
+            logger.info("  ✓ Oracle user environment configured")
+
+            # ── unzip db_home ─────────────────────────────────────────────────
+            logger.info("  ➜ su - oracle -c 'unzip -q LINUX.X64_213000_db_home.zip -d $ORACLE_HOME'")
+            if not _ssh_cmd(ssh,
+                            "su - oracle -c 'unzip -q /tmp/LINUX.X64_213000_db_home.zip -d $ORACLE_HOME'",
+                            logger, "extract Oracle installation archive", timeout=1800):
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle installation archive extracted")
-            
-            # Step 6: Configure SSH for oracle user
-            if verbose:
-                logger.info("Step 6: Configuring SSH for oracle user")
-            
-            # Get hostname for SSH config
+            logger.info("  ✓ Oracle installation archive extracted")
+
+            # ── SSH config for oracle user ────────────────────────────────────
+            logger.info("  ➜ hostname")
             hostname_result = ssh.execute_command("hostname", timeout=30, print_output=False)
             if hostname_result['rc'] != 0:
-                logger.error("Failed to get hostname")
+                logger.error("✗ Failed to get hostname")
                 return False
-            
             hostname = hostname_result['stdout'].strip()
-            
-            # Create SSH config for oracle user
-            ssh_config_content = f"""Host localhost
-    Port 2223
-    StrictHostKeyChecking no
-Host {hostname}
-    Port 2223
-    StrictHostKeyChecking no
-"""
-            
-            # Create .ssh directory if it doesn't exist
-            ssh.execute_command("su - oracle -c 'mkdir -p ~/.ssh'", timeout=30, print_output=verbose)
-            
-            # Write SSH config
+
+            logger.info(f"  ➜ write oracle ~/.ssh/config (localhost + {hostname} → port 2223)")
+            ssh_config_content = (
+                f"Host localhost\n    Port 2223\n    StrictHostKeyChecking no\n"
+                f"Host {hostname}\n    Port 2223\n    StrictHostKeyChecking no\n"
+            )
+            ssh.execute_command("su - oracle -c 'mkdir -p ~/.ssh'", timeout=30, print_output=False)
             config_cmd = f"su - oracle -c 'cat >> ~/.ssh/config <<EOF\n{ssh_config_content}EOF'"
-            
-            result = ssh.execute_command(config_cmd, timeout=30, print_output=verbose)
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure SSH for oracle user: {result['stderr']}")
+            if not _ssh_cmd(ssh, config_cmd, logger, "configure SSH for oracle user"):
                 return False
-            
-            # Set proper permissions on SSH config
-            ssh.execute_command("su - oracle -c 'chmod 600 ~/.ssh/config'", timeout=30, print_output=verbose)
-            
-            if verbose:
-                logger.info("✓ SSH configured for oracle user")
-            
-            # Step 7: Run Oracle installer
-            if verbose:
-                logger.info("Step 7: Running Oracle installer (this may take 15-30 minutes)")
-            
+            ssh.execute_command("su - oracle -c 'chmod 600 ~/.ssh/config'", timeout=30, print_output=False)
+            logger.info("  ✓ SSH configured for oracle user")
+
+            # ── Oracle installer ──────────────────────────────────────────────
+            logger.info("  ➜ runInstaller -silent INSTALL_DB_SWONLY EE (up to 60 min)")
             installer_cmd = """su - oracle -c 'cd $ORACLE_HOME && ./runInstaller -silent \
   oracle.install.option=INSTALL_DB_SWONLY \
   ORACLE_BASE=$ORACLE_BASE \
@@ -275,78 +172,33 @@ Host {hostname}
   oracle.install.db.OSKMDBA_GROUP=dba \
   oracle.install.db.OSRACDBA_GROUP=dba \
   -ignorePrereqFailure'"""
-            
-            result = ssh.execute_command(
-                installer_cmd,
-                timeout=3600,  # 60 minutes for installation
-                print_output=verbose
-            )
-            
-            # Oracle installer returns rc=6 for "Successfully Setup Software with warning(s)"
-            # This is acceptable - rc=0 is success, rc=6 is success with warnings
+            result = ssh.execute_command(installer_cmd, timeout=3600, print_output=False)
             if result['rc'] not in [0, 6]:
-                logger.error(f"Oracle installer failed with return code {result['rc']}: {result['stderr']}")
+                logger.error(f"✗ Oracle installer failed (rc={result['rc']}): {result['stderr'].strip()}")
                 return False
-            
-            # Only log warnings in verbose mode
-            if result['rc'] == 6 and verbose:
-                logger.info("⚠ Oracle installer completed with warnings (rc=6)")
-            elif result['rc'] == 0 and verbose:
-                logger.info("✓ Oracle installer completed successfully")
-            elif not verbose:
-                # In non-verbose mode, just log success without mentioning rc=6
-                logger.info("✓ Oracle installer completed successfully")
-            
-            # Step 8: Run post-installation root scripts
-            if verbose:
-                logger.info("Step 8: Running post-installation root scripts")
-            
-            root_scripts = [
-                "/u01/app/oraInventory/orainstRoot.sh",
-                "/u01/app/oracle/product/21c/dbhome_1/root.sh"
-            ]
-            
-            for script in root_scripts:
-                if verbose:
-                    logger.info(f"Executing {script}")
-                
-                result = ssh.execute_command(
-                    script,
-                    timeout=300,  # 5 minutes per script
-                    print_output=verbose
-                )
-                
-                if result['rc'] != 0:
-                    logger.error(f"Failed to execute {script}: {result['stderr']}")
+            if result['rc'] == 6:
+                logger.info("  ⚠ Oracle installer completed with warnings (rc=6)")
+            else:
+                logger.info("  ✓ Oracle installer completed")
+
+            # ── post-install root scripts ─────────────────────────────────────
+            for script in ["/u01/app/oraInventory/orainstRoot.sh",
+                           "/u01/app/oracle/product/21c/dbhome_1/root.sh"]:
+                logger.info(f"  ➜ {script}")
+                if not _ssh_cmd(ssh, script, logger, f"execute {script}", timeout=300):
                     return False
-            
-            if verbose:
-                logger.info("✓ Post-installation root scripts completed")
-            
-            # Step 9: Configure Oracle listener
-            if verbose:
-                logger.info("Step 9: Configuring Oracle listener")
-            
-            netca_cmd = "su - oracle -c '$ORACLE_HOME/bin/netca -silent -responseFile $ORACLE_HOME/assistants/netca/netca.rsp'"
-            
-            result = ssh.execute_command(
-                netca_cmd,
-                timeout=600,  # 10 minutes
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure Oracle listener: {result['stderr']}")
+            logger.info("  ✓ Post-installation root scripts completed")
+
+            # ── listener ──────────────────────────────────────────────────────
+            logger.info("  ➜ netca -silent -responseFile netca.rsp")
+            if not _ssh_cmd(ssh,
+                            "su - oracle -c '$ORACLE_HOME/bin/netca -silent -responseFile $ORACLE_HOME/assistants/netca/netca.rsp'",
+                            logger, "configure Oracle listener", timeout=600):
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle listener configured")
-            
-            # Step 10: Create Oracle database
-            if verbose:
-                logger.info("Step 10: Creating Oracle database (this may take 20-40 minutes)")
-            
-            # Use password from custom_variables (pwd)
+            logger.info("  ✓ Oracle listener configured")
+
+            # ── create database ───────────────────────────────────────────────
+            logger.info("  ➜ dbca -silent -createDatabase ORCLCDB/ORCLPDB1 (up to 60 min)")
             dbca_cmd = f"""su - oracle -c 'dbca -silent -createDatabase \
   -templateName General_Purpose.dbc \
   -gdbname ORCLCDB \
@@ -362,661 +214,222 @@ Host {hostname}
   -totalMemory 1500 \
   -storageType FS \
   -datafileDestination "/u01/app/oracle/oradata"'"""
-            
-            result = ssh.execute_command(
-                dbca_cmd,
-                timeout=3600,  # 60 minutes for database creation
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to create Oracle database: {result['stderr']}")
+            if not _ssh_cmd(ssh, dbca_cmd, logger, "create Oracle database", timeout=3600):
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle database created")
-            
-            # Step 11: Verify oracle user environment (ORACLE_SID already configured in Step 4)
-            if verbose:
-                logger.info("Step 11: Verifying oracle user environment")
-                logger.info("✓ Oracle user environment verified (configured in Step 4)")
-            
-            # Step 12: Configure pluggable databases to auto-start
-            if verbose:
-                logger.info("Step 12: Configuring pluggable databases to auto-start")
-            
-            sqlplus_cmd = """su - oracle -c 'export ORACLE_SID=ORCLCDB && echo "ALTER PLUGGABLE DATABASE ALL SAVE STATE;" | sqlplus -s / as sysdba'"""
-            
-            result = ssh.execute_command(
-                sqlplus_cmd,
-                timeout=300,  # 5 minutes
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure PDB auto-start: {result['stderr']}")
+            logger.info("  ✓ Oracle database created")
+
+            # ── PDB auto-start ────────────────────────────────────────────────
+            logger.info("  ➜ ALTER PLUGGABLE DATABASE ALL SAVE STATE")
+            if not _ssh_cmd(ssh,
+                            """su - oracle -c 'export ORACLE_SID=ORCLCDB && echo "ALTER PLUGGABLE DATABASE ALL SAVE STATE;" | sqlplus -s / as sysdba'""",
+                            logger, "configure PDB auto-start", timeout=300):
                 return False
-            
-            if verbose:
-                logger.info("✓ Pluggable databases configured to auto-start")
-            
-            # Step 13: Upload and configure listener.ora
-            if verbose:
-                logger.info("Step 13: Configuring listener.ora")
-            
-            # Path to local config file
-            listener_config_path = Path(__file__).parent.parent / "automation_config_files" / "listener.ora"
-            
-            if not listener_config_path.exists():
-                logger.error(f"listener.ora config file not found at {listener_config_path}")
-                return False
-            
-            # Upload listener.ora to sauropod
-            remote_listener_path = "/tmp/listener.ora"
-            upload_success = ssh.upload_file(str(listener_config_path), remote_listener_path)
-            
-            if not upload_success:
-                logger.error("Failed to upload listener.ora")
-                return False
-            
-            # Copy to Oracle network admin directory
-            copy_listener_cmd = f"su - oracle -c 'cp {remote_listener_path} $ORACLE_HOME/network/admin/listener.ora && chmod 644 $ORACLE_HOME/network/admin/listener.ora'"
-            
-            result = ssh.execute_command(
-                copy_listener_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to copy listener.ora: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ listener.ora configured")
-            
-            # Step 14: Upload and configure tnsnames.ora
-            if verbose:
-                logger.info("Step 14: Configuring tnsnames.ora")
-            
-            # Path to local config file
-            tnsnames_config_path = Path(__file__).parent.parent / "automation_config_files" / "tnsnames.ora"
-            
-            if not tnsnames_config_path.exists():
-                logger.error(f"tnsnames.ora config file not found at {tnsnames_config_path}")
-                return False
-            
-            # Upload tnsnames.ora to sauropod
-            remote_tnsnames_path = "/tmp/tnsnames.ora"
-            upload_success = ssh.upload_file(str(tnsnames_config_path), remote_tnsnames_path)
-            
-            if not upload_success:
-                logger.error("Failed to upload tnsnames.ora")
-                return False
-            
-            # Copy to Oracle network admin directory
-            copy_tnsnames_cmd = f"su - oracle -c 'cp {remote_tnsnames_path} $ORACLE_HOME/network/admin/tnsnames.ora && chmod 644 $ORACLE_HOME/network/admin/tnsnames.ora'"
-            
-            result = ssh.execute_command(
-                copy_tnsnames_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to copy tnsnames.ora: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ tnsnames.ora configured")
-            
-            # Step 15: Upload and configure sqlnet.ora
-            if verbose:
-                logger.info("Step 15: Configuring sqlnet.ora")
-            
-            # Path to local config file
-            sqlnet_config_path = Path(__file__).parent.parent / "automation_config_files" / "sqlnet.ora"
-            
-            if not sqlnet_config_path.exists():
-                logger.error(f"sqlnet.ora config file not found at {sqlnet_config_path}")
-                return False
-            
-            # Upload sqlnet.ora to sauropod
-            remote_sqlnet_path = "/tmp/sqlnet.ora"
-            upload_success = ssh.upload_file(str(sqlnet_config_path), remote_sqlnet_path)
-            
-            if not upload_success:
-                logger.error("Failed to upload sqlnet.ora")
-                return False
-            
-            # Copy to Oracle network admin directory
-            copy_sqlnet_cmd = f"su - oracle -c 'cp {remote_sqlnet_path} $ORACLE_HOME/network/admin/sqlnet.ora && chmod 644 $ORACLE_HOME/network/admin/sqlnet.ora'"
-            
-            result = ssh.execute_command(
-                copy_sqlnet_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to copy sqlnet.ora: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("✓ sqlnet.ora configured")
-            
-            # Step 16: Restart Oracle listener to apply new configuration
-            if verbose:
-                logger.info("Step 16: Restarting Oracle listener")
-            
-            restart_listener_cmds = [
-                "su - oracle -c 'lsnrctl stop'",
-                "su - oracle -c 'lsnrctl start'"
-            ]
-            
+            logger.info("  ✓ Pluggable databases configured to auto-start")
+
+            # ── listener.ora / tnsnames.ora / sqlnet.ora ─────────────────────
+            net_admin_dir = "$ORACLE_HOME/network/admin"
+            for local_name, remote_tmp, desc in [
+                ("listener.ora", "/tmp/listener.ora", "listener.ora"),
+                ("tnsnames.ora", "/tmp/tnsnames.ora", "tnsnames.ora"),
+                ("sqlnet.ora",   "/tmp/sqlnet.ora",   "sqlnet.ora"),
+            ]:
+                local_path = Path(__file__).parent.parent / "automation_config_files" / local_name
+                if not local_path.exists():
+                    logger.error(f"✗ {local_name} not found at {local_path}")
+                    return False
+                if not _ssh_upload(ssh, local_path, remote_tmp, logger, local_name):
+                    return False
+                copy_cmd = f"su - oracle -c 'cp {remote_tmp} {net_admin_dir}/{local_name} && chmod 644 {net_admin_dir}/{local_name}'"
+                if not _ssh_cmd(ssh, copy_cmd, logger, f"copy {local_name} to network/admin"):
+                    return False
+            logger.info("  ✓ listener.ora / tnsnames.ora / sqlnet.ora configured")
+
+            # ── listener restart ──────────────────────────────────────────────
+            logger.info("  ➜ lsnrctl stop + start")
+            ssh.execute_command("su - oracle -c 'lsnrctl stop'", timeout=120, print_output=False)
             results = ssh.execute_commands(
-                commands=restart_listener_cmds,
-                timeout=120,
-                print_output=verbose,
-                stop_on_error=False  # Continue even if stop fails (listener might not be running)
+                commands=["su - oracle -c 'lsnrctl start'"],
+                timeout=120, print_output=False, stop_on_error=False
             )
-            
-            # Check if start command succeeded (it's the second command)
-            if len(results) > 1 and results[1]['rc'] != 0:
-                logger.error(f"Failed to start Oracle listener: {results[1]['stderr']}")
+            if results and results[0]['rc'] != 0:
+                logger.error(f"✗ Failed to start Oracle listener: {results[0]['stderr'].strip()}")
                 return False
-            
-            if verbose:
-                logger.info("✓ Oracle listener restarted with new configuration")
-            
-            # Step 17: Configure /etc/oratab for auto-start
-            if verbose:
-                logger.info("Step 17: Configuring /etc/oratab for database auto-start")
-            
-            # Change the last field from N to Y to enable auto-start
-            oratab_cmd = "sed -i 's/^ORCLCDB:\\(.*\\):N$/ORCLCDB:\\1:Y/' /etc/oratab"
-            
-            result = ssh.execute_command(
-                oratab_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to configure /etc/oratab: {result['stderr']}")
+            logger.info("  ✓ Oracle listener restarted")
+
+            # ── oratab auto-start ─────────────────────────────────────────────
+            logger.info("  ➜ sed /etc/oratab ORCLCDB:...:N → :Y")
+            if not _ssh_cmd(ssh, "sed -i 's/^ORCLCDB:\\(.*\\):N$/ORCLCDB:\\1:Y/' /etc/oratab",
+                            logger, "configure /etc/oratab"):
                 return False
-            
-            # Verify the change
-            verify_cmd = "grep ORCLCDB /etc/oratab"
-            result = ssh.execute_command(
-                verify_cmd,
-                timeout=30,
-                print_output=verbose
-            )
-            
-            if result['rc'] == 0 and ':Y' in result['stdout']:
-                if verbose:
-                    logger.info("✓ /etc/oratab configured for auto-start")
+            verify = ssh.execute_command("grep ORCLCDB /etc/oratab", timeout=30, print_output=False)
+            if verify['rc'] == 0 and ':Y' in verify['stdout']:
+                logger.info("  ✓ /etc/oratab auto-start enabled")
             else:
-                logger.warning("Could not verify /etc/oratab configuration")
-            
-            # Step 18: Install HR schema with sample data
-            if verbose:
-                logger.info("Step 18: Installing HR schema with sample data")
-            
-            # Path to HR schema archive on raptor
-            hr_archive_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/human_resources.tar.gz"
-            hr_remote_path = "/home/oracle/human_resources.tar.gz"
-            
-            # Upload HR schema archive to sauropod
-            if verbose:
-                logger.info(f"Uploading HR schema archive to sauropod")
-            
-            upload_success = ssh.upload_file(hr_archive_path, hr_remote_path)
-            
-            if not upload_success:
-                logger.error("Failed to upload HR schema archive")
+                logger.warning("  Could not verify /etc/oratab")
+
+            # ── HR schema ─────────────────────────────────────────────────────
+            hr_archive_path  = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/human_resources.tar.gz"
+            hr_remote_path   = "/home/oracle/human_resources.tar.gz"
+
+            if not _ssh_upload(ssh, hr_archive_path, hr_remote_path, logger, "HR schema archive"):
                 return False
-            
-            # Set ownership to oracle user
-            result = ssh.execute_command(
-                f"chown oracle:oinstall {hr_remote_path}",
-                timeout=30,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to set ownership on HR archive: {result['stderr']}")
+            if not _ssh_cmd(ssh, f"chown oracle:oinstall {hr_remote_path}",
+                            logger, "chown HR archive"):
                 return False
-            
-            if verbose:
-                logger.info("✓ HR schema archive uploaded")
-            
-            # Extract HR schema archive
-            if verbose:
-                logger.info("Extracting HR schema archive")
-            
-            extract_cmd = f"su - oracle -c 'cd /home/oracle && tar -xzf {hr_remote_path}'"
-            
-            result = ssh.execute_command(
-                extract_cmd,
-                timeout=120,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to extract HR schema archive: {result['stderr']}")
+
+            logger.info(f"  ➜ tar -xzf {hr_remote_path}")
+            if not _ssh_cmd(ssh, f"su - oracle -c 'cd /home/oracle && tar -xzf {hr_remote_path}'",
+                            logger, "extract HR schema archive", timeout=120):
                 return False
-            
-            if verbose:
-                logger.info("✓ HR schema archive extracted")
-            
-            # Update password in hr_install.sql
-            if verbose:
-                logger.info("Updating password in hr_install.sql")
-            
-            # Escape special characters in password for sed and shell
-            # Replace / with \/ for sed, and escape other special characters
+            logger.info("  ✓ HR schema archive extracted")
+
             escaped_password = root_password.replace('\\', '\\\\').replace('/', '\\/').replace('&', '\\&').replace('!', '\\!')
-            
-            # Use single quotes around sed command to prevent shell interpretation
-            update_password_cmd = f"su - oracle -c 'sed -i \"s/DEFINE pass = .\\+/DEFINE pass = \\x27{escaped_password}\\x27/\" /home/oracle/human_resources/hr_install.sql'"
-            
-            result = ssh.execute_command(
-                update_password_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to update password in hr_install.sql: {result['stderr']}")
+            logger.info("  ➜ sed hr_install.sql: update DEFINE pass")
+            if not _ssh_cmd(ssh,
+                            f"su - oracle -c 'sed -i \"s/DEFINE pass = .\\+/DEFINE pass = \\x27{escaped_password}\\x27/\" /home/oracle/human_resources/hr_install.sql'",
+                            logger, "update password in hr_install.sql"):
                 return False
-            
-            if verbose:
-                logger.info("✓ Password updated in hr_install.sql")
-            
-            # Create HR tablespace
-            if verbose:
-                logger.info("Creating HR tablespace")
-            
-            # First switch to PDB, then create tablespace in separate commands
-            create_tablespace_cmd = """su - oracle -c "export ORACLE_SID=ORCLCDB && sqlplus -s / as sysdba << 'EOF'
+
+            logger.info("  ➜ CREATE TABLESPACE hr_data in ORCLPDB1")
+            if not _ssh_cmd(ssh, """su - oracle -c "export ORACLE_SID=ORCLCDB && sqlplus -s / as sysdba << 'EOF'
 ALTER SESSION SET CONTAINER = ORCLPDB1;
 CREATE TABLESPACE hr_data DATAFILE '/u01/app/oracle/oradata/ORCLCDB/ORCLPDB1/hr_data01.dbf' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE 1G;
 EXIT;
 EOF
-" """
-            
-            result = ssh.execute_command(
-                create_tablespace_cmd,
-                timeout=300,
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to create HR tablespace: {result['stderr']}")
+" """, logger, "create HR tablespace", timeout=300):
                 return False
-            
-            if verbose:
-                logger.info("✓ HR tablespace created")
-            
-            # Install HR schema
-            if verbose:
-                logger.info("Installing HR schema (this may take a few minutes)")
-            
-            # Use heredoc for proper SQL execution
-            install_hr_cmd = """su - oracle -c "export ORACLE_SID=ORCLCDB && cd /home/oracle/human_resources && sqlplus -s / as sysdba << 'EOF'
+            logger.info("  ✓ HR tablespace created")
+
+            logger.info("  ➜ @hr_install.sql in ORCLPDB1 (up to 10 min)")
+            if not _ssh_cmd(ssh, """su - oracle -c "export ORACLE_SID=ORCLCDB && cd /home/oracle/human_resources && sqlplus -s / as sysdba << 'EOF'
 ALTER SESSION SET CONTAINER = ORCLPDB1;
 @hr_install.sql
 EXIT;
 EOF
-" """
-            
-            result = ssh.execute_command(
-                install_hr_cmd,
-                timeout=600,  # 10 minutes
-                print_output=verbose
-            )
-            
-            if result['rc'] != 0:
-                logger.error(f"Failed to install HR schema: {result['stderr']}")
+" """, logger, "install HR schema", timeout=600):
                 return False
-            
-            if verbose:
-                logger.info("✓ HR schema installed")
-            
-            # Step 19: Clean up installation files
-            if verbose:
-                logger.info("Step 19: Cleaning up installation files")
-            
-            cleanup_commands = [
+            logger.info("  ✓ HR schema installed")
+
+            # ── cleanup ───────────────────────────────────────────────────────
+            logger.info("  ➜ rm db_home.zip, human_resources.tar.gz, human_resources/")
+            _ssh_cmds(ssh, [
                 "rm -f /tmp/LINUX.X64_213000_db_home.zip",
                 "su - oracle -c 'rm -f /home/oracle/human_resources.tar.gz'",
-                "su - oracle -c 'rm -rf /home/oracle/human_resources'"
-            ]
-            
-            results = ssh.execute_commands(
-                commands=cleanup_commands,
-                timeout=60,
-                print_output=verbose,
-                stop_on_error=False  # Continue even if some files don't exist
-            )
-            
-            if verbose:
-                logger.info("✓ Installation files cleaned up")
-            
-            # Step 20: Install SQLcl
-            if verbose:
-                logger.info("Step 20: Installing SQLcl (Java 11 should already be installed)")
-            
-            # Download and install SQLcl
-            sqlcl_install_commands = [
+                "su - oracle -c 'rm -rf /home/oracle/human_resources'",
+            ], logger, "cleanup installation files", stop_on_error=False)
+
+            # ── SQLcl ─────────────────────────────────────────────────────────
+            logger.info("  ➜ curl sqlcl-latest.zip + unzip /opt/sqlcl")
+            failed_sqlcl = not _ssh_cmds(ssh, [
                 "cd /tmp",
                 "curl -L -o sqlcl-latest.zip https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip",
                 "mkdir -p /opt/sqlcl",
                 "unzip -q -o sqlcl-latest.zip -d /opt/sqlcl",
-                "rm -f /tmp/sqlcl-latest.zip"
-            ]
-            
-            results = ssh.execute_commands(
-                commands=sqlcl_install_commands,
-                timeout=600,
-                print_output=verbose,
-                stop_on_error=True
-            )
-            
-            failed = [r for r in results if r['rc'] != 0]
-            if failed:
-                logger.warning("Failed to install SQLcl, but continuing...")
+                "rm -f /tmp/sqlcl-latest.zip",
+            ], logger, "install SQLcl", timeout=600)
+            if failed_sqlcl:
+                logger.warning("  SQLcl installation failed — continuing")
             else:
-                if verbose:
-                    logger.info("✓ SQLcl installed")
-            
-            # Step 21: Configure SQLcl for oracle user
-            if verbose:
-                logger.info("Step 21: Configuring SQLcl for oracle user")
-            
-            # SQLcl PATH and aliases already configured in Step 4
-            if verbose:
-                logger.info("✓ SQLcl configuration already in oracle's .bashrc (configured in Step 4)")
-            
-            # Create .sqlcl directory and upload login.sql
-            sqlcl_setup_commands = [
-                "su - oracle -c 'mkdir -p ~/.sqlcl'"
-            ]
-            
-            results = ssh.execute_commands(
-                commands=sqlcl_setup_commands,
-                timeout=60,
-                print_output=verbose,
-                stop_on_error=False
-            )
-            
-            # Upload login.sql configuration
+                logger.info("  ✓ SQLcl installed")
+
+            ssh.execute_command("su - oracle -c 'mkdir -p ~/.sqlcl'", timeout=60, print_output=False)
             login_sql_path = Path(__file__).parent.parent / "automation_config_files" / "sqlcl_login.sql"
-            
             if login_sql_path.exists():
-                remote_login_sql = "/tmp/sqlcl_login.sql"
-                upload_success = ssh.upload_file(str(login_sql_path), remote_login_sql)
-                
-                if upload_success:
-                    # Copy to oracle's .sqlcl directory
-                    copy_cmd = "su - oracle -c 'cp /tmp/sqlcl_login.sql ~/.sqlcl/login.sql && chmod 644 ~/.sqlcl/login.sql'"
-                    result = ssh.execute_command(
-                        copy_cmd,
-                        timeout=60,
-                        print_output=verbose
-                    )
-                    
-                    if result['rc'] == 0:
-                        if verbose:
-                            logger.info("✓ SQLcl login.sql configured")
-                    else:
-                        logger.warning("Failed to configure SQLcl login.sql")
+                if ssh.upload_file(str(login_sql_path), "/tmp/sqlcl_login.sql"):
+                    if _ssh_cmd(ssh, "su - oracle -c 'cp /tmp/sqlcl_login.sql ~/.sqlcl/login.sql && chmod 644 ~/.sqlcl/login.sql'",
+                                logger, "configure SQLcl login.sql"):
+                        logger.info("  ✓ SQLcl login.sql configured")
                 else:
-                    logger.warning("Failed to upload SQLcl login.sql")
+                    logger.warning("  Failed to upload SQLcl login.sql")
             else:
-                logger.warning(f"SQLcl login.sql not found at {login_sql_path}")
-            
-            # Configure .inputrc for proper Home/End key behavior
-            if verbose:
-                logger.info("Configuring readline for proper Home/End key behavior")
-            
-            inputrc_cmd = """su - oracle -c "cat > ~/.inputrc << 'EOF'
+                logger.warning(f"  SQLcl login.sql not found at {login_sql_path}")
+
+            logger.info("  ➜ write oracle ~/.inputrc (readline meta-flag)")
+            result = ssh.execute_command("""su - oracle -c "cat > ~/.inputrc << 'EOF'
 # Basic readline settings
 set meta-flag on
 set input-meta on
 set convert-meta off
 EOF
-" """
-            
-            result = ssh.execute_command(
-                inputrc_cmd,
-                timeout=60,
-                print_output=verbose
-            )
-            
+" """, timeout=60, print_output=False)
             if result['rc'] == 0:
-                if verbose:
-                    logger.info("✓ Readline configuration (.inputrc) created")
+                logger.info("  ✓ ~/.inputrc created")
             else:
-                logger.warning("Failed to create .inputrc configuration")
-            
-            if verbose:
-                logger.info("=" * 80)
-                logger.info("Configuring SSL/TLS support for Oracle")
-                logger.info("=" * 80)
-            
-            oracle_home = "/u01/app/oracle/product/21c/dbhome_1"
-            wallet_dir = f"{oracle_home}/wallet"
-            client_wallet_dir = f"{oracle_home}/client_wallet"
-            orapki_bin = f"{oracle_home}/bin/orapki"
-            
-            if verbose:
-                logger.info("Step 1: Creating server wallet")
-            result = ssh.execute_command(
-                f"su - oracle -c 'mkdir -p {wallet_dir}'",
-                timeout=30,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to create server wallet directory: {result['stderr']}")
-                return False
-            
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet create -wallet {wallet_dir} -auto_login_local -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to create server wallet: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("Step 2: Adding self-signed certificate to server wallet")
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to add certificate to server wallet: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("Step 3: Creating client wallet")
-            result = ssh.execute_command(
-                f"su - oracle -c 'mkdir -p {client_wallet_dir}'",
-                timeout=30,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to create client wallet directory: {result['stderr']}")
-                return False
-            
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet create -wallet {client_wallet_dir} -auto_login_local -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to create client wallet: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("Step 4: Adding self-signed certificate to client wallet")
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet add -wallet {client_wallet_dir} -dn 'CN=client' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to add certificate to client wallet: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("Step 5: Exporting public keys")
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet export -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -cert /tmp/server-cert.crt -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to export server certificate: {result['stderr']}")
-                return False
-            
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet export -wallet {client_wallet_dir} -dn 'CN=client' -cert /tmp/client-cert.crt -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to export client certificate: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("Step 6: Importing public keys (cross-trust)")
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet add -wallet {client_wallet_dir} -trusted_cert -cert /tmp/server-cert.crt -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to import server cert to client wallet: {result['stderr']}")
-                return False
-            
-            result = ssh.execute_command(
-                f"su - oracle -c \"{orapki_bin} wallet add -wallet {wallet_dir} -trusted_cert -cert /tmp/client-cert.crt -pwd '{root_password}'\"",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to import client cert to server wallet: {result['stderr']}")
-                return False
-            
-            result = ssh.execute_command(
-                "su - oracle -c 'rm -f /tmp/server-cert.crt /tmp/client-cert.crt'",
-                timeout=30,
-                print_output=verbose
-            )
-            
-            if verbose:
-                logger.info("Step 7: Updating listener configuration for SSL")
-            
-            listener_source = "/opt/guardium_tz_bootcamp_automation/automation_config_files/listener.ora"
-            listener_dest = f"{oracle_home}/network/admin/listener.ora"
-            
-            if verbose:
-                logger.info("Uploading listener.ora from raptor to sauropod")
-            
-            upload_success = ssh.upload_file(listener_source, listener_dest)
-            if not upload_success:
-                logger.error("Failed to upload listener.ora")
-                return False
-            
-            tnsnames_source = "/opt/guardium_tz_bootcamp_automation/automation_config_files/tnsnames.ora"
-            tnsnames_dest = f"{oracle_home}/network/admin/tnsnames.ora"
-            
-            if verbose:
-                logger.info("Uploading tnsnames.ora from raptor to sauropod")
-            
-            upload_success = ssh.upload_file(tnsnames_source, tnsnames_dest)
-            if not upload_success:
-                logger.error("Failed to upload tnsnames.ora")
-                return False
-            
-            sqlnet_source = "/opt/guardium_tz_bootcamp_automation/automation_config_files/sqlnet.ora"
-            sqlnet_dest = f"{oracle_home}/network/admin/sqlnet.ora"
-            
-            if verbose:
-                logger.info("Uploading sqlnet.ora from raptor to sauropod")
-            
-            upload_success = ssh.upload_file(sqlnet_source, sqlnet_dest)
-            if not upload_success:
-                logger.error("Failed to upload sqlnet.ora")
-                return False
-            
-            result = ssh.execute_command(
-                f"chown -R oracle:oinstall {oracle_home}/network/admin/",
-                timeout=30,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.error(f"Failed to set ownership on network admin files: {result['stderr']}")
-                return False
-            
-            if verbose:
-                logger.info("Step 8: Restarting listener")
-            result = ssh.execute_command(
-                f"su - oracle -c '{oracle_home}/bin/lsnrctl stop'",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.warning(f"Listener stop returned non-zero: {result['stderr']}")
+                logger.warning("  Failed to create ~/.inputrc")
 
-            result = ssh.execute_command(
-                f"su - oracle -c '{oracle_home}/bin/lsnrctl start'",
-                timeout=60,
-                print_output=verbose
-            )
-            if result['rc'] != 0:
-                logger.warning(f"Listener start returned non-zero: {result['stderr']}")
+            # ── SSL/TLS wallets ───────────────────────────────────────────────
+            _header(logger, "Configuring SSL/TLS for Oracle")
 
-            if verbose:
-                logger.info("Step 9: Registering database with listener")
+            oracle_home      = "/u01/app/oracle/product/21c/dbhome_1"
+            wallet_dir       = f"{oracle_home}/wallet"
+            client_wallet_dir= f"{oracle_home}/client_wallet"
+            orapki           = f"{oracle_home}/bin/orapki"
+
+            for step_desc, cmd, timeout in [
+                ("mkdir server wallet dir",
+                 f"su - oracle -c 'mkdir -p {wallet_dir}'", 30),
+                ("orapki wallet create (server)",
+                 f"su - oracle -c \"{orapki} wallet create -wallet {wallet_dir} -auto_login_local -pwd '{root_password}'\"", 60),
+                ("orapki wallet add CN=sauropod (server cert)",
+                 f"su - oracle -c \"{orapki} wallet add -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"", 60),
+                ("mkdir client wallet dir",
+                 f"su - oracle -c 'mkdir -p {client_wallet_dir}'", 30),
+                ("orapki wallet create (client)",
+                 f"su - oracle -c \"{orapki} wallet create -wallet {client_wallet_dir} -auto_login_local -pwd '{root_password}'\"", 60),
+                ("orapki wallet add CN=client (client cert)",
+                 f"su - oracle -c \"{orapki} wallet add -wallet {client_wallet_dir} -dn 'CN=client' -keysize 2048 -self_signed -validity 3650 -pwd '{root_password}'\"", 60),
+                ("orapki export server cert → /tmp/server-cert.crt",
+                 f"su - oracle -c \"{orapki} wallet export -wallet {wallet_dir} -dn 'CN=sauropod.demo.guardium' -cert /tmp/server-cert.crt -pwd '{root_password}'\"", 60),
+                ("orapki export client cert → /tmp/client-cert.crt",
+                 f"su - oracle -c \"{orapki} wallet export -wallet {client_wallet_dir} -dn 'CN=client' -cert /tmp/client-cert.crt -pwd '{root_password}'\"", 60),
+                ("orapki add server-cert to client wallet (cross-trust)",
+                 f"su - oracle -c \"{orapki} wallet add -wallet {client_wallet_dir} -trusted_cert -cert /tmp/server-cert.crt -pwd '{root_password}'\"", 60),
+                ("orapki add client-cert to server wallet (cross-trust)",
+                 f"su - oracle -c \"{orapki} wallet add -wallet {wallet_dir} -trusted_cert -cert /tmp/client-cert.crt -pwd '{root_password}'\"", 60),
+            ]:
+                logger.info(f"  ➜ {step_desc}")
+                if not _ssh_cmd(ssh, cmd, logger, step_desc, timeout=timeout):
+                    return False
+
+            ssh.execute_command("su - oracle -c 'rm -f /tmp/server-cert.crt /tmp/client-cert.crt'",
+                                timeout=30, print_output=False)
+            logger.info("  ✓ SSL/TLS wallets created and cross-trusted")
+
+            # ── upload network/admin files for SSL ────────────────────────────
+            net_admin = f"{oracle_home}/network/admin"
+            for src, dest_name in [
+                ("/opt/guardium_tz_bootcamp_automation/automation_config_files/listener.ora", "listener.ora"),
+                ("/opt/guardium_tz_bootcamp_automation/automation_config_files/tnsnames.ora", "tnsnames.ora"),
+                ("/opt/guardium_tz_bootcamp_automation/automation_config_files/sqlnet.ora",   "sqlnet.ora"),
+            ]:
+                if not _ssh_upload(ssh, src, f"{net_admin}/{dest_name}", logger, dest_name):
+                    return False
+            if not _ssh_cmd(ssh, f"chown -R oracle:oinstall {net_admin}/",
+                            logger, "chown network/admin"):
+                return False
+
+            logger.info("  ➜ lsnrctl stop + start (SSL config)")
+            ssh.execute_command(f"su - oracle -c '{oracle_home}/bin/lsnrctl stop'", timeout=60, print_output=False)
+            result = ssh.execute_command(f"su - oracle -c '{oracle_home}/bin/lsnrctl start'", timeout=60, print_output=False)
+            if result['rc'] != 0:
+                logger.warning(f"  lsnrctl start returned non-zero: {result['stderr'].strip()}")
+
+            logger.info("  ➜ ALTER SYSTEM SET local_listener + REGISTER")
             result = ssh.execute_command(
                 f"su - oracle -c \"echo -e 'ALTER SYSTEM SET local_listener=\\\"(ADDRESS=(PROTOCOL=TCP)(HOST=sauropod.demo.guardium)(PORT=1521))\\\" SCOPE=BOTH;\\nALTER SYSTEM REGISTER;\\nexit' | {oracle_home}/bin/sqlplus / as sysdba\"",
-                timeout=60,
-                print_output=verbose
+                timeout=60, print_output=False
             )
             if result['rc'] != 0:
-                logger.warning(f"ALTER SYSTEM REGISTER returned non-zero: {result['stderr']}")
-            
-            if verbose:
-                logger.info("=" * 80)
-                logger.info("Oracle Database 21c installation completed successfully!")
-                logger.info("Database: ORCLCDB")
-                logger.info("PDB: ORCLPDB1")
-                logger.info(f"Passwords: {root_password}")
-                logger.info("Network Configuration:")
-                logger.info("  - listener.ora: TCP on port 1521, TCPS on port 2484")
-                logger.info("  - tnsnames.ora: ORCLPDB1 (TCP), ORCLPDB1_SSL (TCPS)")
-                logger.info("  - sqlnet.ora: SSL/TLS enabled with wallet")
-                logger.info("SSL/TLS:")
-                logger.info(f"  - Server wallet: {wallet_dir}")
-                logger.info(f"  - Client wallet: {client_wallet_dir}")
-                logger.info("  - Server CN: sauropod.demo.guardium")
-                logger.info("  - Client CN: client")
-                logger.info("Auto-start: Enabled in /etc/oratab")
-                logger.info("Sample Data: HR schema installed in hr_data tablespace")
-                logger.info("Tools: SQLcl installed and configured")
-                logger.info("=" * 80)
-            
+                logger.warning(f"  ALTER SYSTEM REGISTER returned non-zero: {result['stderr'].strip()}")
+
+            logger.info(
+                f"✓ Oracle 21c deployment completed — DB: ORCLCDB, PDB: ORCLPDB1, "
+                f"SSL: on (wallet: {wallet_dir}), HR schema: installed, SQLcl: installed"
+            )
             return True
-            
+
     except Exception as e:
-        logger.error(f"Error during Oracle deployment: {e}")
+        logger.error(f"✗ Oracle deployment error: {e}")
         return False
 
 
@@ -1027,15 +440,11 @@ def setup_oracle_container_on_sauropod(
     image_source_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_db_21c_image_with_oua.tar.gz",
     debug: bool = False
 ) -> bool:
-    import os
-
-    logger.info("=" * 80)
-    logger.info("SETUP ORACLE CONTAINER ON SAUROPOD")
-    logger.info("=" * 80)
+    _header(logger, "Setup Oracle container on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
-        logger.error("Sauropod IP not found in machines config")
+        logger.error("✗ sauropod IP not found in machines config")
         return False
 
     ssh_config = config.get('ssh', {})
@@ -1044,7 +453,7 @@ def setup_oracle_container_on_sauropod(
 
     root_password = config.get_custom_variable('pwd')
     if not root_password:
-        logger.error("Root password (pwd) not found in custom_variables")
+        logger.error("✗ pwd not found in custom_variables")
         return False
 
     image_filename = os.path.basename(image_source_path)
@@ -1053,66 +462,53 @@ def setup_oracle_container_on_sauropod(
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
     try:
-        logger.info(f"\n➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        logger.info(f"  ➜ SSH {ssh_username}@{sauropod_ip}:{ssh_port}")
         if not ssh.connect():
-            logger.error("Failed to connect to sauropod")
+            logger.error("✗ Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("  ✓ Connected to sauropod")
 
-        result = ssh.execute_command("mkdir -p /opt/lab_files", print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"Failed to create directory: {result['stderr']}")
+        logger.info("  ➜ mkdir -p /opt/lab_files")
+        if not _ssh_cmd(ssh, "mkdir -p /opt/lab_files", logger, "create /opt/lab_files"):
             return False
 
-        logger.info(f"\n➜ Uploading {image_filename} to sauropod...")
-        logger.info(f"  Source: {image_source_path}")
-        logger.info(f"  Destination: {remote_image_path}")
-        if not ssh.upload_file(image_source_path, remote_image_path):
-            logger.error(f"Failed to upload {image_filename}")
+        if not _ssh_upload(ssh, image_source_path, remote_image_path, logger, image_filename):
             return False
-        logger.info("✓ Image uploaded")
 
-        logger.info("\n➜ Loading image into podman...")
-        result = ssh.execute_command(
-            f"cd /opt/lab_files && gunzip -c {image_filename} | podman load",
-            timeout=600, print_output=verbose
-        )
-        if result['rc'] != 0:
-            logger.error(f"podman load failed: {result['stderr']}")
+        logger.info(f"  ➜ gunzip -c {image_filename} | podman load")
+        if not _ssh_cmd(ssh, f"cd /opt/lab_files && gunzip -c {image_filename} | podman load",
+                        logger, "podman load Oracle image", timeout=600):
             return False
-        logger.info("✓ Oracle container image loaded")
+        logger.info("  ✓ Oracle container image loaded")
 
-        logger.info("\n➜ Configuring oradata directory...")
+        logger.info("  ➜ mkdir /opt/oradata + chown 54321 + chmod 775 + restorecon")
         for cmd in [
             "mkdir -p /opt/oradata",
             "chown -R 54321:54321 /opt/oradata",
             "chmod -R 775 /opt/oradata",
             "restorecon -Rv /opt/oradata",
         ]:
-            result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"Failed: {cmd} — {result['stderr']}")
+            if not _ssh_cmd(ssh, cmd, logger, cmd, timeout=60):
                 return False
 
-        import time
         semanage_cmd = "semanage fcontext -a -t container_file_t '/opt/oradata(/.*)?' "
+        logger.info(f"  ➜ {semanage_cmd.strip()}")
         for attempt in range(1, 11):
-            result = ssh.execute_command(semanage_cmd, timeout=60, print_output=verbose)
+            result = ssh.execute_command(semanage_cmd, timeout=60, print_output=False)
             if result['rc'] == 0:
                 break
             if 'Resource temporarily unavailable' in result['stderr'] or 'Could not get' in result['stderr']:
-                logger.warning(f"semanage lock busy (attempt {attempt}/10), retrying in 30s...")
+                logger.warning(f"  semanage lock busy (attempt {attempt}/10), retrying in 30s...")
                 time.sleep(30)
             else:
-                logger.error(f"semanage failed: {result['stderr']}")
+                logger.error(f"✗ semanage failed: {result['stderr'].strip()}")
                 return False
         else:
-            logger.error("semanage failed after 10 attempts (lock busy)")
+            logger.error("✗ semanage failed after 10 attempts (lock busy)")
             return False
+        logger.info("  ✓ oradata directory configured")
 
-        logger.info("✓ oradata directory configured")
-
-        logger.info("\n➜ Starting Oracle container...")
+        logger.info("  ➜ podman run oracle/database:21.3.0-ee-oua")
         run_cmd = (
             f"podman run -d --restart unless-stopped --name oracle_db_21c"
             f" -p 1522:1521 -p 5501:5500"
@@ -1122,28 +518,24 @@ def setup_oracle_container_on_sauropod(
             f" -e ORACLE_PWD='{root_password}'"
             f" oracle/database:21.3.0-ee-oua"
         )
-        result = ssh.execute_command(run_cmd, timeout=60, print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"podman run failed: {result['stderr']}")
+        if not _ssh_cmd(ssh, run_cmd, logger, "podman run Oracle container"):
             return False
-        logger.info("✓ Oracle container started")
+        logger.info("  ✓ Oracle container started")
 
-        logger.info("\n➜ Removing image archive...")
-        result = ssh.execute_command(f"rm -f {remote_image_path}", print_output=verbose)
+        logger.info(f"  ➜ rm -f {remote_image_path}")
+        result = ssh.execute_command(f"rm -f {remote_image_path}", print_output=False)
         if result['rc'] != 0:
-            logger.warning(f"Failed to remove image archive: {result['stderr']}")
+            logger.warning(f"  Failed to remove image archive: {result['stderr'].strip()}")
         else:
-            logger.info("✓ Image archive removed")
+            logger.info("  ✓ Image archive removed")
 
     except Exception as e:
-        logger.error(f"Error during Oracle container setup: {e}")
+        logger.error(f"✗ Oracle container setup error: {e}")
         return False
     finally:
         ssh.disconnect()
 
-    logger.info("=" * 80)
-    logger.info("✓ Oracle container image loaded successfully on sauropod")
-    logger.info("=" * 80)
+    logger.info("✓ Oracle container setup completed on sauropod")
     return True
 
 

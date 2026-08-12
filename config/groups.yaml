@@ -167,7 +167,7 @@ groups:
       - name: setup_oracle_container_on_sauropod
         function: setup_oracle_container_on_sauropod
         module: tasks.deploy_oracle
-        description: "Copy Oracle 21c container image from raptor to sauropod and load into podman"
+        description: "Deploy Oracle 21c in the container"
         args:
           image_source_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_db_21c_image_with_oua.tar.gz"
           debug: false
