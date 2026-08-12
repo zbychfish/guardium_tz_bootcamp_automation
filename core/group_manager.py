@@ -57,18 +57,11 @@ class GroupManager:
         """
         return self.groups.get(group_name)
     
-    def get_auto_execute_groups(self) -> List[str]:
-        """Get list of groups that should be auto-executed (before marker)."""
+    def get_groups_for_deployment(self, deployment_type: str) -> List[str]:
+        """Get list of groups matching the given deployment_type in their deployed_with list."""
         return [
             name for name, info in self.groups.items()
-            if info.get('auto_execute', False)
-        ]
-    
-    def get_manual_groups(self) -> List[str]:
-        """Get list of groups that are executed manually (after marker)."""
-        return [
-            name for name, info in self.groups.items()
-            if not info.get('auto_execute', False)
+            if deployment_type in info.get('deployed_with', [])
         ]
     
     def get_group_stages(self, group_name: str) -> List[Dict[str, str]]:
@@ -238,11 +231,12 @@ class GroupManager:
             if not group_info:
                 continue
             
-            auto = "AUTO" if group_info.get('auto_execute') else "MANUAL"
+            deployed_with = group_info.get('deployed_with', [])
+            deployed_str = ', '.join(deployed_with) if deployed_with else 'manual'
             dependencies = self.get_group_dependencies(group_name)
             deps_str = f" (depends on: {', '.join(dependencies)})" if dependencies else ""
-            
-            print(f"\n[{auto}] {group_name}: {group_info.get('name')}{deps_str}")
+
+            print(f"\n[{deployed_str}] {group_name}: {group_info.get('name')}{deps_str}")
             print(f"  Description: {group_info.get('description')}")
             print(f"  Stages:")
             

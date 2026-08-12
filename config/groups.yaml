@@ -6,7 +6,7 @@ groups:
   initial_preparation:
     name: "Initial Preparation"
     description: "Basic system setup and database deployments before marker creation"
-    auto_execute: true  # Executed automatically before marker
+    deployed_with: [init]
     dependencies: []  # No dependencies - this is the first group
     stages:
       - name: setup_hosts
@@ -142,7 +142,7 @@ groups:
   other_preparations:
     name: "Other general tasks, standard database installation"
     description: "Bootcamp machines preparation"
-    auto_execute: true
+    deployed_with: [init]
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
@@ -202,7 +202,7 @@ groups:
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
-    auto_execute: true  # Executed on demand
+    deployed_with: [appliances]
     dependencies: [initial_preparation, other_preparations]  # Requires initial_preparation to be completed
     stages:
       - name: reset_cli_password_all
@@ -347,7 +347,7 @@ groups:
   gim_lab:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"
-    auto_execute: true  # Executed on demand
+    deployed_with: [gim]
     dependencies: [setup_appliances]  # Requires initial_preparation and setup_appliances
     stages:
      
@@ -365,7 +365,7 @@ groups:
   atap_lab:
     name: "ATAP Lab"
     description: "Bootcamp state after ATAP lab"
-    auto_execute: true  # Executed after marker, on demand
+    deployed_with: [agents]
     dependencies: [gim_lab]  # Requires initial_preparation to be completed
     stages:
       
@@ -438,7 +438,7 @@ groups:
   exit_lab:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
-    auto_execute: true  # Executed on demand
+    deployed_with: [agents]
     dependencies: [atap_lab]
     stages:
       - name: configure_db2_exit
@@ -457,7 +457,7 @@ groups:
   uc1_lab:
     name: "UC 1.0 lab"
     description: "Universal Connector 1.0 lab setup"
-    auto_execute: false  # Executed on demand
+    deployed_with: []
     dependencies: [exit_lab]
     stages:
       - name: install_filebeat_on_sauropod
@@ -472,7 +472,7 @@ groups:
   etap_lab:
     name: "ETAP Lab"
     description: "Setup raptor for External TAP (ETAP) deployment"
-    auto_execute: true  # Executed on demand
+    deployed_with: [agents]
     dependencies: [exit_lab]
     stages:
       - name: setup_raptor_to_deploy_etap
@@ -515,7 +515,7 @@ groups:
   va_basics:
     name: "VA Basics Lab"
     description: "Enable Vulnerability Assessment feature and basic VA lab setup"
-    auto_execute: true
+    deployed_with: [standard_demo]
     dependencies: [etap_lab]
     stages:
       
@@ -589,7 +589,7 @@ groups:
   winstap_lab:
     name: "WinSTAP Lab"
     description: "Windows STAP lab - prepare ceratops for GIM/STAP installation"
-    auto_execute: true
+    deployed_with: []
     dependencies: [va_basics]
     stages:
       - name: extract_zip_on_ceratops
@@ -628,7 +628,7 @@ groups:
   fam_lab:
     name: "FAM Lab"
     description: "File Activity Monitoring lab - configure FAM on raptor"
-    auto_execute: false
+    deployed_with: []
     dependencies: [winstap_lab]
     stages:
       - name: configure_fam_on_raptor
@@ -677,7 +677,7 @@ groups:
   oracle_lab:
     name: "Oracle Lab"
     description: "Install GIM and STAP on sauropod for Oracle monitoring"
-    auto_execute: true
+    deployed_with: [standard_demo]
     dependencies: [winstap_lab]
     stages:
       - name: install_stap_on_sauropod
@@ -750,7 +750,7 @@ groups:
   oracle_lab_uc2:
     name: "Oracle Lab UC2"
     description: "Deploy Universal Connector 2.0 for Oracle container on sauropod"
-    auto_execute: false
+    deployed_with: []
     dependencies: [oracle_lab]
     stages:
       - name: run_uc_and_setup_kafka_node
@@ -819,7 +819,7 @@ groups:
   policies_reports_part1:
     name: "Policies and Reports"
     description: "Basics - Policies and Reports"
-    auto_execute: true
+    deployed_with: [standard_demo]
     dependencies: [oracle_lab]
     stages:
       - name: stop_raptor_databases
@@ -875,7 +875,7 @@ groups:
   va_api:
     name: "VA API"
     description: "Import VA dashboard and Oracle security assessment definitions"
-    auto_execute: true
+    deployed_with: [standard_demo]
     dependencies: [policies_reports_part1]
     stages:
       - name: import_va_api_definitions
@@ -899,7 +899,7 @@ groups:
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
-    auto_execute: false
+    deployed_with: []
     dependencies: [va_api]
     stages:
       - name: setup_minio_on_raptor
@@ -985,7 +985,7 @@ groups:
   edge_lab:
     name: "Edge Lab"
     description: "Install Edge patch on CM and configure Edge features"
-    auto_execute: false
+    deployed_with: []
     dependencies: [ltr_lab]
     stages:
       - name: prepare_cm_for_edge_patching  

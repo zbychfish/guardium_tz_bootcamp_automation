@@ -385,8 +385,12 @@ class AutomationOrchestrator:
             groups_to_run = specific_groups
             mode = f"SPECIFIC GROUPS: {', '.join(specific_groups)}"
         else:
-            groups_to_run = self.group_manager.get_auto_execute_groups()
-            mode = "AUTO-EXECUTE GROUPS (before marker)"
+            deployment_type = self.config.get_custom_variable('deployment_type') or self.config.get('deployment.deployment_type', '')
+            if not deployment_type:
+                self.logger.error("deployment_type not found in custom_variables or deployment config")
+                return False
+            groups_to_run = self.group_manager.get_groups_for_deployment(deployment_type)
+            mode = f"DEPLOYMENT TYPE: {deployment_type} ({len(groups_to_run)} groups)"
         
         self.logger.info("=" * 80)
         self.logger.info("Starting automation execution")
