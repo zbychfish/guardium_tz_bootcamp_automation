@@ -662,14 +662,13 @@ def create_demo_user_on_ceratops(config, logger, verbose=True,
     logger.info("CREATE DEMO USER ON CERATOPS (WINDOWS)")
     logger.info("=" * 80)
 
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("✗ pwd not found in custom_variables")
-        return False
-
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
             if ssh is None:
+                return False
+            pwd = config.get_custom_variable('pwd')
+            if not pwd:
+                logger.error("✗ pwd not found in custom_variables")
                 return False
             commands = [
                 f'net user {demo_username} "{pwd}" /add',
@@ -979,14 +978,13 @@ def configure_mssql_on_ceratops(config, logger, verbose=True,
     logger.info("CONFIGURE MSSQL ON CERATOPS (WINDOWS)")
     logger.info("=" * 80)
 
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("✗ pwd not found in custom_variables")
-        return False
-
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
             if ssh is None:
+                return False
+            pwd = config.get_custom_variable('pwd')
+            if not pwd:
+                logger.error("✗ pwd not found in custom_variables")
                 return False
             logger.info("  ➜ Checking MSSQLSERVER service state...")
             result = ssh.execute_command(
@@ -1039,14 +1037,13 @@ def restore_adventureworks_on_ceratops(config, logger, verbose=True,
     logger.info("RESTORE ADVENTUREWORKS ON CERATOPS (MSSQL)")
     logger.info("=" * 80)
 
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("✗ pwd not found in custom_variables")
-        return False
-
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
             if ssh is None:
+                return False
+            pwd = config.get_custom_variable('pwd')
+            if not pwd:
+                logger.error("✗ pwd not found in custom_variables")
                 return False
             restore_sql = (
                 f"RESTORE DATABASE AdventureWorks2019 FROM DISK = N'{bak_file}' "
@@ -1080,14 +1077,13 @@ def setup_fam_files_on_ceratops(config, logger, verbose=True,
     logger.info("FAM FILES SETUP ON CERATOPS")
     logger.info("=" * 80)
 
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("✗ pwd not found in custom_variables")
-        return False
-
     try:
         with _ceratops_ssh(config, logger, ceratops_machine, ssh_username) as ssh:
             if ssh is None:
+                return False
+            pwd = config.get_custom_variable('pwd')
+            if not pwd:
+                logger.error("✗ pwd not found in custom_variables")
                 return False
             csv_filename = os.path.basename(csv_src)
             txt_filename = os.path.basename(txt_src)
