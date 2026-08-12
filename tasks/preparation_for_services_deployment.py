@@ -16,7 +16,7 @@ from core import execute_commands, download_and_extract, ConfigLoader
 from core.ssh_client import SSHClient
 
 
-def update_system_packages(config: ConfigLoader, logger) -> bool:
+def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -> bool:
     logger.info("Updating system packages (excluding kernel)")
     if not execute_commands(["dnf update --exclude=kernel* -y"], logger):
         logger.error("System update failed")
