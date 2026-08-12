@@ -23,7 +23,7 @@ def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -
         return False
     logger.info("✓ System packages updated successfully")
 
-    logger.info("Step 5: Installing required packages on raptor")
+    logger.info("Installing required packages on raptor")
     if not execute_commands(
         ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat"],
         logger
@@ -35,25 +35,16 @@ def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -
 
 
 def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Preparing upload content")
-        logger.info("=" * 80)
+    logger.info("=" * 80)
+    logger.info("Preparing upload content")
+    logger.info("=" * 80)
+    logger.info("Creating necessary directories")
 
-    # Step 2: Create necessary directories
-    if verbose:
-        logger.info("Step 2: Creating necessary directories")
-
-    if not execute_commands(["mkdir -p /opt/guardium_tz_bootcamp_automation/upload"], logger, verbose):
+    if not execute_commands(["mkdir -p /opt/guardium_tz_bootcamp_automation/upload"], logger):
         logger.error("Failed to create upload directory")
         return False
-
-    if verbose:
-        logger.info("✓ Directories created successfully")
-
-    # Step 3: Download source_files from IBM COS
-    if verbose:
-        logger.info("Step 3: Downloading source_files from IBM COS")
+    logger.info("✓ Directories created successfully")
+    logger.info("Downloading source_files from IBM COS")
 
     api_id   = config.get_custom_variable('s3_source_api_id')
     api_key  = config.get_custom_variable('s3_source_api_key')
@@ -77,7 +68,6 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
         )
 
         local_base = "/opt/guardium_tz_bootcamp_automation/upload/source_files/"
-
         paginator = cos.get_paginator("list_objects_v2")
         downloaded = 0
         for page in paginator.paginate(Bucket=bucket):
@@ -85,32 +75,22 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
                 key = obj["Key"]
                 local_path = os.path.join(local_base, key)
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                if verbose:
-                    logger.info(f"  ↓ {key}")
+                logger.info(f"  ↓ {key}")
                 cos.download_file(bucket, key, local_path)
                 downloaded += 1
 
-        if verbose:
-            logger.info(f"✓ Downloaded {downloaded} file(s) from COS to {local_base}")
-
+        logger.info(f"✓ Downloaded {downloaded} file(s) from COS to {local_base}")
     except Exception as e:
         logger.error(f"Failed to download from IBM COS: {e}")
         return False
-
-    # Step 4: Clone guardium_notes_dbtraffic repository
-    if verbose:
-        logger.info("Step 4: Cloning guardium_notes_dbtraffic repository")
-
+    logger.info("Cloning guardium_notes_dbtraffic repository")
     if not execute_commands(
         ["cd /opt/guardium_tz_bootcamp_automation/upload && rm -rf guardium_notes_dbtraffic && git clone https://github.com/zbychfish/guardium_notes_dbtraffic.git"],
-        logger, verbose
+        logger
     ):
         logger.error("Failed to clone guardium_notes_dbtraffic repository")
         return False
-
-    if verbose:
-        logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
-
+    logger.info("✓ guardium_notes_dbtraffic repository cloned successfully")
     return True
 
 
