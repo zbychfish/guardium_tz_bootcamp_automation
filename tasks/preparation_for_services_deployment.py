@@ -97,8 +97,7 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
 
 
 def configure_dbtraffic(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Step 6: Configuring guardium_notes_dbtraffic")
+    logger.info("Configuring guardium_notes_dbtraffic")
 
     root_password = config.get_custom_variable("pwd")
     if not root_password:
@@ -161,8 +160,7 @@ EOF""",
         logger.error("Failed to configure guardium_notes_dbtraffic")
         return False
 
-    if verbose:
-        logger.info("✓ guardium_notes_dbtraffic configured on raptor")
+    logger.info("✓ guardium_notes_dbtraffic configured on raptor")
     return True
 
 
