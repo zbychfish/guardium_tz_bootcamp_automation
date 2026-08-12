@@ -1052,11 +1052,13 @@ def import_definitions_files(
             
             logger.info(f"\n➜ Importing: {filename}")
             result = api.import_definitions(file_path=file_path)
-            
+
             if debug:
                 logger.info(f"  API Response: {result}")
-            
+
             logger.info(f"✓ {filename} imported successfully")
+            logger.info("⌛ Waiting 30s for import to process...")
+            time.sleep(30)
         
         return True
         
