@@ -56,6 +56,8 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
         return False
 
     try:
+        import warnings
+        warnings.filterwarnings("ignore", message=".*Boto3 will no longer support.*")
         import boto3
         from botocore.client import Config
 
