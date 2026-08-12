@@ -16,26 +16,21 @@ from core import execute_commands, download_and_extract, ConfigLoader
 from core.ssh_client import SSHClient
 
 
-def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("Updating system packages (excluding kernel)")
-    if not execute_commands(["dnf update --exclude=kernel* -y"], logger, verbose):
+def update_system_packages(config: ConfigLoader, logger) -> bool:
+    logger.info("Updating system packages (excluding kernel)")
+    if not execute_commands(["dnf update --exclude=kernel* -y"], logger):
         logger.error("System update failed")
         return False
-    if verbose:
-        logger.info("✓ System packages updated successfully")
+    logger.info("✓ System packages updated successfully")
 
-    # Step 5: Install required packages on raptor
-    if verbose:
-        logger.info("Step 5: Installing required packages on raptor")
+    logger.info("Step 5: Installing required packages on raptor")
     if not execute_commands(
         ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat"],
-        logger, verbose
+        logger
     ):
         logger.error("Package installation failed")
         return False
-    if verbose:
-        logger.info("✓ Required packages installed on raptor")
+    logger.info("✓ Required packages installed on raptor")
     return True
 
 
