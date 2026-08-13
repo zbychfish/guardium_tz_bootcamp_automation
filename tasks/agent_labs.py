@@ -483,4 +483,132 @@ def set_stap_network_latency(
     finally:
         client.disconnect()
 
+def install_stap_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    appliance_name: Optional[str] = None,
+    collector_name: Optional[str] = None,
+    client_ip: Optional[str] = None,
+    gim_installer_filename: str = "guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-8-linux-x86_64.gim.sh",
+    gim_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell",
+    module: str = "BUNDLE-STAP",
+    module_version: str = "12.2.2.0_r123489_3",
+    use_tls: str = "1",
+    statistics: str = "-3",
+    debug: bool = False) -> bool:
+
+    if not _require(logger, appliance_name=appliance_name, collector_name=collector_name):
+        return False
+
+    _header(logger, "INSTALL STAP ON SAUROPOD")
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    if not client_ip:
+        client_ip = sauropod_ip
+
+    collector_config = ApplianceConfigLoader(config_loader=config).get_appliance(collector_name)
+    if not collector_config:
+        logger.error(f"collector '{collector_name}' not found in machines_info.json")
+        return False
+    sqlguard_ip = collector_config.get('ip')
+    if not sqlguard_ip:
+        logger.error(f"collector '{collector_name}' has no IP configured")
+        return False
+
+    logger.info(f"  sauropod={sauropod_ip}:{ssh_port}  sqlguard={sqlguard_ip}")
+
+    gim_local_path = f"{gim_source_dir}/{gim_installer_filename}"
+    remote_lab_dir = "/opt/lab_files"
+    remote_installer_path = f"{remote_lab_dir}/{gim_installer_filename}"
+
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+    try:
+        logger.info("➜ connect to sauropod")
+        if not ssh.connect():
+            logger.error("✗ failed to connect to sauropod")
+            return False
+        logger.info("✓ connected")
+
+        result = ssh.execute_command(f"mkdir -p {remote_lab_dir}", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ mkdir failed: {result['stderr']}")
+            return False
+
+        logger.info(f"➜ upload {gim_installer_filename}")
+        if not ssh.upload_file(gim_local_path, remote_installer_path):
+            logger.error(f"✗ failed to upload {gim_installer_filename}")
+            return False
+        logger.info("✓ GIM installer uploaded")
+
+        result = ssh.execute_command(f"chmod +x {remote_lab_dir}/*.sh", print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"⚠ chmod +x failed: {result['stderr']}")
+
+        install_cmd = f"cd {remote_lab_dir} && ./{gim_installer_filename} -- --dir /opt/guardium --tapip {sauropod_ip} --sqlguardip cm -q"
+        logger.info(f"➜ {install_cmd}")
+        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ GIM install failed: {result['stderr']}")
+            return False
+        logger.info("✓ GIM installed on sauropod")
+
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    logger.info("⌛ waiting for GIM client to register on CM")
+    api = create_guardium_api(config, logger, appliance_name)
+    api.get_token(username='demo', password=root_password)
+
+    max_wait, interval, elapsed = 300, 15, 0
+    while elapsed < max_wait:
+        try:
+            api.gim_list_client_modules(client_ip=client_ip)
+            logger.info(f"✓ GIM client {client_ip} registered (after {elapsed}s)")
+            break
+        except Exception:
+            logger.info(f"  not registered yet ({elapsed}/{max_wait}s)")
+            time.sleep(interval)
+            elapsed += interval
+    else:
+        logger.error(f"✗ GIM client {client_ip} did not register within {max_wait}s")
+        return False
+
+    stap_params = {
+        "STAP_SQLGUARD_IP": sqlguard_ip,
+        "STAP_USE_TLS": use_tls,
+        "STAP_STATISTIC": statistics,
+        "KTAP_ENABLED": "1",
+        "STAP_ENABLED": "1",
+        "KTAP_ALLOW_MODULE_COMBOS": "Y"
+    }
+    logger.info(f"  sqlguard={sqlguard_ip}  tls={use_tls}  stats={statistics}")
+
+    return install_gim_module(
+        config=config, logger=logger,
+        appliance_name=appliance_name, client_ip=client_ip,
+        module=module, module_version=module_version,
+        params=stap_params, monitor_installation=True, installation_delay=10,
+        debug=debug
+    )
+
+
 # Made with Bob

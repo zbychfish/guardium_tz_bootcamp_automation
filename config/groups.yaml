@@ -661,7 +661,7 @@ groups:
     stages:
       - name: install_stap_on_sauropod
         function: install_stap_on_sauropod
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Create /opt/lab_files, copy and install GIM on sauropod, then install STAP via API"
         args:
           appliance_name: "cm"
