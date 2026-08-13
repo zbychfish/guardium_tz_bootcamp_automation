@@ -673,10 +673,8 @@ groups:
 
       - name: enable_atap_for_oracle
         function: enable_atap_for_oracle
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Enable ATAP for Oracle on sauropod"
-        args:
-          debug: false
 
       - name: deploy_etap_for_oracle
         function: deploy_etap_for_oracle_container_on_sauropod

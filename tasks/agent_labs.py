@@ -610,5 +610,65 @@ def install_stap_on_sauropod(
         debug=debug
     )
 
+def enable_atap_for_oracle(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False) -> bool:
+    
+    _header(logger, "ENABLE ATAP FOR ORACLE ON SAUROPOD")
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("sauropod IP not found in machines config")
+        return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
+    try:
+        logger.info(f"➜ connect to sauropod ({sauropod_ip}:{ssh_port})")
+        if not ssh.connect():
+            logger.error("✗ failed to connect to sauropod")
+            return False
+        logger.info("✓ connected")
+
+        for cmd, desc, warn_only in [
+            ("su - oracle -c 'lsnrctl stop'", "lsnrctl stop", True),
+            ('su - oracle -c "echo -e \'shutdown immediate;\\nexit\' | sqlplus / as sysdba"', "sqlplus shutdown immediate", False),
+            (f"{guardctl} authorize-user oracle", "guardctl authorize-user oracle", False),
+            (f"{guardctl} --db-type=oracle --db-instance=ORCLCDB --db_user=oracle --db_home=/u01/app/oracle/product/21c/dbhome_1/ --db_base=/home/oracle --db_version=21 store-conf", "guardctl store-conf", False),
+            (f"{guardctl} --db-type=oracle --db-instance=ORCLCDB activate", "guardctl activate", False),
+            ('su - oracle -c "echo -e \'startup\\nexit\' | sqlplus / as sysdba"', "sqlplus startup", False),
+            ("su - oracle -c 'lsnrctl start'", "lsnrctl start", True),
+        ]:
+            logger.info(f"➜ {desc}")
+            result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
+            if result['rc'] != 0:
+                if warn_only:
+                    logger.warning(f"⚠ {desc}: {result['stderr']}")
+                else:
+                    logger.error(f"✗ {desc}: {result['stderr']}")
+                    return False
+        logger.info("✓ ATAP enabled for Oracle")
+
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
+    return True
+
 
 # Made with Bob
