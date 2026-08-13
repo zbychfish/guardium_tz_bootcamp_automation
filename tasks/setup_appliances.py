@@ -763,90 +763,42 @@ def restart_appliance_all(
     retry_interval: int = 10,
     max_retries: int = 60
 ) -> bool:
+    _header(logger, "RESTART ALL APPLIANCES")
 
-    from core.appliance_config_loader import ApplianceConfigLoader
-    from core.appliance_operations import execute_on_appliances_async
-    
-    logger.info("=" * 80)
-    logger.info("RESTART ALL APPLIANCES (ASYNC)")
-    logger.info("=" * 80)
-    
-    # Load all appliances
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
-    
+
     if not all_appliances:
         logger.error("No appliances found in machines_info.json")
         return False
-    
-    # Group appliances by type
-    cms = []
-    collectors = []
-    appnodes = []
-    others = []
-    
-    for name, appliance_config in all_appliances.items():
-        appliance_type = appliance_config.get('type', '').lower()
-        if appliance_type == 'cm':
-            cms.append(name)
-        elif appliance_type == 'collector':
-            collectors.append(name)
-        elif appliance_type == 'appnode':
-            appnodes.append(name)
-        else:
-            others.append(name)
-    
-    # Order: CM → Collectors → AppNodes → Others
+
+    cms        = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm']
+    collectors = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'collector']
+    appnodes   = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'appnode']
+    others     = [n for n, c in all_appliances.items() if c.get('type', '').lower() not in ('cm', 'collector', 'appnode')]
     ordered_appliances = cms + collectors + appnodes + others
-    
-    logger.info(f"Found {len(ordered_appliances)} appliances to restart:")
+
+    logger.info(f"Found {len(ordered_appliances)} appliances:")
     logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
     logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
     logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
     if others:
         logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
-    logger.info("")
-    
-    # Execute restart asynchronously on all appliances (max 20 parallel)
+
     results, errors = execute_on_appliances_async(
         appliances=ordered_appliances,
         operation_func=core_restart_appliance,
         operation_name="restart",
         logger=logger,
         config=config,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
         debug=debug,
         wait_for_availability=wait_for_availability,
         retry_interval=retry_interval,
         max_retries=max_retries
     )
-    
-    # Count results
-    success_count = sum(1 for success in results.values() if success)
-    failed_count = len(results) - success_count
-    failed_appliances = [name for name, success in results.items() if not success]
-    
-    # Summary
-    logger.info("")
-    logger.info("=" * 80)
-    logger.info("RESTART SUMMARY")
-    logger.info("=" * 80)
-    logger.info(f"Total appliances: {len(ordered_appliances)}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {failed_count}")
-    
-    if failed_appliances:
-        logger.error(f"Failed appliances: {', '.join(failed_appliances)}")
-        for appliance in failed_appliances:
-            if appliance in errors:
-                logger.error(f"  - {appliance}: {errors[appliance]}")
-    
-    logger.info("=" * 80)
-    
-    # Return True only if all succeeded
-    return failed_count == 0
+
+    _log_summary(logger, "RESTART SUMMARY", results, errors)
+    return all(results.values())
 
 def configure_system_settings_all(
     config,
