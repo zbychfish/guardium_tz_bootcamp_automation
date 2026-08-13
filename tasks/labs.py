@@ -350,80 +350,6 @@ def import_ltr_dashboard(
     return success
 
 
-    
-def setup_oua_audit_policy_on_sauropod(
-    config,
-    logger,
-    verbose: bool = False,
-    debug: bool = False,
-    **kwargs
-) -> bool:
-    logger.info("=" * 80)
-    logger.info("SETUP OUA AUDIT POLICY GAME_APP ON SAUROPOD")
-    logger.info("=" * 80)
-
-    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
-    if not sauropod_ip:
-        logger.error("Sauropod IP not found in machines config")
-        return False
-
-    root_password = config.get_custom_variable('pwd')
-    if not root_password:
-        logger.error("Root password (pwd) not found in custom_variables")
-        return False
-
-    try:
-        import oracledb
-        dsn = f"{sauropod_ip}:1522/ORCLPDB1"
-
-        logger.info("âžś Creating audit policy GAME_APP and scheduler job as secadmin...")
-        conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
-        cur = conn.cursor()
-
-        # cleanup â€” ignore errors if objects don't exist
-        for ddl in [
-            "NOAUDIT POLICY GAME_APP",
-            "DROP AUDIT POLICY GAME_APP",
-        ]:
-            try:
-                cur.execute(ddl)
-                conn.commit()
-            except Exception:
-                conn.rollback()
-
-        # drop scheduler job if exists
-        try:
-            cur.execute("BEGIN DBMS_SCHEDULER.drop_job(job_name=>'ENSURE_GAME_APP_AUDIT', force=>TRUE); END;")
-            conn.commit()
-        except Exception:
-            conn.rollback()
-
-        # create fresh
-        for sql in [
-            r"CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features",
-            r"AUDIT POLICY GAME_APP",
-            r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
-        ]:
-            cur.execute(sql)
-            conn.commit()
-
-        cur.close()
-        conn.close()
-        logger.info("âś“ Audit policy GAME_APP created and enabled")
-
-    except Exception as e:
-        logger.error(f"âś— Oracle connection failed: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        return False
-
-    logger.info("=" * 80)
-    logger.info("âś“ SETUP OUA AUDIT POLICY COMPLETED")
-    logger.info("=" * 80)
-    return True
-
-
 def run_uc_and_setup_kafka_node(
     config,
     logger,
@@ -775,40 +701,6 @@ def bulk_install_uc_profile(
     client.disconnect()
     logger.info("âś“ UC bulk install completed")
     return True
-
-
-def import_oracle_dashboard(
-    config,
-    logger,
-    verbose: bool = True,
-    cm_appliance: str = "cm",
-    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
-    debug: bool = False
-) -> bool:
-    from core.guardium_rest_api import import_definitions_files
-
-    logger.info("=" * 80)
-    logger.info("IMPORT ORACLE DASHBOARD ON CM")
-    logger.info("=" * 80)
-
-    definition_files = ["exp_dashboard_oracle.sql"]
-
-    logger.info(f"CM Appliance: {cm_appliance}")
-    logger.info(f"File to import: {definition_files[0]}")
-
-    success = import_definitions_files(
-        config=config,
-        logger=logger,
-        appliance_name=cm_appliance,
-        definition_files=definition_files,
-        definitions_dir=definitions_dir,
-        debug=debug
-    )
-
-    if success:
-        logger.info("âś“ Oracle dashboard imported successfully")
-
-    return success
 
 
 def enable_vulnerability_management(

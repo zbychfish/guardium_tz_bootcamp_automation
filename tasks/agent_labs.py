@@ -867,5 +867,76 @@ ORCLPDB1 =
     logger.info("✓ SETUP STAP WITH OUA ON SAUROPOD COMPLETED")
     return True
 
+def setup_oua_audit_policy_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "SETUP OUA AUDIT POLICY GAME_APP ON SAUROPOD")
+
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    if not sauropod_ip:
+        logger.error("sauropod IP not found in machines config")
+        return False
+
+    root_password = config.get_custom_variable('pwd')
+    if not root_password:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    try:
+        import oracledb
+        conn = oracledb.connect(user="secadmin", password=root_password, dsn=f"{sauropod_ip}:1522/ORCLPDB1")
+        cur = conn.cursor()
+
+        for ddl in ["NOAUDIT POLICY GAME_APP", "DROP AUDIT POLICY GAME_APP"]:
+            try:
+                cur.execute(ddl); conn.commit()
+            except Exception:
+                conn.rollback()
+        try:
+            cur.execute("BEGIN DBMS_SCHEDULER.drop_job(job_name=>'ENSURE_GAME_APP_AUDIT', force=>TRUE); END;"); conn.commit()
+        except Exception:
+            conn.rollback()
+
+        logger.info("➜ CREATE AUDIT POLICY GAME_APP / AUDIT POLICY / DBMS_SCHEDULER")
+        for sql in [
+            r"CREATE AUDIT POLICY GAME_APP ACTIONS ALL ON game.customers, ALL ON game.credit_cards, ALL ON game.transactions, ALL ON game.extras, ALL ON game.features",
+            r"AUDIT POLICY GAME_APP",
+            r"BEGIN DBMS_SCHEDULER.create_job(job_name=>'ENSURE_GAME_APP_AUDIT', job_type=>'STORED_PROCEDURE', job_action=>'ENSURE_GAME_APP_AUDIT', repeat_interval=>'FREQ=MINUTELY;INTERVAL=45', enabled=>TRUE); END;",
+        ]:
+            cur.execute(sql); conn.commit()
+
+        cur.close(); conn.close()
+        logger.info("✓ audit policy GAME_APP created and enabled")
+
+    except Exception as e:
+        logger.error(f"✗ Oracle connection failed: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+
+    return True
+
+def import_oracle_dashboard(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False) -> bool:
+    from core.guardium_rest_api import import_definitions_files
+
+    _header(logger, "IMPORT ORACLE DASHBOARD ON CM")
+    logger.info(f"  cm={cm_appliance}  dir={definitions_dir}")
+
+    return import_definitions_files(
+        config=config, logger=logger, appliance_name=cm_appliance,
+        definition_files=["exp_dashboard_oracle.sql"],
+        definitions_dir=definitions_dir, debug=debug
+    )
+
 
 # Made with Bob

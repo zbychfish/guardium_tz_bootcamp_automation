@@ -703,19 +703,16 @@ groups:
 
       - name: setup_oua_audit_policy_on_sauropod
         function: setup_oua_audit_policy_on_sauropod
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Create GAME_APP audit policy and scheduler job as secadmin in Oracle on sauropod"
-        args:
-          debug: false
 
       - name: import_oracle_dashboard
         function: import_oracle_dashboard
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Import Oracle dashboard (exp_dashboard_oracle.sql) to CM via REST API"
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
-          debug: false
 
   oracle_lab_uc2:
     name: "Oracle Lab UC2"
