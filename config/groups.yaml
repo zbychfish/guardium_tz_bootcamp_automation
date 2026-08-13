@@ -187,7 +187,7 @@ groups:
         module: tasks.deploy_cassandra
         description: "Deploy Apache Cassandra 4.1 on sauropod"
 
-      - name: deploy_informix
+      - name: deploy_informix_on_raptor
         function: deploy_informix
         module: tasks.deploy_informix
         description: "Full Informix deployment: kernel, user, binaries, config, storage, network, init, firewall, service"
