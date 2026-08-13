@@ -677,9 +677,12 @@ def setup_stap_with_oua_on_sauropod(
     appliance_name: str = "cm",
     collector_name: str = "coll1",
     guardium_password: Optional[str] = None,
-    instantclient_rpm: str = "oracle-instantclient-basic-21.1.0.0.0-1.x86_64.rpm",
+    instantclient_rpm: Optional[str] = None,
     instantclient_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle",
     debug: bool = False) -> bool:
+
+    if not _require(logger, instantclient_rpm=instantclient_rpm):
+        return False
 
     if not guardium_password:
         guardium_password = config.get_custom_variable('simple_pwd')
