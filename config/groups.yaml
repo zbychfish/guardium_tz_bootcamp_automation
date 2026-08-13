@@ -408,14 +408,19 @@ groups:
         module: tasks.agent_labs
         description: "Enable ATAP for MongoDB on raptor"
 
-      - name: import_atap_definitions
-        function: import_atap_definitions
+      - name: import_verification_definitions
+        function: import_verification_definitions
         module: tasks.agent_labs
         description: "Import ATAP lab definitions to CM via REST API"
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
+
+      - name: stop_databases_atap
+        function: stop_databases_atap
+        module: tasks.agent_labs
+        description: "Stop and disable mongod and informix-ifxserver services on raptor"
 
   exit_lab:
     name: "Exit Lab"

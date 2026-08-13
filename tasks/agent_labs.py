@@ -342,7 +342,6 @@ def enable_atap_for_mongo(config, logger, verbose: bool = False, **kwargs) -> bo
     logger.info("✓ ATAP enabled for MongoDB")
     return True
 
-
 def db2_exit_configuration(config, logger, verbose: bool = False) -> bool:
     _header(logger, "DB2 EXIT CONFIGURATION")
     commands = [
@@ -401,7 +400,7 @@ def configure_db2_exit_ie(
     return True
 
 
-def import_atap_definitions(
+def import_verification_definitions(
     config,
     logger,
     verbose: bool = False,
@@ -529,6 +528,22 @@ def install_filebeat_on_sauropod(
         return False
     finally:
         ssh.disconnect()
+
+def stop_databases_atap(config, logger, verbose: bool = False, **kwargs) -> bool:
+    _header(logger, "STOP DATABASES ATAP (RAPTOR)")
+    services = ["mongod", "informix-ifxserver"]
+    for svc in services:
+        logger.info(f"➜ stop {svc}")
+        if not execute_commands([f"systemctl stop {svc}"], logger, verbose):
+            logger.error(f"✗ failed to stop {svc}")
+            return False
+        logger.info(f"➜ disable {svc}")
+        if not execute_commands([f"systemctl disable {svc}"], logger, verbose):
+            logger.error(f"✗ failed to disable {svc}")
+            return False
+        logger.info(f"✓ {svc} stopped and disabled")
+    logger.info("✓ all ATAP databases stopped and disabled")
+    return True
 
 
 # Made with Bob
