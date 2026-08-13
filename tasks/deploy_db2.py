@@ -10,49 +10,43 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 from core import execute_commands, execute_local_command, ConfigLoader, write_file
 
 
-def deploy_db2_on_raptor(config, logger, verbose: bool = True) -> bool:
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Installing Db2 prerequisites on raptor")
-        logger.info("=" * 80)
-    
-    password = config.get_custom_variable('pwd')
-    
-    if not password:
-        logger.error("Password (pwd) not found in custom_variables")
+def _header(logger, title: str):
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
+def _cmds(commands, logger, verbose, desc: str) -> bool:
+    if not execute_commands(commands, logger, verbose):
+        logger.error(f"✗ {desc} failed")
         return False
-    
-    # Decode and save DB2 license file
+    return True
+
+
+def deploy_db2_on_raptor(config, logger, verbose: bool = True) -> bool:
+    _header(logger, "Installing Db2 prerequisites on raptor")
+
+    password = config.get_custom_variable('pwd')
+    if not password:
+        logger.error("✗ pwd not found in custom_variables")
+        return False
+
     db2_lic_b64 = config.get_custom_variable('db2_lic')
-    
     if db2_lic_b64:
-        if verbose:
-            logger.info("Decoding and saving DB2 license from custom_variables")
-        
+        lic_file_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic"
+        logger.info(f"  ➜ base64 decode db2_lic → {lic_file_path}")
         try:
-            # Decode base64 license
             db2_lic_content = base64.b64decode(db2_lic_b64)
-            if verbose:
-                logger.info("✓ DB2 license decoded successfully")
-            
-            # Save to file immediately
-            lic_file_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic"
-            
             with open(lic_file_path, 'wb') as f:
                 f.write(db2_lic_content)
-            
-            if verbose:
-                logger.info(f"✓ DB2 license file saved to: {lic_file_path}")
+            logger.info(f"  ✓ DB2 license saved to {lic_file_path}")
         except Exception as e:
-            logger.error(f"Failed to decode and save DB2 license: {e}")
+            logger.error(f"✗ Failed to decode and save DB2 license: {e}")
             return False
     else:
-        if verbose:
-            logger.warning("DB2 license (db2_lic) not found in custom_variables")
-    
-    if verbose:
-        logger.info("Creating Db2 groups and users")
-  
+        logger.warning("  DB2 license (db2_lic) not found in custom_variables")
+
+    logger.info("  ➜ groupadd db2iadm1/db2fadm1 + useradd db2inst1/db2fenc1 + dnf prereqs + sysctl + tar")
     commands = [
         "groupadd db2iadm1",
         "groupadd db2fadm1",
@@ -67,20 +61,14 @@ def deploy_db2_on_raptor(config, logger, verbose: bool = True) -> bool:
         "echo 'db2inst1 hard nofile 65536' >> /etc/security/limits.conf",
         "echo 'db2inst1 soft nproc 65536' >> /etc/security/limits.conf",
         "echo 'db2inst1 hard nproc 65536' >> /etc/security/limits.conf",
-        "tar -xzf /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/v11.5.9_linuxx64_universal_fixpack.tar.gz -C /opt/guardium_tz_bootcamp_automation/upload/source_files/db2"
+        "tar -xzf /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/v11.5.9_linuxx64_universal_fixpack.tar.gz -C /opt/guardium_tz_bootcamp_automation/upload/source_files/db2",
     ]
-    
-    if not execute_commands(commands, logger, verbose):
-        logger.error("Db2 prerequisites installation failed")
+    if not _cmds(commands, logger, verbose, "Db2 prerequisites installation"):
         return False
-    
-    if verbose:
-        logger.info("✓ Db2 groups and users created")
-        logger.info("✓ Db2 prerequisites installed successfully")
-    
-    if verbose:
-        logger.info("Creating Db2 response file")
-    
+    logger.info("  ✓ Db2 groups, users and prerequisites installed")
+
+    rsp_file_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2inst1.rsp"
+    logger.info(f"  ➜ write response file → {rsp_file_path}")
     rsp_content = f"""PROD                      = DB2_SERVER_EDITION
 FILE                      = /opt/ibm/db2/V11.5
 LIC_AGREEMENT             = ACCEPT         ** ACCEPT or DECLINE
@@ -119,127 +107,71 @@ DB2_INST.FENCED_PASSWORD = {password}                ** char(8)
 
 *INSTALL_ENCRYPTION       = YES             ** YES or NO.Valid for root installation only.
 """
-    
-    rsp_file_path = "/opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2inst1.rsp"
-    
     try:
         write_file(rsp_file_path, rsp_content)
-        if verbose:
-            logger.info(f"✓ Db2 response file created: {rsp_file_path}")
+        logger.info(f"  ✓ Response file created: {rsp_file_path}")
     except Exception as e:
-        logger.error(f"Failed to create Db2 response file: {e}")
+        logger.error(f"✗ Failed to create Db2 response file: {e}")
         return False
-    
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Running DB2 silent installation (this may take 15-30 minutes)")
-        logger.info("=" * 80)
-    
+
+    _header(logger, "DB2 silent installation (15-30 min)")
+
     install_cmd = f"cd /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal && ./db2setup -r {rsp_file_path} -f sysreq"
-    
+    logger.info(f"  ➜ db2setup -r {rsp_file_path} -f sysreq")
     result = execute_local_command(install_cmd, logger, verbose)
-    
-    if verbose:
-        logger.info(f"DB2 installation exit code: {result['rc']}")
-    
+
     if result['rc'] not in [0, 4]:
-        logger.error(f"DB2 silent installation failed with exit code {result['rc']}")
+        logger.error(f"✗ DB2 silent installation failed (rc={result['rc']})")
         if result['stderr']:
-            logger.error(f"Error output: {result['stderr']}")
+            logger.error(f"  {result['stderr']}")
         return False
-    
-    if result['rc'] == 4 and verbose:
-        logger.info("⚠ DB2 installation completed with warnings (exit code 4)")
-    elif verbose:
-        logger.info("✓ DB2 installation completed successfully")
-    
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Creating sample database with db2sampl")
-        logger.info("=" * 80)
-    
-    sample_db_cmd = "su - db2inst1 -c 'db2sampl'"
-    
-    if not execute_commands([sample_db_cmd], logger, verbose):
-        logger.error("Failed to create sample database")
+
+    if result['rc'] == 4:
+        logger.info("  ⚠ DB2 installation completed with warnings")
+    else:
+        logger.info("  ✓ DB2 installation completed")
+
+    _header(logger, "Creating sample database")
+    logger.info("  ➜ su - db2inst1 -c 'db2sampl'")
+    if not _cmds(["su - db2inst1 -c 'db2sampl'"], logger, verbose, "create sample database"):
         return False
-    
-    if verbose:
-        logger.info("✓ Sample database created successfully")
-    
-    # Install DB2 license if it was saved
+    logger.info("  ✓ Sample database created")
+
     if db2_lic_b64:
-        if verbose:
-            logger.info("=" * 80)
-            logger.info("Installing DB2 license")
-            logger.info("=" * 80)
-        
-        license_commands = [
+        _header(logger, "Installing DB2 license")
+        logger.info("  ➜ db2licm -a db2.lic + db2licm -r db2aese")
+        if not _cmds([
             "su - db2inst1 -c 'db2licm -a /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic'",
-            "su - db2inst1 -c 'db2licm -r db2aese'"
-        ]
-        
-        if not execute_commands(license_commands, logger, verbose):
-            logger.error("Failed to install DB2 license")
+            "su - db2inst1 -c 'db2licm -r db2aese'",
+        ], logger, verbose, "install DB2 license"):
             return False
-        
-        if verbose:
-            logger.info("✓ DB2 license installed successfully")
-    
-    # Configure DB2 instance memory
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Configuring DB2 instance memory")
-        logger.info("=" * 80)
-    
-    memory_commands = [
-        "su - db2inst1 -c 'db2 update dbm cfg using INSTANCE_MEMORY 50'"
-    ]
-    
-    if not execute_commands(memory_commands, logger, verbose):
-        logger.error("Failed to configure DB2 instance memory")
+        logger.info("  ✓ DB2 license installed")
+
+    _header(logger, "Configuring DB2 instance memory")
+    logger.info("  ➜ db2 update dbm cfg INSTANCE_MEMORY 50")
+    if not _cmds(["su - db2inst1 -c 'db2 update dbm cfg using INSTANCE_MEMORY 50'"],
+                 logger, verbose, "configure DB2 instance memory"):
         return False
-    
-    if verbose:
-        logger.info("✓ DB2 instance memory configured successfully")
-    
-    # Configure remote access to database
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Configuring remote access to DB2 database")
-        logger.info("=" * 80)
-    
-    remote_access_commands = [
+    logger.info("  ✓ DB2 instance memory configured")
+
+    _header(logger, "Configuring remote access to DB2")
+    logger.info("  ➜ catalog tcpip node mynode 127.0.0.1:25010 + catalog database sample")
+    if not _cmds([
         'su - db2inst1 -c \'db2 "catalog tcpip node mynode remote 127.0.0.1 server 25010"\'',
-        'su - db2inst1 -c \'db2 "catalog database sample as mysample at node mynode"\''
-    ]
-    
-    if not execute_commands(remote_access_commands, logger, verbose):
-        logger.error("Failed to configure remote access to DB2 database")
+        'su - db2inst1 -c \'db2 "catalog database sample as mysample at node mynode"\'',
+    ], logger, verbose, "configure remote access to DB2"):
         return False
-    
-    if verbose:
-        logger.info("✓ Remote access to DB2 database configured successfully")
-    
-    # Cleanup installation files
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Cleaning up installation files")
-        logger.info("=" * 80)
-    
-    cleanup_commands = [
+    logger.info("  ✓ Remote access configured")
+
+    _header(logger, "Cleaning up installation files")
+    logger.info("  ➜ rm db2.lic + rm -rf universal/")
+    execute_commands([
         "rm -f /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/db2.lic",
-        "rm -rf /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal"
-    ]
-    
-    if not execute_commands(cleanup_commands, logger, verbose):
-        logger.warning("Failed to cleanup some installation files")
-    elif verbose:
-        logger.info("✓ Installation files cleaned up")
-    
-    if verbose:
-        logger.info("=" * 80)
-    
+        "rm -rf /opt/guardium_tz_bootcamp_automation/upload/source_files/db2/universal",
+    ], logger, verbose)
+    logger.info("  ✓ Installation files cleaned up")
+
+    logger.info("✓ Db2 deployment completed")
     return True
 
 

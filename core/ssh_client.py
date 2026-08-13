@@ -91,7 +91,8 @@ class SSHClient:
         self,
         command: str,
         timeout: Optional[int] = None,
-        print_output: bool = True
+        print_output: bool = True,
+        ok_rc: list = None
     ) -> Dict[str, Any]:
         """
         Execute a single command on remote host.
@@ -100,6 +101,7 @@ class SSHClient:
             command: Command to execute
             timeout: Command timeout in seconds (None = no timeout)
             print_output: Whether to print output to console
+            ok_rc: Additional return codes treated as success (no warning logged)
             
         Returns:
             Dictionary with keys: cmd, rc (return code), stdout, stderr
@@ -132,7 +134,7 @@ class SSHClient:
                 'stderr': err
             }
             
-            if rc == 0:
+            if rc == 0 or (ok_rc and rc in ok_rc):
                 self.logger.debug(f"Command succeeded (rc={rc})")
             else:
                 self.logger.warning(f"Command failed (rc={rc})")

@@ -172,12 +172,12 @@ EOF
   oracle.install.db.OSKMDBA_GROUP=dba \
   oracle.install.db.OSRACDBA_GROUP=dba \
   -ignorePrereqFailure'"""
-            result = ssh.execute_command(installer_cmd, timeout=3600, print_output=False)
+            result = ssh.execute_command(installer_cmd, timeout=3600, print_output=False, ok_rc=[6])
             if result['rc'] not in [0, 6]:
                 logger.error(f"✗ Oracle installer failed (rc={result['rc']}): {result['stderr'].strip()}")
                 return False
             if result['rc'] == 6:
-                logger.info("  ⚠ Oracle installer completed with warnings (rc=6)")
+                logger.info("  ⚠ Oracle installer completed with warnings")
             else:
                 logger.info("  ✓ Oracle installer completed")
 
