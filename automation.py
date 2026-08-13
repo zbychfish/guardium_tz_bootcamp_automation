@@ -368,37 +368,39 @@ class AutomationOrchestrator:
     def show_status(self):
         """Display current execution status."""
         completed = self.state.get_completed_tasks()
-        
+
         print("\n" + "=" * 80)
         print("AUTOMATION STATUS")
         print("=" * 80)
-        
+
         all_groups = self.group_manager.list_groups()
-        
+
         for group_name in all_groups:
             group_info = self.group_manager.get_group_info(group_name)
             if not group_info:
                 continue
-            
-            deployed_with = group_info.get('deployed_with', [])
-            print(f"\n[{', '.join(deployed_with) or 'manual'}] {group_name}: {group_info.get('name')}")
-            print(f"  {group_info.get('description')}")
-            
+
             stages = self.group_manager.get_group_stages(group_name)
-            completed_count = 0
-            
-            for stage_info in stages:
-                stage_name = stage_info.get('name')
-                stage_key = f"{group_name}.{stage_name}"
-                
-                if stage_key in completed:
-                    print(f"    ✓ {stage_name}")
-                    completed_count += 1
-                else:
-                    print(f"    ○ {stage_name}")
-            
-            print(f"  Progress: {completed_count}/{len(stages)} stages completed")
-        
+            completed_count = sum(
+                1 for s in stages
+                if f"{group_name}.{s.get('name')}" in completed
+            )
+            total = len(stages)
+            deployed_with = group_info.get('deployed_with', [])
+            prefix = f"[{', '.join(deployed_with) or 'manual'}] {group_name}: {group_info.get('name')}"
+
+            if completed_count == total:
+                print(f"\n  ✓ {prefix} ({total}/{total})")
+            else:
+                print(f"\n{prefix}")
+                print(f"  {group_info.get('description')}")
+                for stage_info in stages:
+                    stage_name = stage_info.get('name')
+                    stage_key = f"{group_name}.{stage_name}"
+                    mark = "✓" if stage_key in completed else "○"
+                    print(f"    {mark} {stage_name}")
+                print(f"  Progress: {completed_count}/{total} stages completed")
+
         print("\n" + "=" * 80)
         print(f"Total completed stages: {len(completed)}")
         print("=" * 80 + "\n")
