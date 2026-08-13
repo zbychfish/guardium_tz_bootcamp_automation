@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
 import sys
 from pathlib import Path
 
@@ -47,6 +48,12 @@ INFORMIX_PORT   = 9088
 ROOTDBS_SIZE_KB = 200000
 
 
+def _header(logger, title: str):
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
 def _run(cmd, logger, verbose, desc):
     result = execute_local_command(cmd, logger, verbose)
     if result['rc'] != 0:
@@ -81,16 +88,13 @@ def deploy_informix(
     **kwargs
 ) -> bool:
 
-    logger.info("=" * 80)
-    logger.info("DEPLOY INFORMIX")
-    logger.info("=" * 80)
+    _header(logger, "DEPLOY INFORMIX")
 
     password = config.get_custom_variable('pwd')
     if not password:
-        logger.error("pwd not found in custom_variables")
+        logger.error("✗ pwd not found in custom_variables")
         return False
 
-    import os
     local_installer = f"{installer_source_dir}/{installer_filename}"
     if not os.path.exists(local_installer):
         logger.error(f"Installer not found: {local_installer}")
@@ -372,9 +376,7 @@ scenario:
     logger.info(f"✓ dbtraffic config written: {dbtraffic_config}")
 
 
-    logger.info("=" * 80)
-    logger.info("✓ INFORMIX DEPLOYED")
-    logger.info("=" * 80)
+    logger.info("✓ Informix deployment completed")
     return True
 
 # Made with Bob
