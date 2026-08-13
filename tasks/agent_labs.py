@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import glob
 import os
@@ -432,100 +432,6 @@ def import_verification_definitions(
     logger.info("✓ ATAP definitions imported")
     return True
 
-def install_filebeat_on_sauropod(
-    config,
-    logger,
-    verbose: bool = False,
-    rpms_dir: Optional[str] = None,
-    filebeat_pattern: Optional[str] = None,
-    debug: bool = False
-) -> bool:
-
-    if not _require(logger, rpms_dir=rpms_dir, filebeat_pattern=filebeat_pattern):
-        return False
-
-    _header(logger, "INSTALL FILEBEAT ON SAUROPOD")
-
-    machines = config.get('machines', {})
-    sauropod_info = machines.get('sauropod', {})
-    sauropod_ip = sauropod_info.get('private_ip')
-    sauropod_password = sauropod_info.get('password')
-
-    if not _require(logger, sauropod_ip=sauropod_ip, sauropod_password=sauropod_password):
-        return False
-
-    filebeat_rpms = glob.glob(os.path.join(rpms_dir, filebeat_pattern))
-    if not filebeat_rpms:
-        logger.error(f"✗ no filebeat RPM found: {os.path.join(rpms_dir, filebeat_pattern)}")
-        return False
-
-    filebeat_rpm = filebeat_rpms[0]
-    filebeat_filename = os.path.basename(filebeat_rpm)
-    logger.info(f"  found: {filebeat_filename}")
-
-    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
-    try:
-        logger.info("➜ connect to sauropod")
-        if not ssh.connect():
-            logger.error("✗ failed to connect to sauropod")
-            return False
-        logger.info("✓ connected")
-
-        logger.info("➜ mkdir /root/gn-trainings")
-        result = ssh.execute_command("mkdir -p /root/gn-trainings", print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ mkdir failed: {result['stderr']}")
-            return False
-
-        remote_rpm_path = f"/root/gn-trainings/{filebeat_filename}"
-        logger.info(f"➜ upload {filebeat_filename}")
-        if not ssh.upload_file(filebeat_rpm, remote_rpm_path):
-            logger.error("✗ failed to upload filebeat RPM")
-            return False
-        logger.info("✓ RPM uploaded")
-
-        logger.info(f"➜ dnf install {filebeat_filename}")
-        result = ssh.execute_command(f"dnf -y install {remote_rpm_path}", timeout=300, print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ dnf install failed: {result['stderr']}")
-            return False
-        logger.info("✓ filebeat installed")
-
-        logger.info("➜ configure filebeat for Cassandra audit logs")
-        config_commands = [
-            r"sed -i '/^- type: filestream/,/^[^[:space:]]/c\- type: filestream\n  id: \"cassandra\"\n  enabled: true\n  paths:\n    - /var/log/cassandra/audit/audit.log\n  exclude_lines: [\"AuditLogManager\"]\n  tags: [\"cassandra\"]\n  multiline.type: pattern\n  multiline.pattern: \"^INFO\"\n  multiline.negate: true\n  multiline.match: after' /etc/filebeat/filebeat.yml",
-            r"sed -i '/^output.elasticsearch:/,/^[^[:space:]]/ { s/^/# / }' /etc/filebeat/filebeat.yml",
-            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.com:5047\"]| }' /etc/filebeat/filebeat.yml",
-        ]
-        for cmd in config_commands:
-            result = ssh.execute_command(cmd, print_output=verbose)
-            if result['rc'] != 0:
-                logger.warning(f"⚠ config command failed (rc={result['rc']}): {cmd[:60]}…")
-                if debug:
-                    logger.debug(f"  stderr: {result['stderr']}")
-        logger.info("✓ filebeat configured")
-
-        logger.info("➜ systemctl start filebeat")
-        result = ssh.execute_command("systemctl start filebeat", print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ start failed: {result['stderr']}")
-            return False
-
-        result = ssh.execute_command("systemctl enable filebeat", print_output=verbose)
-        if result['rc'] != 0:
-            logger.warning(f"⚠ enable failed: {result['stderr']}")
-
-        logger.info("✓ filebeat started and enabled")
-        return True
-
-    except Exception as e:
-        logger.error(f"✗ {e}")
-        if debug:
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        ssh.disconnect()
-
 def stop_databases_atap(config, logger, verbose: bool = False, **kwargs) -> bool:
     _header(logger, "STOP DATABASES ATAP (RAPTOR)")
     services = ["mongod", "informix-ifxserver"]
@@ -576,6 +482,5 @@ def set_stap_network_latency(
         return True
     finally:
         client.disconnect()
-
 
 # Made with Bob

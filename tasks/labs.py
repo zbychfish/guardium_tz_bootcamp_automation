@@ -27,114 +27,81 @@ def install_filebeat_on_sauropod(
     filebeat_pattern: str = "filebeat-*.rpm",
     debug: bool = False
 ) -> bool:
-    from core.ssh_client import SSHClient
-    import glob
-    import os
-    
-    logger.info("=" * 80)
-    logger.info("INSTALL FILEBEAT ON SAUROPOD")
-    logger.info("=" * 80)
-    
     machines = config.get('machines', {})
     sauropod_info = machines.get('sauropod', {})
     sauropod_ip = sauropod_info.get('private_ip')
     sauropod_password = sauropod_info.get('password')
-    
+
     if not sauropod_ip:
-        logger.error("Sauropod IP not found in machines config")
+        logger.error("sauropod private_ip not found in machines config")
         return False
-    
     if not sauropod_password:
-        logger.error("Sauropod password not found in machines config")
+        logger.error("sauropod password not found in machines config")
         return False
-    
-    logger.info(f"Sauropod IP: {sauropod_ip}")
-    
-    filebeat_rpm_pattern = os.path.join(rpms_dir, filebeat_pattern)
-    filebeat_rpms = glob.glob(filebeat_rpm_pattern)
-    
+
+    filebeat_rpms = glob.glob(os.path.join(rpms_dir, filebeat_pattern))
     if not filebeat_rpms:
-        logger.error(f"No filebeat RPM found matching pattern: {filebeat_rpm_pattern}")
+        logger.error(f"✗ no filebeat RPM found: {os.path.join(rpms_dir, filebeat_pattern)}")
         return False
-    
+
     filebeat_rpm = filebeat_rpms[0]
     filebeat_filename = os.path.basename(filebeat_rpm)
-    
-    logger.info(f"Found filebeat RPM: {filebeat_filename}")
-    
-    ssh = SSHClient(
-        host=sauropod_ip,
-        username="root",
-        password=sauropod_password,
-        timeout=60
-    )
-    
+    logger.info(f"  found: {filebeat_filename}")
+
+    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
     try:
-        logger.info("\nâžś Connecting to sauropod...")
+        logger.info("➜ connect to sauropod")
         if not ssh.connect():
-            logger.error("Failed to connect to sauropod")
+            logger.error("✗ failed to connect to sauropod")
             return False
-        
-        logger.info("âś“ Connected to sauropod")
-        
-        logger.info("\nâžś Creating directory /root/gn-trainings...")
+        logger.info("✓ connected")
+
         result = ssh.execute_command("mkdir -p /root/gn-trainings", print_output=verbose)
         if result['rc'] != 0:
-            logger.error(f"Failed to create directory: {result['stderr']}")
+            logger.error(f"✗ mkdir failed: {result['stderr']}")
             return False
-        logger.info("âś“ Directory created")
-        
-        logger.info(f"\nâžś Uploading {filebeat_filename} to sauropod...")
+
         remote_rpm_path = f"/root/gn-trainings/{filebeat_filename}"
+        logger.info(f"➜ upload {filebeat_filename}")
         if not ssh.upload_file(filebeat_rpm, remote_rpm_path):
-            logger.error("Failed to upload filebeat RPM")
+            logger.error("✗ failed to upload filebeat RPM")
             return False
-        logger.info("âś“ RPM uploaded")
-        
-        logger.info("\nâžś Installing filebeat RPM...")
-        install_cmd = f"dnf -y install {remote_rpm_path}"
-        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        logger.info("✓ RPM uploaded")
+
+        logger.info(f"➜ dnf install {filebeat_filename}")
+        result = ssh.execute_command(f"dnf -y install {remote_rpm_path}", timeout=300, print_output=verbose)
         if result['rc'] != 0:
-            logger.error(f"Failed to install filebeat: {result['stderr']}")
+            logger.error(f"✗ dnf install failed: {result['stderr']}")
             return False
-        logger.info("âś“ Filebeat installed")
-        
-        logger.info("\nâžś Configuring filebeat for Cassandra audit logs...")
-        
+        logger.info("✓ filebeat installed")
+
         config_commands = [
             r"sed -i '/^- type: filestream/,/^[^[:space:]]/c\- type: filestream\n  id: \"cassandra\"\n  enabled: true\n  paths:\n    - /var/log/cassandra/audit/audit.log\n  exclude_lines: [\"AuditLogManager\"]\n  tags: [\"cassandra\"]\n  multiline.type: pattern\n  multiline.pattern: \"^INFO\"\n  multiline.negate: true\n  multiline.match: after' /etc/filebeat/filebeat.yml",
             r"sed -i '/^output.elasticsearch:/,/^[^[:space:]]/ { s/^/# / }' /etc/filebeat/filebeat.yml",
-            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.com:5047\"]| }' /etc/filebeat/filebeat.yml"
+            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.com:5047\"]| }' /etc/filebeat/filebeat.yml",
         ]
-        
         for cmd in config_commands:
             result = ssh.execute_command(cmd, print_output=verbose)
             if result['rc'] != 0:
-                logger.warning(f"Configuration command failed (rc={result['rc']}): {cmd[:50]}...")
+                logger.warning(f"⚠ config command failed (rc={result['rc']}): {cmd[:60]}…")
                 if debug:
-                    logger.debug(f"stderr: {result['stderr']}")
-        
-        logger.info("âś“ Filebeat configured")
-        
-        logger.info("\nâžś Starting and enabling filebeat service...")
+                    logger.debug(f"  stderr: {result['stderr']}")
+        logger.info("✓ filebeat configured")
+
         result = ssh.execute_command("systemctl start filebeat", print_output=verbose)
         if result['rc'] != 0:
-            logger.error(f"Failed to start filebeat: {result['stderr']}")
+            logger.error(f"✗ start failed: {result['stderr']}")
             return False
-        
+
         result = ssh.execute_command("systemctl enable filebeat", print_output=verbose)
         if result['rc'] != 0:
-            logger.warning(f"Failed to enable filebeat: {result['stderr']}")
-        
-        logger.info("âś“ Filebeat started and enabled")
-        
-        logger.info("\n" + "=" * 80)
-        logger.info("âś“ Filebeat installation completed successfully")
-        logger.info("=" * 80)
+            logger.warning(f"⚠ enable failed: {result['stderr']}")
+
+        logger.info("✓ filebeat started and enabled")
         return True
-        
+
     except Exception as e:
-        logger.error(f"âś— Failed to install filebeat: {e}")
+        logger.error(f"✗ {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())

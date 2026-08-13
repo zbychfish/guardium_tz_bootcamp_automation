@@ -457,7 +457,7 @@ groups:
     stages:
       - name: install_filebeat_on_sauropod
         function: install_filebeat_on_sauropod
-        module: tasks.agent_labs
+        module: tasks.labs
         description: "Install and configure Filebeat on sauropod for Cassandra audit logs"
         args:
           rpms_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/rpms"
