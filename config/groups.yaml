@@ -685,6 +685,11 @@ groups:
           etap_state: "Lubuskie"
           etap_email: "guardadmin@gmail.com"
 
+      - name: stop_etap_services
+        function: stop_etap_services
+        module: tasks.etap_labs
+        description: "Stop and disable mysql-etap and oracle-etap systemd services"
+
       - name: setup_stap_with_oua_on_sauropod
         function: setup_stap_with_oua_on_sauropod
         module: tasks.labs

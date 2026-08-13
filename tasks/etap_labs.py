@@ -576,5 +576,18 @@ def deploy_etap_for_oracle_container_on_sauropod(
         etap_version=etap_version, etap_token=etap_token
     )
 
+def stop_etap_services(config, logger, verbose: bool = False, **kwargs) -> bool:
+    _header(logger, "STOP ETAP SERVICES")
+    for svc in ("mysql-etap", "oracle-etap"):
+        for action, desc in [("stop", f"systemctl stop {svc}"), ("disable", f"systemctl disable {svc}")]:
+            logger.info(f"➜ {desc}")
+            result = execute_local_command(f"systemctl {action} {svc}", logger=logger, verbose=verbose)
+            if result['rc'] != 0:
+                logger.warning(f"⚠ {desc}: {result['stderr']}")
+            else:
+                logger.info(f"✓ {desc}")
+    logger.info("✓ ETAP services stopped and disabled")
+    return True
+
 
 # Made with Bob
