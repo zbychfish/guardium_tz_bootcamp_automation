@@ -14,18 +14,28 @@ from core.appliance_operations import (
     configure_system_settings_consolidated,
     register_appliance,
     prepare_appliance_for_patching,
+    prepare_appliance_for_patching as core_prepare,
     get_patch_installation_order,
-    install_and_monitor_patches
+    install_and_monitor_patches,
+    install_patch_on_appliance as core_install,
+    copy_single_file_to_appliance,
+    prepare_log_guard_dir,
+    _get_appliance_connection_params
 )
 
 logger = get_logger(__name__)
 
 
+def _get_all_appliances(config, logger):
+    all_appliances = ApplianceConfigLoader(config_loader=config).get_all_appliances()
+    if not all_appliances:
+        logger.error("No appliances found in machines_info.json")
+    return all_appliances
+
 def _header(logger, title: str) -> None:
     logger.info("=" * 60)
     logger.info(title)
     logger.info("=" * 60)
-
 
 def _log_summary(logger, title: str, results: dict, errors: dict) -> None:
     _header(logger, title)
@@ -38,22 +48,17 @@ def _log_summary(logger, title: str, results: dict, errors: dict) -> None:
             if not success:
                 logger.error(f"  - {name}: {errors.get(name, 'Unknown error')}")
 
-
 def reset_cli_password_all(
     config,
     logger,
     verbose: bool = True,
     cloudsupport_password: Optional[str] = None,
     cli_password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     _header(logger, "RESET CLI PASSWORD ON ALL APPLIANCES")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -86,15 +91,11 @@ def set_shared_secret_all(
     logger,
     verbose: bool = True,
     shared_secret: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     _header(logger, "SET SHARED SECRET ON ALL APPLIANCES")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -124,15 +125,11 @@ def configure_aggr_settings_all(
     config,
     logger,
     verbose: bool = True,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     _header(logger, "CONFIGURE AGGREGATION SETTINGS ON ALL APPLIANCES")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -158,15 +155,13 @@ def configure_aggr_settings_all(
     _log_summary(logger, "CONFIGURE AGGREGATION SETTINGS SUMMARY", results, errors)
     return all(results.values())
 
-
 def import_definitions_on_cm(
     config,
     logger,
     verbose: bool = True,
     cm_appliance: str = "cm02",
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     from core.guardium_rest_api import import_definitions_files
 
     _header(logger, "IMPORT DEFINITIONS ON CM")
@@ -202,8 +197,7 @@ def install_policy_on_collector(
     policy_name: str = "Log Everything",
     max_outer_retries: int = 5,
     outer_retry_delay: int = 120,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import time
     import traceback
     from core.guardium_rest_api import create_guardium_api
@@ -281,8 +275,7 @@ def initial_collector_settings(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
     import traceback
 
     if not collector_name:
@@ -302,31 +295,17 @@ def initial_collector_settings(
         logger.error(f"[{collector_name}] not a collector (type: {collector_config.get('type')})")
         return False
 
-    host = collector_config.get('ip')
-    if not host:
-        logger.error(f"[{collector_name}] no IP address configured")
-        return False
-
-    if not user:
-        user = appliance_loader.get_default_user('collector')
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error(f"[{collector_name}] cli_pwd not found in custom_variables")
-        return False
-    if not prompt_regex:
-        prompt_regex = appliance_loader.get_default_prompt('collector', configured=False)
-    if not prompt_regex:
-        logger.error(f"[{collector_name}] no default prompt_regex for unconfigured collector")
+    params = _get_appliance_connection_params(config, logger, collector_name, user, password, prompt_regex)
+    if not params:
         return False
 
     appliance = ApplianceClient(
-        host=host, user=user, password=password,
-        prompt_regex=prompt_regex, initial_pattern=None,
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
         timeout=120, strip_ansi=True, debug=debug
     )
 
-    logger.info(f"[{collector_name}] ➜ connect {host}")
+    logger.info(f"[{collector_name}] ➜ connect {params['host']}")
     if not appliance.connect():
         logger.error(f"[{collector_name}] failed to connect")
         return False
@@ -384,60 +363,27 @@ def create_oauth_client(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     client_id: str = "BOOTCAMP",
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
     import json
     import traceback
 
     _header(logger, f"CREATE OAUTH CLIENT: {client_id}")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        return False
-
-    if not password:
-        custom_vars = config.get_custom_variables()
-        if custom_vars and 'cli_pwd' in custom_vars:
-            password = custom_vars['cli_pwd']
-        else:
-            logger.error("cli_pwd not found in custom_variables")
-            return False
-
-    if not user:
-        user = appliance_loader.get_default_user(appliance_config.get('type', 'collector'))
-
-    if not prompt_regex:
-        prompt_regex = appliance_loader.get_default_prompt(
-            appliance_config.get('type', 'collector'), configured=True
-        )
-
-    appliance_ip = appliance_config.get('ip')
-    if not appliance_ip:
-        logger.error(f"IP address not found for appliance '{appliance_name}'")
-        return False
-
-    if not prompt_regex:
-        logger.error("Prompt regex could not be determined")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
 
     client = ApplianceClient(
-        host=appliance_ip,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        timeout=120,
-        debug=debug
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], timeout=120, debug=debug
     )
 
     try:
-        logger.info(f"➜ connect {appliance_name} ({appliance_ip})")
+        logger.info(f"➜ connect {appliance_name} ({params['host']})")
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        logger.info("✓ Connected")
+        logger.info(f"[{appliance_name}] ✓ connected")
 
         logger.info("➜ grdapi list_oauth_clients")
         result = client.execute_command("grdapi list_oauth_clients")
@@ -494,26 +440,21 @@ def create_demo_user(
     verbose: bool = True,
     appliance_name: str = "cm01",
     accessmgr_password: Optional[str] = None,
-    demo_password: Optional[str] = None
-) -> bool:
+    demo_password: Optional[str] = None) -> bool:
     import traceback
     from core.guardium_rest_api import create_guardium_api
 
     _header(logger, "CREATE DEMO USER")
 
-    custom_vars = config.get_custom_variables()
-
     if not accessmgr_password:
-        if custom_vars and 'cli_pwd' in custom_vars:
-            accessmgr_password = custom_vars['cli_pwd']
-        else:
+        accessmgr_password = config.get_custom_variable('cli_pwd')
+        if not accessmgr_password:
             logger.error("cli_pwd not found in custom_variables")
             return False
 
     if not demo_password:
-        if custom_vars and 'pwd' in custom_vars:
-            demo_password = custom_vars['pwd']
-        else:
+        demo_password = config.get_custom_variable('pwd')
+        if not demo_password:
             logger.error("pwd not found in custom_variables")
             return False
 
@@ -588,37 +529,14 @@ def set_unit_type_manager(
 
     _header(logger, f"SET UNIT TYPE MANAGER: {appliance_name}")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-
-    if not appliance_config:
-        logger.error(f"[{appliance_name}] not found in machines_info.json")
-        return False
-
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-
-    if not host:
-        logger.error(f"[{appliance_name}] no IP address configured")
-        return False
-
-    if not user:
-        user = appliance_loader.get_default_user(appliance_type) if appliance_type else "cli"
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error(f"[{appliance_name}] cli_pwd not found in custom_variables")
-        return False
-    if not prompt_regex:
-        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False) if appliance_type else None
-    if not prompt_regex:
-        logger.error(f"[{appliance_name}] no prompt_regex for type '{appliance_type}'")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
 
     try:
         client = ApplianceClient(
-            host=host, user=user, password=password,
-            prompt_regex=prompt_regex, initial_pattern=None,
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
             timeout=300, strip_ansi=True, debug=debug
         )
 
@@ -661,11 +579,8 @@ def restart_appliance_all(
 ) -> bool:
     _header(logger, "RESTART ALL APPLIANCES")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     cms        = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm']
@@ -711,15 +626,11 @@ def configure_system_settings_all(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     _header(logger, "CONFIGURE ALL SYSTEM SETTINGS (CONSOLIDATED)")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     cms        = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm']
@@ -773,11 +684,8 @@ def register_appliances_all(
 ) -> bool:
     _header(logger, "REGISTER APPLIANCES ON CENTRAL MANAGER")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     appliances_to_register = {
@@ -830,11 +738,8 @@ def prepare_appliances_for_patching_all(
 ) -> bool:
     _header(logger, "PREPARE ALL APPLIANCES FOR PATCHING")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
@@ -876,11 +781,8 @@ def install_and_monitor_patches_all(
 ) -> bool:
     _header(logger, "INSTALL AND MONITOR PATCHES ON ALL APPLIANCES")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-
+    all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
-        logger.error("No appliances found in machines_info.json")
         return False
 
     if not patch_selection:
@@ -935,12 +837,10 @@ def prepare_appliance_for_patching_single(
     cloudsupport_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    from core.appliance_operations import prepare_appliance_for_patching as core_prepare
-    
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
-    
+
     return core_prepare(
         config=config,
         logger=logger,
@@ -963,7 +863,6 @@ def install_patch_on_appliance_single(
     password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    from core.appliance_operations import install_patch_on_appliance as core_install
     import os
 
     if not appliance_name:
@@ -974,18 +873,14 @@ def install_patch_on_appliance_single(
         logger.error("patch_selection or patch_filename is required")
         return False
 
-    # Auto-detect patch_selection by listing /var/IBM/Guardium/log/patches/ via SSH
     if not patch_selection and patch_filename:
         import paramiko
-        from core.appliance_config_loader import ApplianceConfigLoader
 
-        appliance_loader = ApplianceConfigLoader(config_loader=config)
-        appliance_config = appliance_loader.get_appliance(appliance_name)
-        if not appliance_config:
-            logger.error(f"Appliance '{appliance_name}' not found")
+        params = _get_appliance_connection_params(config, logger, appliance_name)
+        if not params:
             return False
 
-        host = appliance_config.get('ip')
+        host = params['host']
         cloudsupport_pwd = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_pwd:
             logger.error("cloudsupport_pwd not found in custom_variables")
@@ -1037,8 +932,6 @@ def copy_single_file_to_appliance_task(
     cloudsupport_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    from core.appliance_operations import copy_single_file_to_appliance
-    
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -1064,15 +957,12 @@ def prepare_log_guard_dir_all(
     logger,
     verbose: bool = True,
     cloudsupport_password: Optional[str] = None,
-    debug: bool = False
-) -> bool:
-    from core.appliance_operations import prepare_log_guard_dir
-    appliances = list(ApplianceConfigLoader(config_loader=config).get_all_appliances().keys())
-    if not appliances:
-        logger.error("No appliances found")
+    debug: bool = False) -> bool:
+    all_appliances = _get_all_appliances(config, logger)
+    if not all_appliances:
         return False
     results, errors = execute_on_appliances_async(
-        appliances=appliances, operation_func=prepare_log_guard_dir,
+        appliances=list(all_appliances.keys()), operation_func=prepare_log_guard_dir,
         operation_name="prepare_log_guard_dir", logger=logger,
         config=config, cloudsupport_password=cloudsupport_password, debug=debug
     )
