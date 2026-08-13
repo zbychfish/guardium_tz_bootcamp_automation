@@ -409,7 +409,7 @@ def deploy_etap_mysql(
 
     for cmd, desc in [
         ("systemctl restart sshd", "systemctl restart sshd"),
-        ("mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi", "git clone Guardium_External_S-TAP"),
+        ("mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; fi; exit 0", "git clone Guardium_External_S-TAP"),
     ]:
         logger.info(f"➜ {desc}")
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
