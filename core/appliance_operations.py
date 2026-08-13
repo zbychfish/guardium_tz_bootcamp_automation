@@ -293,151 +293,83 @@ def setup_appnode(
     retry_interval: int = 60,
     max_retries: int = 10
 ) -> bool:
-    """
-    Setup app-node on Guardium appliance by executing 'store unit type app-node'.
-    Waits for confirmation, sends 'y', waits for disconnect, then retries connection.
-    """
-    
+    import traceback
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
-    
-    logger.info("=" * 80)
-    logger.info(f"SETUP APP-NODE: {appliance_name}")
-    logger.info("=" * 80)
-    
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
+
+    host = params['host']
+
     try:
         client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
+            host=host, user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
+            timeout=60, strip_ansi=True, debug=debug
         )
-        
+
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        
-        logger.info("\n➜ Executing: store unit type app-node")
-        logger.info("Waiting for confirmation prompt...")
-        
+
+        logger.info(f"[{appliance_name}] ➜ store unit type app-node")
         try:
-            result = client.execute_command_with_confirmation(
+            client.execute_command_with_confirmation(
                 command="store unit type app-node",
                 confirmation_pattern=r"Are you sure you want to proceed\s*\(y/n\)\?",
                 response="y",
                 confirm_idle=0.2
             )
-            logger.info("✓ Command executed, system restarting")
+            logger.info(f"[{appliance_name}] ✓ command sent, system restarting")
         except RuntimeError as e:
             if "Channel closed" in str(e):
-                logger.info("✓ System restarting (connection closed as expected)")
+                logger.info(f"[{appliance_name}] ✓ system restarting (connection closed)")
             else:
                 raise
-        
+
         try:
             client.disconnect()
         except Exception:
             pass
-        
-        logger.info(f"\n⌛ Waiting for appliance to come back online...")
-        logger.info(f"   Retry interval: {retry_interval}s")
-        logger.info(f"   Max retries: {max_retries}")
-        
+
+        logger.info(f"[{appliance_name}] ⌛ waiting online (max {max_retries * retry_interval}s)")
         start_time = time.time()
-        retry_count = 0
-        
-        while retry_count < max_retries:
-            retry_count += 1
-            logger.info(f"   Attempt {retry_count}/{max_retries}...")
-            
+
+        for retry_count in range(1, max_retries + 1):
             time.sleep(retry_interval)
-            
             try:
                 test_client = ApplianceClient(
-                    host=host,
-                    user=user,
-                    password=password,
-                    prompt_regex=prompt_regex,
-                    initial_pattern=None,
-                    timeout=30,
-                    strip_ansi=True,
-                    debug=False
+                    host=host, user=params['user'], password=params['password'],
+                    prompt_regex=params['prompt_regex'], initial_pattern=None,
+                    timeout=30, strip_ansi=True, debug=False
                 )
-                
                 if test_client.connect():
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
-                    
-                    logger.info("\n➜ Verifying unit type...")
+                    logger.info(f"[{appliance_name}] ✓ back online ({elapsed}s, {retry_count} attempts)")
+                    logger.info(f"[{appliance_name}] ➜ show unit type")
                     verify_result = test_client.execute_command("show unit type")
-                    
+                    test_client.disconnect()
                     if "App-Node" in verify_result or "App_Node" in verify_result:
-                        logger.info(f"✓ Unit type verified: {verify_result.strip()}")
-                        test_client.disconnect()
-                        logger.info("=" * 80)
-                        logger.info("App-node setup completed successfully")
-                        logger.info("=" * 80)
+                        logger.info(f"[{appliance_name}] ✓ unit type=App-Node")
                         return True
                     else:
-                        logger.error(f"✗ Unit type verification failed. Expected 'App-Node', got: {verify_result.strip()}")
-                        test_client.disconnect()
+                        logger.error(f"[{appliance_name}] ✗ unexpected unit type: {verify_result.strip()}")
                         return False
             except Exception:
                 pass
-        
+
         elapsed = int(time.time() - start_time)
-        logger.error(f"✗ Timeout waiting for appliance (waited {elapsed}s, {retry_count} attempts)")
+        logger.error(f"[{appliance_name}] ✗ timeout ({elapsed}s, {max_retries} attempts)")
         return False
-        
+
     except Exception as e:
-        logger.error(f"Error setting up app-node: {e}")
-        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         logger.error(traceback.format_exc())
         return False
-    return False
 
 def setup_kafka_node(
     config,
@@ -450,82 +382,41 @@ def setup_kafka_node(
     retry_interval: int = 60,
     max_retries: int = 10
 ) -> bool:
+    import traceback
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
 
-    logger.info("=" * 80)
-    logger.info(f"SETUP KAFKA-NODE: {appliance_name}")
-    logger.info("=" * 80)
-
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
 
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
+    host = params['host']
 
     try:
         client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
+            host=host, user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
+            timeout=60, strip_ansi=True, debug=debug
         )
 
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info("\n➜ Executing: store unit type kafka-node")
-        logger.info("Waiting for confirmation prompt...")
-
+        logger.info(f"[{appliance_name}] ➜ store unit type kafka-node")
         try:
-            result = client.execute_command_with_confirmation(
+            client.execute_command_with_confirmation(
                 command="store unit type kafka-node",
                 confirmation_pattern=r"Are you sure you want to proceed\s*\(y/n\)\?",
                 response="y",
                 confirm_idle=0.2
             )
-            logger.info("✓ Command executed, system restarting")
+            logger.info(f"[{appliance_name}] ✓ command sent, system restarting")
         except RuntimeError as e:
             if "Channel closed" in str(e):
-                logger.info("✓ System restarting (connection closed as expected)")
+                logger.info(f"[{appliance_name}] ✓ system restarting (connection closed)")
             else:
                 raise
 
@@ -534,59 +425,38 @@ def setup_kafka_node(
         except Exception:
             pass
 
-        logger.info(f"\n⌛ Waiting for appliance to come back online...")
-        logger.info(f"   Retry interval: {retry_interval}s")
-        logger.info(f"   Max retries: {max_retries}")
-
+        logger.info(f"[{appliance_name}] ⌛ waiting online (max {max_retries * retry_interval}s)")
         start_time = time.time()
-        retry_count = 0
 
-        while retry_count < max_retries:
-            retry_count += 1
-            logger.info(f"   Attempt {retry_count}/{max_retries}...")
-
+        for retry_count in range(1, max_retries + 1):
             time.sleep(retry_interval)
-
             try:
                 test_client = ApplianceClient(
-                    host=host,
-                    user=user,
-                    password=password,
-                    prompt_regex=prompt_regex,
-                    initial_pattern=None,
-                    timeout=30,
-                    strip_ansi=True,
-                    debug=False
+                    host=host, user=params['user'], password=params['password'],
+                    prompt_regex=params['prompt_regex'], initial_pattern=None,
+                    timeout=30, strip_ansi=True, debug=False
                 )
-
                 if test_client.connect():
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"✓ Appliance is back online (after {elapsed}s, {retry_count} attempts)")
-
-                    logger.info("\n➜ Verifying unit type...")
+                    logger.info(f"[{appliance_name}] ✓ back online ({elapsed}s, {retry_count} attempts)")
+                    logger.info(f"[{appliance_name}] ➜ show unit type")
                     verify_result = test_client.execute_command("show unit type")
-
+                    test_client.disconnect()
                     if "Kafka" in verify_result:
-                        logger.info(f"✓ Unit type verified: {verify_result.strip()}")
-                        test_client.disconnect()
-                        logger.info("=" * 80)
-                        logger.info("Kafka-node setup completed successfully")
-                        logger.info("=" * 80)
+                        logger.info(f"[{appliance_name}] ✓ unit type=Kafka-Node")
                         return True
                     else:
-                        logger.error(f"✗ Unit type verification failed. Expected 'Kafka-Node', got: {verify_result.strip()}")
-                        test_client.disconnect()
+                        logger.error(f"[{appliance_name}] ✗ unexpected unit type: {verify_result.strip()}")
                         return False
             except Exception:
                 pass
 
         elapsed = int(time.time() - start_time)
-        logger.error(f"✗ Timeout waiting for appliance (waited {elapsed}s, {retry_count} attempts)")
+        logger.error(f"[{appliance_name}] ✗ timeout ({elapsed}s, {max_retries} attempts)")
         return False
 
     except Exception as e:
-        logger.error(f"Error setting up kafka-node: {e}")
-        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -744,224 +614,119 @@ def register_appliance(
     timeout: int = 600,
     registration_check_delay: int = 120
 ) -> bool:
-    
+    import traceback
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
-    
-    logger.info("=" * 80)
-    logger.info(f"REGISTER APPLIANCE: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Auto-detect CM IP if not provided
+
+    host = params['host']
+
     if not cm_ip:
+        appliance_loader = ApplianceConfigLoader(config_loader=config)
         all_appliances = appliance_loader.get_all_appliances()
-        cm_appliances = {name: cfg for name, cfg in all_appliances.items() 
-                        if cfg.get('type', '').lower() == 'cm'}
-        
+        cm_appliances = {n: c for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm'}
         if not cm_appliances:
-            logger.error("No Central Manager found in machines_info.json")
+            logger.error(f"[{appliance_name}] no Central Manager found in machines_info.json")
             return False
-        
         if len(cm_appliances) > 1:
-            logger.warning(f"Multiple CMs found: {list(cm_appliances.keys())}")
-            logger.warning("Using the first one. Specify cm_ip to use a different CM.")
-        
-        cm_name = list(cm_appliances.keys())[0]
+            logger.warning(f"[{appliance_name}] multiple CMs: {list(cm_appliances.keys())} — using first")
+        cm_name = next(iter(cm_appliances))
         cm_ip = cm_appliances[cm_name].get('ip')
-        logger.info(f"Auto-detected Central Manager: {cm_name} at {cm_ip}")
-    
+        logger.info(f"[{appliance_name}] auto-detected CM: {cm_name} at {cm_ip}")
+
     if not cm_ip:
-        logger.error("Central Manager IP not found")
+        logger.error(f"[{appliance_name}] CM IP not found")
         return False
-    
-    # Get user from config if not provided
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    # Get prompt regex from config if not provided
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"Central Manager: {cm_ip}:{cm_port}")
-    logger.info(f"User: {user}")
-    logger.info(f"Timeout: {timeout} seconds")
-    
-    try:
-        # Connect to appliance
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=timeout,
-            strip_ansi=True,
-            debug=debug
+
+    logger.info(f"[{appliance_name}] CM={cm_ip}:{cm_port} timeout={timeout}s")
+
+    def _reconnect():
+        c = ApplianceClient(
+            host=host, user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
+            timeout=60, strip_ansi=True, debug=debug
         )
-        
+        return c if c.connect() else None
+
+    def _check_managed(c):
+        logger.info(f"[{appliance_name}] ➜ show unit type")
+        out = c.execute_command("show unit type")
+        logger.info(f"[{appliance_name}] {out.strip()}")
+        c.disconnect()
+        return "Managed" in out or "managed" in out.lower()
+
+    try:
+        client = ApplianceClient(
+            host=host, user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
+            timeout=timeout, strip_ansi=True, debug=debug
+        )
+
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        
-        # Check unit type before registration
-        logger.info("\n➜ Checking unit type before registration...")
-        unit_type_output = client.execute_command("show unit type")
-        logger.info(f"Unit type:\n{unit_type_output}")
-        
-        # Register appliance using early fail detection
+
+        logger.info(f"[{appliance_name}] ➜ show unit type")
+        logger.info(f"[{appliance_name}] {client.execute_command('show unit type').strip()}")
+
         command = f"register management {cm_ip} {cm_port}"
-        logger.info(f"\n➜ Executing: {command}")
-        logger.info("⌛ This can take several minutes (up to 10 minutes)...")
-        
+        logger.info(f"[{appliance_name}] ➜ {command}")
+        logger.info(f"[{appliance_name}] ⌛ up to {timeout}s...")
+
         try:
-            # Use special method that detects "Fail:" early
             output, fail_detected = client.execute_command_with_early_fail_detection(
-                command,
-                fail_pattern="Fail:",
-                timeout=timeout
+                command, fail_pattern="Fail:", timeout=timeout
             )
-            logger.info(f"Command output:\n{output}")
-            
-            # If "Fail:" was detected, disconnect and check unit type after delay
+            if output:
+                logger.info(f"[{appliance_name}] {output.strip()}")
+
             if fail_detected:
-                logger.warning(f"⚠ Registration returned 'Fail:' - disconnecting and waiting {registration_check_delay} seconds before checking status...")
+                logger.warning(f"[{appliance_name}] ⚠ Fail: detected, waiting {registration_check_delay}s before recheck")
                 client.disconnect()
-                
-                # Wait before checking status
-                logger.info(f"⏳ Waiting {registration_check_delay} seconds...")
                 time.sleep(registration_check_delay)
-                
-                # Reconnect and check status
-                logger.info("➜ Reconnecting to check registration status...")
-                client = ApplianceClient(
-                    host=host,
-                    user=user,
-                    password=password,
-                    prompt_regex=prompt_regex,
-                    initial_pattern=None,
-                    timeout=60,
-                    strip_ansi=True,
-                    debug=debug
-                )
-                
-                if not client.connect():
-                    logger.error("Failed to reconnect to appliance")
+                reconnected = _reconnect()
+                if not reconnected:
+                    logger.error(f"[{appliance_name}] failed to reconnect")
                     return False
-                
-                logger.info("\n➜ Checking unit type after 'Fail:' response...")
-                unit_type_output = client.execute_command("show unit type")
-                logger.info(f"Unit type:\n{unit_type_output}")
-                
-                client.disconnect()
-                
-                # Check if appliance is Managed
-                if "Managed" in unit_type_output or "managed" in unit_type_output.lower():
-                    logger.info("=" * 80)
-                    logger.info("✓ Appliance is Managed - registration successful despite 'Fail:' message")
-                    logger.info("=" * 80)
-                    return True
+                managed = _check_managed(reconnected)
+                if managed:
+                    logger.info(f"[{appliance_name}] ✓ Managed (despite Fail: message)")
                 else:
-                    logger.error("✗ Appliance is not Managed - registration failed")
-                    return False
-            
-            # Normal success path
-            # Check unit type after registration
-            logger.info("\n➜ Checking unit type after registration...")
-            unit_type_output = client.execute_command("show unit type")
-            logger.info(f"Unit type:\n{unit_type_output}")
-            
-            client.disconnect()
-            
-            # Verify success by checking if appliance is Managed
-            if "Managed" in unit_type_output or "managed" in unit_type_output.lower():
-                logger.info("=" * 80)
-                logger.info("✓ Appliance registered successfully (Managed)")
-                logger.info("=" * 80)
-                return True
+                    logger.error(f"[{appliance_name}] ✗ not Managed after Fail:")
+                return managed
+
+            managed = _check_managed(client)
+            if managed:
+                logger.info(f"[{appliance_name}] ✓ registered (Managed)")
             elif "unit_type" in output.lower() or "registered" in output.lower():
-                logger.info("=" * 80)
-                logger.info("✓ Appliance registered successfully")
-                logger.info("=" * 80)
-                return True
+                logger.info(f"[{appliance_name}] ✓ registered")
+                managed = True
             else:
-                logger.warning("Registration command completed but verification unclear")
-                logger.warning("Check the output above to verify registration status")
-                return True
-                
+                logger.warning(f"[{appliance_name}] ⚠ registration unclear — treating as success")
+                managed = True
+            return managed
+
         except TimeoutError:
-            logger.warning("⚠ Registration command timeout")
-            logger.warning(f"This sometimes happens. Waiting {registration_check_delay} seconds and checking status...")
+            logger.warning(f"[{appliance_name}] ⚠ timeout, waiting {registration_check_delay}s before recheck")
             time.sleep(registration_check_delay)
-            
-            # Reconnect and check status
-            client = ApplianceClient(
-                host=host,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                initial_pattern=None,
-                timeout=60,
-                strip_ansi=True,
-                debug=debug
-            )
-            
-            if not client.connect():
-                logger.error("Failed to reconnect to appliance")
+            reconnected = _reconnect()
+            if not reconnected:
+                logger.error(f"[{appliance_name}] failed to reconnect after timeout")
                 return False
-            
-            logger.info("\n➜ Checking unit type after timeout...")
-            unit_type_output = client.execute_command("show unit type")
-            logger.info(f"Unit type:\n{unit_type_output}")
-            
-            client.disconnect()
-            
-            # Check if appliance is Managed
-            if "Managed" in unit_type_output or "managed" in unit_type_output.lower():
-                logger.info("=" * 80)
-                logger.info("✓ Registration completed (after timeout) - appliance is Managed")
-                logger.info("=" * 80)
-                return True
+            managed = _check_managed(reconnected)
+            if managed:
+                logger.info(f"[{appliance_name}] ✓ registered (after timeout)")
             else:
-                logger.warning("⚠ Registration timeout but appliance is not Managed")
-                logger.warning("Check the output above to verify registration status")
-                return False
-        
+                logger.warning(f"[{appliance_name}] ⚠ timeout, not Managed")
+            return managed
+
     except Exception as e:
-        logger.error(f"Error registering appliance: {e}")
-        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -975,136 +740,68 @@ def set_timezone(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
+    import traceback
+
+    if not appliance_name:
+        logger.error("appliance_name is required")
+        return False
+
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
+        return False
+
+    machines_info = config.get('machines_info', {})
+    target_timezone = timezone or machines_info.get('timezone', 'Europe/Warsaw')
+
     try:
-        if not appliance_name:
-            logger.error("appliance_name is required")
-            return False
-        
-        logger.info("=" * 80)
-        logger.info(f"SET TIMEZONE: {appliance_name}")
-        logger.info("=" * 80)
-        
-        # Load appliance configuration
-        appliance_loader = ApplianceConfigLoader(config_loader=config)
-        appliance_config = appliance_loader.get_appliance(appliance_name)
-        
-        if not appliance_config:
-            logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-            available = list(appliance_loader.get_all_appliances().keys())
-            logger.error(f"Available appliances: {', '.join(available)}")
-            return False
-        
-        appliance_type = appliance_config.get('type')
-        host = appliance_config.get('ip')
-        
-        if not host:
-            logger.error(f"No IP address configured for appliance '{appliance_name}'")
-            return False
-        
-        # Get user from config if not provided
-        if not user:
-            if appliance_type:
-                user = appliance_loader.get_default_user(appliance_type)
-            else:
-                user = "cli"
-        
-        # Get password from custom_variables if not provided
-        if not password:
-            password = config.get_custom_variable('cli_pwd')
-        if not password:
-            logger.error("Password not provided and cli_pwd not found in custom_variables")
-            return False
-        
-        # Get prompt regex from config if not provided
-        if not prompt_regex:
-            if appliance_type:
-                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-            if not prompt_regex:
-                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-                return False
-        
-        # Determine timezone to use
-        target_timezone = timezone
-        if not target_timezone:
-            # Try to get from machines_info.json
-            machines_info = config.get('machines_info', {})
-            target_timezone = machines_info.get('timezone', 'Europe/Warsaw')
-        
-        logger.info(f"Target timezone: {target_timezone}")
-        logger.info(f"Connecting to {appliance_name} ({host})...")
-        
-        # Create appliance client with longer timeout for timezone change
         client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            timeout=120,  # Longer timeout as timezone change restarts services
-            debug=debug
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], timeout=120, debug=debug
         )
-        
+
         if not client.connect():
-            logger.error(f"Failed to connect to {appliance_name}")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        
-        logger.info(f"✓ Connected to {appliance_name}")
-        
-        # Check current timezone
-        logger.info("➜ Checking current timezone...")
+
+        logger.info(f"[{appliance_name}] ➜ show system clock all")
         output = client.execute_command("show system clock all")
-        
         if not output:
-            logger.error("Failed to get current timezone")
             client.disconnect()
+            logger.error(f"[{appliance_name}] failed to get current timezone")
             return False
-        
-        # Parse current timezone (last line of output)
+
         current_timezone = output.strip().splitlines()[-1]
-        logger.info(f"  Current timezone: {current_timezone}")
-        
-        # Check if timezone needs to be changed
+        logger.info(f"[{appliance_name}] current timezone: {current_timezone}")
+
         if current_timezone == target_timezone:
-            logger.info(f"✓ Timezone already set to {target_timezone}")
+            logger.info(f"[{appliance_name}] ✓ timezone already {target_timezone}")
             client.disconnect()
             return True
-        
-        # Change timezone
-        logger.info(f"➜ Changing timezone from {current_timezone} to {target_timezone}...")
-        command = f"store system clock timezone {target_timezone}"
-        
+
+        logger.info(f"[{appliance_name}] ➜ store system clock timezone {target_timezone}")
         output = client.execute_command_with_confirmation(
-            command=command,
+            command=f"store system clock timezone {target_timezone}",
             response="y"
         )
-        
         if debug and output:
-            logger.info(f"  Command output:\n{output}")
-        
-        # Verify new timezone (wait a moment for services to restart)
-        logger.info("➜ Verifying new timezone...")
-        time.sleep(1)  # Give services time to restart
+            logger.info(f"[{appliance_name}] {output.strip()}")
+
+        time.sleep(1)
+        logger.info(f"[{appliance_name}] ➜ show system clock all (verify)")
         output = client.execute_command("show system clock all")
-        
         if output:
             new_timezone = output.strip().splitlines()[-1]
-            logger.info(f"  New timezone: {new_timezone}")
-            
             if new_timezone == target_timezone:
-                logger.info(f"✓ Timezone successfully changed to {target_timezone}")
+                logger.info(f"[{appliance_name}] ✓ timezone={new_timezone}")
             else:
-                logger.warning(f"⚠ Timezone verification failed. Expected: {target_timezone}, Got: {new_timezone}")
-        
+                logger.warning(f"[{appliance_name}] ⚠ expected {target_timezone}, got {new_timezone}")
+
         client.disconnect()
-        
-        logger.info("=" * 80)
-        logger.info(f"✓ Timezone configuration completed")
-        logger.info("=" * 80)
-        return True        
+        return True
+
     except Exception as e:
-        logger.error(f"Error setting timezone: {str(e)}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
+        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(traceback.format_exc())
         return False
 
 def configure_system_settings_consolidated(
@@ -1401,264 +1098,177 @@ def prepare_appliance_for_patching(
     cloudsupport_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    
     import os
     import glob
-    import subprocess
-    
+    import paramiko
+    import traceback
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
-    
-    logger.info("=" * 80)
-    logger.info(f"PREPARE APPLIANCE FOR PATCHING: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Load appliance configuration
+
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
-    
+
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+        logger.error(f"[{appliance_name}] not found in machines_info.json")
         return False
-    
+
     appliance_type = appliance_config.get('type')
     host = appliance_config.get('ip')
     if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        logger.error(f"[{appliance_name}] no IP address configured")
         return False
-    
-    # Get prompt regex for CLI user
-    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
-    if not cli_prompt_regex:
-        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
-    
-    # Get cloudsupport password from custom_variables if not provided
+
+    cli_prompt_regex = (appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None) \
+        or r'[\w-]+(\.demo\.guardium)?> '
+
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_password:
-            logger.error("cloudsupport_pwd not found in machines_info.json custom_variables")
+            logger.error(f"[{appliance_name}] cloudsupport_pwd not found in custom_variables")
             return False
-        logger.info("Using cloudsupport password from custom_variables")
-    
-    # Check if patches directory exists
+
     if not os.path.exists(patches_source_dir):
-        logger.error(f"Patches directory not found: {patches_source_dir}")
+        logger.error(f"[{appliance_name}] patches directory not found: {patches_source_dir}")
         return False
-    
-    # Find all *.sig files
+
     patch_files = glob.glob(os.path.join(patches_source_dir, "*.sig"))
     if not patch_files:
-        logger.error(f"No *.sig files found in {patches_source_dir}")
+        logger.error(f"[{appliance_name}] no *.sig files found in {patches_source_dir}")
         return False
-    
-    logger.info(f"Found {len(patch_files)} patch files to copy")
-    for patch_file in patch_files:
-        logger.info(f"  - {os.path.basename(patch_file)}")
-    
+
+    logger.info(f"[{appliance_name}] found {len(patch_files)} patch files")
+    for pf in patch_files:
+        logger.info(f"[{appliance_name}]   - {os.path.basename(pf)}")
+
     try:
-        # Get raptor IP from machines_info.json
         raptor_ip = config.get_machine_ip('raptor', use_private=True)
         if not raptor_ip:
-            logger.error("Could not find raptor IP in machines_info.json")
+            logger.error(f"[{appliance_name}] raptor IP not found")
             return False
-        
-        # Get root password for raptor from custom_variables
+
         raptor_root_password = config.get_custom_variable('pwd')
         if not raptor_root_password:
-            logger.error("pwd not found in machines_info.json custom_variables")
+            logger.error(f"[{appliance_name}] pwd not found in custom_variables")
             return False
-        
-        # Get SSH port from config.yaml
+
         ssh_port = config.config.get('ssh', {}).get('port', 22)
-        
-        logger.info(f"Raptor IP: {raptor_ip}, SSH port: {ssh_port}")
-        
-        # Step 1: Connect as cloudsupport and pull files from raptor using SCP
-        logger.info(f"\n➜ Connecting to {host} as cloudsupport user...")
-        
-        import paramiko
-        
+        logger.info(f"[{appliance_name}] ➜ SSH {host} as cloudsupport")
+
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
+        ssh_client.connect(
+            hostname=host, username='cloudsupport', password=cloudsupport_password,
+            look_for_keys=False, allow_agent=False, timeout=30
+        )
+        logger.info(f"[{appliance_name}] ✓ connected as cloudsupport")
+
         try:
-            ssh_client.connect(
-                hostname=host,
-                username='cloudsupport',
-                password=cloudsupport_password,
-                look_for_keys=False,
-                allow_agent=False,
-                timeout=30
-            )
-            
-            logger.info(f"✓ Connected successfully")
-            
-            # Copy files from raptor to appliance /tmp/ using SCP (pull from appliance side)
-            logger.info(f"\n➜ Copying patch files from raptor:{patches_source_dir} to {host}:/tmp/...")
-            
-            # Try to use sshpass first, if not available use expect-like approach
-            logger.info("  Checking if sshpass is available...")
-            stdin, stdout, stderr = ssh_client.exec_command('which sshpass')
+            stdin, stdout, _ = ssh_client.exec_command('which sshpass')
             sshpass_available = stdout.channel.recv_exit_status() == 0
-            
+
+            logger.info(f"[{appliance_name}] ➜ scp {len(patch_files)} files from raptor")
             for patch_file in patch_files:
                 filename = os.path.basename(patch_file)
-                logger.info(f"  Copying {filename}...")
-                
                 if sshpass_available:
-                    # Use sshpass if available
-                    scp_command = f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}"
+                    scp_command = (
+                        f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} "
+                        f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                        f"root@{raptor_ip}:{patch_file} /tmp/{filename}"
+                    )
                     stdin, stdout, stderr = ssh_client.exec_command(scp_command)
-                    exit_status = stdout.channel.recv_exit_status()
-                    
-                    if exit_status != 0:
-                        error = stderr.read().decode()
-                        logger.error(f"Failed to copy {filename}: {error}")
+                    if stdout.channel.recv_exit_status() != 0:
+                        logger.error(f"[{appliance_name}] failed to copy {filename}: {stderr.read().decode()}")
                         ssh_client.close()
                         return False
                 else:
-                    # Use expect-like approach with invoke_shell
-                    logger.info("  Using interactive SCP (sshpass not available)...")
                     channel = ssh_client.invoke_shell()
                     time.sleep(0.5)
-                    
-                    # Clear initial output
                     if channel.recv_ready():
                         channel.recv(65535)
-                    
-                    # Send SCP command
-                    scp_cmd = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{patch_file} /tmp/{filename}\n"
-                    channel.send(scp_cmd.encode())
-                    
-                    # Wait for password prompt
-                    output = ""
-                    timeout = time.time() + 30
-                    while time.time() < timeout:
+                    channel.send(
+                        f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                        f"root@{raptor_ip}:{patch_file} /tmp/{filename}\n".encode()
+                    )
+                    out = ""
+                    deadline = time.time() + 30
+                    while time.time() < deadline:
                         if channel.recv_ready():
                             chunk = channel.recv(4096).decode(errors='ignore')
-                            output += chunk
-                            if "password:" in output.lower():
-                                # Send password
+                            out += chunk
+                            if "password:" in out.lower():
                                 channel.send(f"{raptor_root_password}\n".encode())
                                 break
                         time.sleep(0.1)
-                    
-                    # Wait for completion
                     time.sleep(2)
-                    final_output = ""
                     while channel.recv_ready():
-                        final_output += channel.recv(4096).decode(errors='ignore')
-                    
+                        channel.recv(4096)
                     channel.close()
-                    
-                    # Check if file was copied
-                    stdin, stdout, stderr = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
-                    result = stdout.read().decode().strip()
-                    
-                    if result != "OK":
-                        logger.error(f"Failed to copy {filename}")
-                        logger.error(f"SCP output: {output + final_output}")
+                    stdin, stdout, _ = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
+                    if stdout.read().decode().strip() != "OK":
+                        logger.error(f"[{appliance_name}] failed to copy {filename}")
                         ssh_client.close()
                         return False
-            
-            logger.info(f"✓ All {len(patch_files)} files copied to /tmp/")
-            
-            # Step 2: Use sudo to move files and set permissions
-            logger.info(f"\n➜ Moving files to /var/IBM/Guardium/log/patches/ and setting permissions...")
-            
-            # Create target directory if it doesn't exist
-            logger.info("  Creating /var/IBM/Guardium/log/patches/ directory if needed...")
+
+            logger.info(f"[{appliance_name}] ✓ {len(patch_files)} files in /tmp/")
+
+            logger.info(f"[{appliance_name}] ➜ sudo mkdir -p /var/IBM/Guardium/log/patches/")
             stdin, stdout, stderr = ssh_client.exec_command('sudo mkdir -p /var/IBM/Guardium/log/patches/')
-            exit_status = stdout.channel.recv_exit_status()
-            if exit_status != 0:
-                error = stderr.read().decode()
-                logger.error(f"Failed to create directory: {error}")
+            if stdout.channel.recv_exit_status() != 0:
+                logger.error(f"[{appliance_name}] mkdir failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
-            
-            # Move files from /tmp/ to /var/IBM/Guardium/log/patches/
-            logger.info("  Moving files from /tmp/ to /var/IBM/Guardium/log/patches/...")
+
+            logger.info(f"[{appliance_name}] ➜ sudo mv /tmp/*.sig /var/IBM/Guardium/log/patches/")
             stdin, stdout, stderr = ssh_client.exec_command('sudo mv /tmp/*.sig /var/IBM/Guardium/log/patches/')
-            exit_status = stdout.channel.recv_exit_status()
-            if exit_status != 0:
-                error = stderr.read().decode()
-                logger.error(f"Failed to move files: {error}")
+            if stdout.channel.recv_exit_status() != 0:
+                logger.error(f"[{appliance_name}] mv failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
-            
-            # Set ownership to tomcat:tomcat
-            logger.info("  Setting ownership to tomcat:tomcat...")
+
+            logger.info(f"[{appliance_name}] ➜ sudo chown tomcat:tomcat /var/IBM/Guardium/log/patches/*.sig")
             stdin, stdout, stderr = ssh_client.exec_command('sudo chown tomcat:tomcat /var/IBM/Guardium/log/patches/*.sig')
-            exit_status = stdout.channel.recv_exit_status()
-            if exit_status != 0:
-                error = stderr.read().decode()
-                logger.error(f"Failed to set ownership: {error}")
+            if stdout.channel.recv_exit_status() != 0:
+                logger.error(f"[{appliance_name}] chown failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
-            
-            # Verify files exist
-            logger.info("  Verifying files...")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo ls -la /var/IBM/Guardium/log/patches/*.sig')
-            output = stdout.read().decode()
-            logger.info(f"Files in /var/IBM/Guardium/log/patches/:\n{output}")
-            
+
+            stdin, stdout, _ = ssh_client.exec_command('sudo ls -la /var/IBM/Guardium/log/patches/*.sig')
+            logger.info(f"[{appliance_name}] {stdout.read().decode().strip()}")
             ssh_client.close()
-            
-            # Step 3: Register patches using CLI user
-            logger.info(f"\n➜ Registering patches on appliance as CLI user...")
-            
-            # Get CLI password from custom_variables
-            cli_password = config.get_custom_variable('cli_pwd')
-            if not cli_password:
-                logger.error("cli_pwd not found in machines_info.json custom_variables")
-                return False
-            
-            # Connect as CLI user to register patches
-            cli_client = ApplianceClient(
-                host=host,
-                user='cli',
-                password=cli_password,
-                prompt_regex=cli_prompt_regex,
-                initial_pattern=None,
-                timeout=300,
-                strip_ansi=True,
-                debug=debug
-            )
-            
-            if not cli_client.connect():
-                logger.error("Failed to connect to appliance as CLI user")
-                return False
-            
-            # Execute show system patch available to register patches
-            logger.info("  Executing: show system patch available")
-            patch_output = cli_client.execute_command("show system patch available", timeout=300)
-            logger.info(f"Available patches:\n{patch_output}")
-            
-            cli_client.disconnect()
-            
-            logger.info("=" * 80)
-            logger.info(f"✓ Appliance {appliance_name} prepared for patching successfully")
-            logger.info(f"✓ Patches registered and available for installation")
-            logger.info("=" * 80)
-            return True
-            
+
         except Exception as e:
-            logger.error(f"SSH/SFTP error: {e}")
-            if debug:
-                import traceback
-                logger.error(traceback.format_exc())
-            logger.error("=" * 80)
-            return False
-    
-    except Exception as e:
-        logger.error(f"✗ Failed to prepare appliance for patching: {e}")
-        if debug:
-            import traceback
+            logger.error(f"[{appliance_name}] ✗ SSH error: {e}")
             logger.error(traceback.format_exc())
-        logger.error("=" * 80)
+            return False
+
+        cli_password = config.get_custom_variable('cli_pwd')
+        if not cli_password:
+            logger.error(f"[{appliance_name}] cli_pwd not found in custom_variables")
+            return False
+
+        cli_client = ApplianceClient(
+            host=host, user='cli', password=cli_password,
+            prompt_regex=cli_prompt_regex, initial_pattern=None,
+            timeout=300, strip_ansi=True, debug=debug
+        )
+
+        if not cli_client.connect():
+            logger.error(f"[{appliance_name}] failed to connect as CLI user")
+            return False
+
+        logger.info(f"[{appliance_name}] ➜ show system patch available")
+        patch_output = cli_client.execute_command("show system patch available", timeout=300)
+        logger.info(f"[{appliance_name}] {patch_output.strip()}")
+        cli_client.disconnect()
+
+        logger.info(f"[{appliance_name}] ✓ prepared for patching")
+        return True
+
+    except Exception as e:
+        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(traceback.format_exc())
         return False
 
 def copy_files_to_appliance(
