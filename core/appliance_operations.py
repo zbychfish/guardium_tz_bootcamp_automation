@@ -19,7 +19,6 @@ def _header(logger, title: str) -> None:
     logger.info(title)
     logger.info("=" * 60)
 
-
 def execute_on_appliances_async(
     appliances: List[str],
     operation_func: Callable,
@@ -1873,8 +1872,6 @@ def install_gim_module(
             logger.error(traceback.format_exc())
         return False
 
-
-
 def enable_ltr_on_appnode(
     config,
     logger,
@@ -1972,8 +1969,6 @@ def enable_ltr_on_appnode(
         import traceback
         logger.error(traceback.format_exc())
         return False
-
-
 
 def import_datalake_s3_certificate(
     config,
@@ -2124,7 +2119,6 @@ def import_datalake_s3_certificate(
         import traceback
         logger.error(traceback.format_exc())
         return False
-
 
 def distribute_datalake_certificate(
     config,
@@ -2306,7 +2300,6 @@ def distribute_datalake_certificate(
         import traceback
         logger.error(traceback.format_exc())
         return False
-
 
 def activate_ltr(
     config,
