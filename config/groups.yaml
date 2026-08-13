@@ -472,14 +472,14 @@ groups:
     stages:
       - name: setup_raptor_to_deploy_etap
         function: setup_raptor_to_deploy_etap
-        module: tasks.labs
+        module: tasks.etap_labs
         description: "Install required packages and determine latest ETAP version for deployment"
         args:
           debug: false
-      
+
       - name: setup_etap_certificates_mysql
         function: setup_etap_certificates_mysql
-        module: tasks.labs
+        module: tasks.etap_labs
         description: "Create CA, generate CSR, sign certificate, and import ETAP certificates for MySQL to collector"
         args:
           collector_appliance: "coll1"
@@ -501,7 +501,7 @@ groups:
 
       - name: deploy_etap_mysql
         function: deploy_etap_mysql
-        module: tasks.labs
+        module: tasks.etap_labs
         description: "Temporarily add SSH port 22 on raptor, restart sshd, clone Guardium External S-TAP repository, and run ETAP MySQL deployment"
         args:
           collector_appliance: "coll1"
