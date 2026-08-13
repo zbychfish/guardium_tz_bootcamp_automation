@@ -189,7 +189,11 @@ WantedBy=multi-user.target
         logger.info(f"➜ {desc}")
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ {desc}: {result['stderr']}")
+            logger.error(f"✗ {desc} (rc={result['rc']})")
+            if result['stdout']:
+                logger.error(f"  stdout: {result['stdout']}")
+            if result['stderr']:
+                logger.error(f"  stderr: {result['stderr']}")
             return False
         logger.info(f"✓ {desc}")
     return True
@@ -414,7 +418,11 @@ def deploy_etap_mysql(
         logger.info(f"➜ {desc}")
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ {desc}: {result['stderr']}")
+            logger.error(f"✗ {desc} (rc={result['rc']})")
+            if result['stdout']:
+                logger.error(f"  stdout: {result['stdout']}")
+            if result['stderr']:
+                logger.error(f"  stderr: {result['stderr']}")
             return False
         logger.info(f"✓ {desc}")
 
