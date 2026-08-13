@@ -692,7 +692,7 @@ groups:
 
       - name: setup_stap_with_oua_on_sauropod
         function: setup_stap_with_oua_on_sauropod
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Configure Oracle OUA: create secadmin/guardium users, guard_tap.ini, store SQL credentials and SQL configuration on collector"
         args:
           appliance_name: "cm"
