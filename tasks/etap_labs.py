@@ -3,8 +3,8 @@
 import json
 import os
 import re
+import traceback
 from packaging.version import Version
-from typing import Optional
 from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_client import ApplianceClient
@@ -13,46 +13,39 @@ from core.utils import execute_local_command, run_local_command
 logger = get_logger(__name__)
 
 
+def _header(logger, title: str) -> None:
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
 def setup_raptor_to_deploy_etap(
     config,
     logger,
     verbose: bool = False,
     debug: bool = False
 ) -> bool:
-    logger.info("=" * 80)
-    logger.info("SETUP RAPTOR TO DEPLOY ETAP")
-    logger.info("=" * 80)
+    _header(logger, "SETUP RAPTOR TO DEPLOY ETAP")
 
-    # Step 1: Install required packages
-    logger.info("\n➜ Installing package requirements (podman-docker, skopeo)...")
-
+    logger.info("➜ dnf install podman-docker skopeo")
     try:
-        dnf_command = "dnf -y install podman-docker skopeo"
-        logger.info(f"Executing: {dnf_command}")
-        result = run_local_command(command=dnf_command, shell=True, timeout=300, check=True)
-        logger.info("✓ Packages installed successfully")
+        result = run_local_command(command="dnf -y install podman-docker skopeo", shell=True, timeout=300, check=True)
+        logger.info("✓ packages installed")
         if debug and result.stdout:
-            logger.debug(f"dnf output: {result.stdout}")
+            logger.debug(result.stdout)
     except Exception as e:
-        logger.error(f"✗ Failed to install packages: {e}")
-        logger.error("ETAP setup requires podman-docker and skopeo packages")
+        logger.error(f"✗ dnf install failed: {e}")
         return False
-
-    # Step 2: Determine the latest ETAP version from ICR
-    logger.info("\n➜ Determining the latest ETAP version from ICR...")
 
     etap_version = None
 
+    logger.info("➜ skopeo list-tags icr.io/guardium/guardium_external_s-tap")
     try:
-        skopeo_command = "skopeo list-tags docker://icr.io/guardium/guardium_external_s-tap"
-        logger.info(f"Executing: {skopeo_command}")
-        result = run_local_command(command=skopeo_command, shell=True, timeout=120, check=True)
-
+        result = run_local_command(command="skopeo list-tags docker://icr.io/guardium/guardium_external_s-tap", shell=True, timeout=120, check=True)
         if result.stdout:
             etap_versions = json.loads(result.stdout)
             if debug:
-                logger.debug(f"Available tags: {etap_versions.get('Tags', [])}")
-
+                logger.debug(f"tags: {etap_versions.get('Tags', [])}")
             latest = {}
             for tag in etap_versions.get("Tags", []):
                 match = re.match(r"^v(\d+\.\d+\.\d+)", tag)
@@ -67,13 +60,11 @@ def setup_raptor_to_deploy_etap(
                         latest[key] = v
                 except Exception:
                     continue
-
             if latest:
                 guardium_minor_version = config.get_custom_variable('guardium_minor_version') or max(latest.keys())
                 if guardium_minor_version in latest:
                     etap_version = str(latest[guardium_minor_version])
-                    logger.info(f"✓ Latest ETAP version for Guardium {guardium_minor_version}: {etap_version}")
-
+                    logger.info(f"✓ latest ETAP for Guardium {guardium_minor_version}: {etap_version}")
     except Exception as e:
         logger.warning(f"⚠ skopeo failed ({e}) — falling back to local image")
 
@@ -83,22 +74,20 @@ def setup_raptor_to_deploy_etap(
     # Remove this block once ICR access is restored.
     if etap_version is None:
         local_tar = "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar"
-        logger.warning("⚠ ICR registry unreachable — loading local ETAP image (TEMPORARY WORKAROUND)")
-        logger.info(f"➜ Loading image from {local_tar}...")
-
+        logger.warning("⚠ ICR unreachable — loading local ETAP image (TEMPORARY WORKAROUND)")
         tar_match = re.search(r"guardium_external_s-tap_v(\d+\.\d+\.\d+)\.tar", local_tar)
         if not tar_match:
-            logger.error(f"✗ Cannot extract version from tar filename: {local_tar}")
+            logger.error(f"✗ cannot extract version from: {local_tar}")
             return False
         etap_version = tar_match.group(1)
-
+        logger.info(f"➜ podman load -i {local_tar}")
         try:
             load_result = run_local_command(command=f"podman load -i {local_tar}", shell=True, timeout=300, check=True)
-            logger.info(f"✓ Local image loaded (version: {etap_version})")
+            logger.info(f"✓ local image loaded (version: {etap_version})")
             if debug and load_result.stdout:
-                logger.debug(f"podman load output: {load_result.stdout}")
+                logger.debug(load_result.stdout)
         except Exception as e:
-            logger.error(f"✗ Failed to load local ETAP image: {e}")
+            logger.error(f"✗ podman load failed: {e}")
             return False
     # ── END TEMPORARY WORKAROUND ─────────────────────────────────────────────
 
@@ -106,12 +95,7 @@ def setup_raptor_to_deploy_etap(
     with open("/opt/ETAP/ca/guardium_etap_version.txt", "w", encoding="utf-8") as f:
         f.write(etap_version)
     config.set_custom_variable('guardium_etap_version', etap_version)
-
     logger.info(f"✓ ETAP version saved: {etap_version}")
-    logger.info("\n" + "=" * 80)
-    logger.info("✓ Raptor setup for ETAP deployment completed successfully")
-    logger.info(f"ETAP Version: {etap_version}")
-    logger.info("=" * 80)
     return True
 
 
@@ -137,110 +121,117 @@ def setup_etap_certificates_mysql(
     ca_alias: str = "etapca",
     debug: bool = False
 ) -> bool:
-    from core.utils import run_local_command as _run
-
-    logger.info("=" * 80)
-    logger.info("SETUP ETAP CERTIFICATES")
-    logger.info("=" * 80)
+    _header(logger, "SETUP ETAP CERTIFICATES")
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     collector_config = appliance_loader.get_appliance(collector_appliance)
     if not collector_config:
-        logger.error(f"Collector '{collector_appliance}' not found in machines_info.json")
+        logger.error(f"collector '{collector_appliance}' not found in machines_info.json")
         return False
     collector_ip = collector_config.get('ip')
     if not collector_ip:
-        logger.error(f"Collector '{collector_appliance}' has no IP address configured")
+        logger.error(f"collector '{collector_appliance}' has no IP configured")
         return False
 
     cli_password = config.get_custom_variable('cli_pwd')
     if not cli_password:
-        logger.error("CLI password not found in custom_variables (cli_pwd)")
+        logger.error("cli_pwd not found in custom_variables")
         return False
 
-    logger.info(f"Collector: {collector_appliance} at {collector_ip}")
-    logger.info(f"CA Directory: {ca_dir}")
-    logger.info(f"ETAP Alias: {etap_alias}")
+    logger.info(f"  collector={collector_appliance} ({collector_ip})  ca_dir={ca_dir}  alias={etap_alias}")
 
-    ca_key_path = os.path.join(ca_dir, "ca.key")
+    ca_key_path  = os.path.join(ca_dir, "ca.key")
     ca_cert_path = os.path.join(ca_dir, "ca.pem")
-    csr_path = os.path.join(ca_dir, "etap.csr")
+    csr_path     = os.path.join(ca_dir, "etap.csr")
     etap_cert_path = os.path.join(ca_dir, "etap.pem")
-    token_file = os.path.join(ca_dir, "mysql_etap_token.txt")
+    token_file   = os.path.join(ca_dir, "mysql_etap_token.txt")
+
+    ca_subj_parts = [f"C={etap_country}"]
+    if etap_state:
+        ca_subj_parts.append(f"ST={etap_state}")
+    if etap_locality:
+        ca_subj_parts.append(f"L={etap_locality}")
+    ca_subj_parts += [f"O={etap_organization}", f"OU={etap_organizational_unit}", f"CN={ca_common_name}"]
+    if etap_email:
+        ca_subj_parts.append(f"emailAddress={etap_email}")
+    ca_subj = "/" + "/".join(ca_subj_parts)
 
     try:
-        _run(command=f"mkdir -p {ca_dir}", shell=True, timeout=30, check=True)
-        logger.info("✓ CA directory created")
-        _run(command=f"openssl genrsa -out {ca_key_path} 2048", shell=True, timeout=60, check=True)
-        logger.info("✓ CA private key generated")
-
-        ca_subj_parts = [f"C={etap_country}"]
-        if etap_state:
-            ca_subj_parts.append(f"ST={etap_state}")
-        if etap_locality:
-            ca_subj_parts.append(f"L={etap_locality}")
-        ca_subj_parts += [f"O={etap_organization}", f"OU={etap_organizational_unit}", f"CN={ca_common_name}"]
-        if etap_email:
-            ca_subj_parts.append(f"emailAddress={etap_email}")
-        ca_subj = "/" + "/".join(ca_subj_parts)
-
-        _run(command=f'openssl req -x509 -sha256 -new -key {ca_key_path} -days 3650 -out {ca_cert_path} -subj "{ca_subj}"', shell=True, timeout=60, check=True)
-        logger.info("✓ CA certificate generated")
+        logger.info(f"➜ mkdir -p {ca_dir}")
+        run_local_command(command=f"mkdir -p {ca_dir}", shell=True, timeout=30, check=True)
+        logger.info(f"➜ openssl genrsa → {ca_key_path}")
+        run_local_command(command=f"openssl genrsa -out {ca_key_path} 2048", shell=True, timeout=60, check=True)
+        logger.info(f"➜ openssl req -x509 → {ca_cert_path}")
+        run_local_command(command=f'openssl req -x509 -sha256 -new -key {ca_key_path} -days 3650 -out {ca_cert_path} -subj "{ca_subj}"', shell=True, timeout=60, check=True)
+        logger.info("✓ CA key + certificate generated")
     except Exception as e:
         logger.error(f"✗ CA setup failed: {e}")
         return False
 
     etap_csr_id = None
-    etap_token = None
+    etap_token  = None
 
-    for step, action in [("generate CSR", True), ("import CA cert", False), ("import ETAP cert", False)]:
-        try:
-            appliance = ApplianceClient(host=collector_ip, user="cli", password=cli_password, prompt_regex=r">", strip_ansi=True, debug=debug)
-            if not appliance.connect():
-                logger.error(f"✗ Failed to connect to collector for: {step}")
-                return False
-            logger.info(f"✓ Connected to collector ({step})")
+    def _connect(step):
+        appliance = ApplianceClient(host=collector_ip, user="cli", password=cli_password, prompt_regex=r">", strip_ansi=True, debug=debug)
+        if not appliance.connect():
+            logger.error(f"✗ connect to collector failed ({step})")
+            return None
+        logger.info(f"✓ connected to collector ({step})")
+        return appliance
 
-            if action:  # generate CSR
-                csr, token, line_above = appliance.generate_external_stap_csr(
-                    alias=etap_alias, common_name=etap_common_name, san1=etap_san1,
-                    organizational_unit=etap_organizational_unit, organization=etap_organization,
-                    country=etap_country, encryption_algorithm=etap_encryption_algorithm,
-                    keysize=etap_keysize, locality=etap_locality, state=etap_state,
-                    email=etap_email, san2=etap_san2
-                )
-                with open(csr_path, "w", encoding="utf-8") as f:
-                    f.write(csr)
-                etap_csr_id = line_above
-                etap_token = token
-                config.set_custom_variable('mysql_etap_token', etap_token)
-                with open(token_file, "w", encoding="utf-8") as f:
-                    f.write(etap_token)
-                logger.info(f"✓ CSR generated (id={etap_csr_id}, token={etap_token})")
-
-                _run(command=f"openssl x509 -sha256 -req -days 3650 -CA {ca_cert_path} -CAkey {ca_key_path} -CAcreateserial -CAserial serial -in {csr_path} -out {etap_cert_path}", shell=True, timeout=60, check=True)
-                logger.info(f"✓ CSR signed → {etap_cert_path}")
-
-            elif etap_csr_id is None:  # import CA cert (second iteration)
-                with open(ca_cert_path, "r", encoding="utf-8") as f:
-                    ca_cert_pem = f.read()
-                appliance.import_external_stap_ca_certificate(alias=ca_alias, ca_cert=ca_cert_pem)
-                logger.info("✓ CA certificate imported")
-            else:  # import ETAP cert (third iteration)
-                with open(etap_cert_path, "r", encoding="utf-8") as f:
-                    etap_cert_pem = f.read()
-                appliance.import_external_stap_certificate(alias_line=etap_csr_id, stap_cert=etap_cert_pem)
-                logger.info("✓ ETAP certificate imported")
-
-            appliance.disconnect()
-        except Exception as e:
-            logger.error(f"✗ {step} failed: {e}")
-            if debug:
-                import traceback
-                logger.error(traceback.format_exc())
+    try:
+        logger.info(f"➜ generate_external_stap_csr alias={etap_alias}")
+        appliance = _connect("generate CSR")
+        if not appliance:
             return False
+        csr, token, line_above = appliance.generate_external_stap_csr(
+            alias=etap_alias, common_name=etap_common_name, san1=etap_san1,
+            organizational_unit=etap_organizational_unit, organization=etap_organization,
+            country=etap_country, encryption_algorithm=etap_encryption_algorithm,
+            keysize=etap_keysize, locality=etap_locality, state=etap_state,
+            email=etap_email, san2=etap_san2
+        )
+        appliance.disconnect()
+        with open(csr_path, "w", encoding="utf-8") as f:
+            f.write(csr)
+        etap_csr_id = line_above
+        etap_token  = token
+        config.set_custom_variable('mysql_etap_token', etap_token)
+        with open(token_file, "w", encoding="utf-8") as f:
+            f.write(etap_token)
+        logger.info(f"✓ CSR generated (id={etap_csr_id}, token={etap_token})")
 
-    logger.info("✓ ETAP CERTIFICATES SETUP COMPLETED SUCCESSFULLY")
+        logger.info(f"➜ openssl x509 sign CSR → {etap_cert_path}")
+        run_local_command(command=f"openssl x509 -sha256 -req -days 3650 -CA {ca_cert_path} -CAkey {ca_key_path} -CAcreateserial -CAserial serial -in {csr_path} -out {etap_cert_path}", shell=True, timeout=60, check=True)
+        logger.info(f"✓ CSR signed → {etap_cert_path}")
+
+        logger.info(f"➜ import_external_stap_ca_certificate alias={ca_alias}")
+        appliance = _connect("import CA cert")
+        if not appliance:
+            return False
+        with open(ca_cert_path, "r", encoding="utf-8") as f:
+            ca_cert_pem = f.read()
+        appliance.import_external_stap_ca_certificate(alias=ca_alias, ca_cert=ca_cert_pem)
+        appliance.disconnect()
+        logger.info("✓ CA certificate imported")
+
+        logger.info(f"➜ import_external_stap_certificate id={etap_csr_id}")
+        appliance = _connect("import ETAP cert")
+        if not appliance:
+            return False
+        with open(etap_cert_path, "r", encoding="utf-8") as f:
+            etap_cert_pem = f.read()
+        appliance.import_external_stap_certificate(alias_line=etap_csr_id, stap_cert=etap_cert_pem)
+        appliance.disconnect()
+        logger.info("✓ ETAP certificate imported")
+
+    except Exception as e:
+        logger.error(f"✗ certificate setup failed: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info("✓ ETAP certificates setup completed")
     return True
 
 
@@ -248,32 +239,27 @@ def deploy_etap_mysql(
     config,
     logger,
     verbose: bool = False,
-    debug: bool = False,
-    **kwargs
+    collector_appliance: str = "coll1",
+    debug: bool = False
 ) -> bool:
-    logger.info("=" * 80)
-    logger.info("DEPLOY ETAP MYSQL")
-    logger.info("=" * 80)
-
-    collector_appliance = kwargs.get('collector_appliance', 'coll1')
+    _header(logger, "DEPLOY ETAP MYSQL")
 
     raptor_info = config.get_machine("raptor")
     if not raptor_info:
-        logger.error("Machine 'raptor' not found in configuration")
+        logger.error("machine 'raptor' not found in configuration")
         return False
     raptor_ip = raptor_info.get("private_ip") or raptor_info.get("host")
     if not raptor_ip:
-        logger.error("Raptor IP not found in configuration")
+        logger.error("raptor IP not found in configuration")
         return False
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    collector_config = appliance_loader.get_appliance(collector_appliance)
+    collector_config = ApplianceConfigLoader(config_loader=config).get_appliance(collector_appliance)
     if not collector_config:
-        logger.error(f"Collector '{collector_appliance}' not found in configuration")
+        logger.error(f"collector '{collector_appliance}' not found in configuration")
         return False
     collector_ip = collector_config.get("ip")
     if not collector_ip:
-        logger.error(f"Collector '{collector_appliance}' IP not found in configuration")
+        logger.error(f"collector '{collector_appliance}' IP not found in configuration")
         return False
 
     version_file = "/opt/ETAP/ca/guardium_etap_version.txt"
@@ -281,8 +267,6 @@ def deploy_etap_mysql(
     if not etap_version and os.path.exists(version_file):
         with open(version_file, "r", encoding="utf-8") as f:
             etap_version = f.read().strip()
-        if etap_version:
-            logger.info(f"Loaded guardium_etap_version from {version_file}")
     if not etap_version:
         logger.error("guardium_etap_version not found in custom_variables or version file")
         return False
@@ -292,31 +276,32 @@ def deploy_etap_mysql(
     if not etap_token and os.path.exists(token_file):
         with open(token_file, "r", encoding="utf-8") as f:
             etap_token = f.read().strip()
-        if etap_token:
-            logger.info(f"Loaded mysql_etap_token from {token_file}")
     if not etap_token:
         logger.error("mysql_etap_token not found in custom_variables or token file")
         return False
 
     sshd_config = "/etc/ssh/sshd_config"
-    check_command = f"python3 -c \"import pathlib, re; text = pathlib.Path('{sshd_config}').read_text(); raise SystemExit(0 if re.search(r'^\\s*Port\\s+22\\s*$', text, re.MULTILINE) else 1)\""
-    if execute_local_command(check_command, logger=logger, verbose=False)['rc'] != 0:
-        logger.info("Port 22 not found - adding temporary SSH port 22 to sshd_config")
+    check_cmd = f"python3 -c \"import pathlib, re; text = pathlib.Path('{sshd_config}').read_text(); raise SystemExit(0 if re.search(r'^\\s*Port\\s+22\\s*$', text, re.MULTILINE) else 1)\""
+    if execute_local_command(check_cmd, logger=logger, verbose=False)['rc'] != 0:
+        logger.info("➜ add Port 22 to sshd_config")
         result = execute_local_command(f"printf '\\n# Temporary port for ETAP\\nPort 22\\n' >> {sshd_config}", logger=logger, verbose=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ Failed to add port 22: {result['stderr']}")
+            logger.error(f"✗ failed to add port 22: {result['stderr']}")
             return False
+        logger.info("✓ Port 22 added")
     else:
-        logger.info("Port 22 already present in sshd_config")
+        logger.info("  Port 22 already in sshd_config")
 
     for cmd, desc in [
-        ("systemctl restart sshd", "restart SSHD"),
-        ("mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi", "clone Guardium External S-TAP"),
+        ("systemctl restart sshd", "systemctl restart sshd"),
+        ("mkdir -p /opt/ETAP && cd /opt/ETAP && if [ ! -d Guardium_External_S-TAP ]; then git clone https://github.com/IBM/Guardium_External_S-TAP.git; else echo Repository already exists; fi", "git clone Guardium_External_S-TAP"),
     ]:
+        logger.info(f"➜ {desc}")
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+            logger.error(f"✗ {desc}: {result['stderr']}")
             return False
+        logger.info(f"✓ {desc}")
 
     container_file_content = f"""[Unit]
 Description=mysql-etap
@@ -367,15 +352,17 @@ WantedBy=multi-user.target
 
     container_file_path = "/etc/containers/systemd/mysql-etap.container"
     for cmd, desc in [
-        ("mkdir -p /etc/containers/systemd", "create systemd container directory"),
-        (f"cat > {container_file_path} << 'EOF'\n{container_file_content}\nEOF", "create systemd container file"),
-        ("systemctl daemon-reload", "reload systemd daemon"),
-        ("systemctl start mysql-etap", "start mysql-etap service"),
+        ("mkdir -p /etc/containers/systemd", "mkdir /etc/containers/systemd"),
+        (f"cat > {container_file_path} << 'EOF'\n{container_file_content}\nEOF", f"write {container_file_path}"),
+        ("systemctl daemon-reload", "systemctl daemon-reload"),
+        ("systemctl start mysql-etap", "systemctl start mysql-etap"),
     ]:
+        logger.info(f"➜ {desc}")
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+            logger.error(f"✗ {desc}: {result['stderr']}")
             return False
+        logger.info(f"✓ {desc}")
 
     logger.info("✓ ETAP MySQL deployed and started on raptor")
     return True
