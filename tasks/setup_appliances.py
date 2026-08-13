@@ -626,49 +626,41 @@ def create_demo_user(
     accessmgr_password: Optional[str] = None,
     demo_password: Optional[str] = None
 ) -> bool:
-    
+    import traceback
     from core.guardium_rest_api import create_guardium_api
-    
-    logger.info("=" * 80)
-    logger.info("CREATE DEMO USER")
-    logger.info("=" * 80)
-    
+
+    _header(logger, "CREATE DEMO USER")
+
     custom_vars = config.get_custom_variables()
-    
+
     if not accessmgr_password:
         if custom_vars and 'cli_pwd' in custom_vars:
             accessmgr_password = custom_vars['cli_pwd']
-            logger.info("Using accessmgr password from custom_variables (cli_pwd)")
         else:
-            logger.error("accessmgr_password not provided and cli_pwd not found in custom_variables")
+            logger.error("cli_pwd not found in custom_variables")
             return False
-    
+
     if not demo_password:
         if custom_vars and 'pwd' in custom_vars:
             demo_password = custom_vars['pwd']
-            logger.info("Using demo password from custom_variables (pwd)")
         else:
-            logger.error("demo_password not provided and pwd not found in custom_variables")
+            logger.error("pwd not found in custom_variables")
             return False
-    
-    assert accessmgr_password is not None
-    assert demo_password is not None
-    
+
     try:
         api = create_guardium_api(config, logger, appliance_name)
-        
-        logger.info("Getting token as accessmgr...")
-        token = api.get_token(username='accessmgr', password=accessmgr_password)
-        logger.info("✓ Token obtained successfully")
-        
-        logger.info("\nListing existing users:")
+
+        logger.info("➜ get_token accessmgr")
+        api.get_token(username='accessmgr', password=accessmgr_password)
+        logger.info("✓ Token obtained")
+
+        logger.info("➜ get_users")
         users = api.get_users()
-        
         demo_exists = any(u.get('user_name') == 'demo' for u in users)
-        
+
         if not demo_exists:
-            logger.info("\n➜ Creating demo user...")
-            result = api.create_user(
+            logger.info("➜ create_user demo")
+            api.create_user(
                 username='demo',
                 password=demo_password,
                 confirm_password=demo_password,
@@ -679,45 +671,34 @@ def create_demo_user(
                 disabled=False,
                 disable_pwd_expiry=True
             )
-            logger.info("✓ Demo user created successfully")
-            
-            logger.info("\n➜ Assigning roles to demo user...")
-            result = api.set_user_roles(
-                username='demo',
-                roles='admin,cli,user,vulnerability-assess,fam'
-            )
-            logger.info("✓ Roles assigned: admin, cli, user, vulnerability-assess, fam")
-            
+            logger.info("✓ demo user created")
+
+            logger.info("➜ set_user_roles demo admin,cli,user,vulnerability-assess,fam")
+            api.set_user_roles(username='demo', roles='admin,cli,user,vulnerability-assess,fam')
+            logger.info("✓ Roles assigned")
         else:
-            logger.info("\nℹ Demo user already exists")
-        
-        logger.info("\n➜ Disabling guardium account...")
+            logger.info("ℹ demo user already exists")
+
+        logger.info("➜ update_user guardium disabled=True")
         api.update_user(username='guardium', disabled=True)
-        logger.info("✓ guardium account disabled")
-        
-        logger.info("\n➜ Disabling guardcli accounts...")
+        logger.info("✓ guardium disabled")
+
         for cli_num in range(2, 10):
             username = f"guardcli{cli_num}"
+            logger.info(f"➜ update_user {username} disabled=True")
             api.update_user(username=username, disabled=True)
-            logger.info(f"✓ {username} account disabled")
-        
-        logger.info("\nVerifying demo user credentials...")
-        token = api.get_token(username='demo', password=demo_password)
-        logger.info("✓ Demo user login successful")
-        
-        logger.info("=" * 80)
-        logger.info("Demo user setup completed successfully")
-        logger.info("Disabled accounts: guardium, guardcli2-guardcli9")
-        logger.info("=" * 80)
-        
+            logger.info(f"✓ {username} disabled")
+
+        logger.info("➜ get_token demo (verify)")
+        api.get_token(username='demo', password=demo_password)
+        logger.info("✓ demo login verified")
+
         return True
-        
+
     except Exception as e:
-        logger.error(f"Error creating demo user: {e}")
-        import traceback
+        logger.error(f"✗ {e}")
         logger.error(traceback.format_exc())
         return False
-    return True
 
 def set_unit_type_manager(
     config,
