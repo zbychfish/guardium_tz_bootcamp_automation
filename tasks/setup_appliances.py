@@ -7,7 +7,6 @@ from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_operations import (
     restart_appliance as core_restart_appliance,
-    configure_hosts_resolving as core_configure_hosts,
     configure_aggr_settings,
     execute_on_appliances_async,
     reset_cli_password,

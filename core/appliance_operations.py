@@ -1043,206 +1043,6 @@ def register_appliance(
         logger.error(traceback.format_exc())
         return False
 
-def configure_hosts_resolving(
-    config,
-    logger,
-    appliance_name: str,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
-    logger.info("=" * 80)
-    logger.info(f"CONFIGURE HOSTS RESOLVING: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Get user from config if not provided
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    # Get prompt regex from config if not provided
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
-    # Get only regular (non-appliance) machines from config
-    machines = config.get_regular_machines()
-
-    # Get all appliances from machines_info.json
-    all_appliances = appliance_loader.get_all_appliances()
-
-    if not machines and not all_appliances:
-        logger.warning("No machines or appliances found to configure")
-        logger.info("=" * 80)
-        logger.info("No hosts to configure")
-        logger.info("=" * 80)
-        return True
-
-    logger.info(f"Found {len(machines)} Unix machines and {len(all_appliances)} appliances to configure")
-    
-    try:
-        # Connect to appliance
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Get existing hosts to avoid duplicates
-        logger.info("\n➜ Checking existing hosts configuration...")
-        existing_output = client.execute_command("support show hosts")
-        logger.info(f"Current hosts:\n{existing_output}")
-        
-        # Parse existing hosts (format: "ip hostname")
-        existing_hosts = set()
-        for line in existing_output.split('\n'):
-            line = line.strip()
-            if line and not line.startswith('#') and ' ' in line:
-                parts = line.split()
-                if len(parts) >= 2:
-                    existing_hosts.add((parts[0], parts[1]))
-        
-        logger.info(f"Found {len(existing_hosts)} existing host entries")
-        
-        # Configure hosts for each machine and appliance
-        configured_count = 0
-        skipped_count = 0
-        
-        # First, add Unix machines (raptor, ceraptos, sauropod)
-        logger.info("\n➜ Configuring Unix machines:")
-        for machine_name, machine_config in machines.items():
-            # Use private_ip (local network IP)
-            private_ip = machine_config.get('private_ip', '')
-            
-            if not private_ip:
-                logger.warning(f"  ⊘ Skipping {machine_name}: no private_ip")
-                continue
-            
-            # Use short name (without suffix) and add .demo.guardium domain
-            short_name = machine_name  # Already shortened by config_loader
-            fqdn = f"{short_name}.demo.guardium"
-            
-            # Check if already exists (check both FQDN and short name)
-            if (private_ip, fqdn) in existing_hosts or (private_ip, short_name) in existing_hosts:
-                logger.info(f"  ⊘ Skipping {short_name} ({private_ip}) - already configured")
-                skipped_count += 1
-                continue
-            
-            # Add host entry with FQDN
-            command = f"support store hosts {private_ip} {fqdn}"
-            logger.info(f"  ➜ Adding: {fqdn} ({private_ip})")
-            output = client.execute_command(command)
-            
-            if debug and output:
-                logger.info(f"     Output: {output}")
-            
-            configured_count += 1
-        
-        # Second, add other Guardium appliances (excluding current one)
-        logger.info("\n➜ Configuring Guardium appliances:")
-        for other_appliance_name, other_appliance_config in all_appliances.items():
-            # Skip the current appliance
-            if other_appliance_name == appliance_name:
-                logger.info(f"  ⊘ Skipping {other_appliance_name} (current appliance)")
-                continue
-            
-            # Get IP address
-            appliance_ip = other_appliance_config.get('ip', '')
-            if not appliance_ip:
-                logger.warning(f"  ⊘ Skipping {other_appliance_name}: no IP address")
-                continue
-            
-            # Remove suffix from appliance name (everything after last dash)
-            # e.g., "cm02-suffix" -> "cm02", "coll2-suffix2" -> "coll2", "cm-02-suffix" -> "cm-02"
-            short_name = other_appliance_name.rsplit('-', 1)[0] if '-' in other_appliance_name else other_appliance_name
-            fqdn = f"{short_name}.demo.guardium"
-            
-            # Check if already exists
-            if (appliance_ip, fqdn) in existing_hosts or (appliance_ip, short_name) in existing_hosts:
-                logger.info(f"  ⊘ Skipping {short_name} ({appliance_ip}) - already configured")
-                skipped_count += 1
-                continue
-            
-            # Add host entry with FQDN
-            command = f"support store hosts {appliance_ip} {fqdn}"
-            logger.info(f"  ➜ Adding: {fqdn} ({appliance_ip})")
-            output = client.execute_command(command)
-            
-            if debug and output:
-                logger.info(f"     Output: {output}")
-            
-            configured_count += 1
-        
-        # Show final configuration
-        logger.info("\n➜ Final hosts configuration:")
-        final_output = client.execute_command("support show hosts")
-        logger.info(f"\n{final_output}")
-        
-        client.disconnect()
-        
-        logger.info("=" * 80)
-        logger.info(f"✓ Hosts resolving configured successfully")
-        logger.info(f"  - Configured: {configured_count} new entries")
-        logger.info(f"  - Skipped: {skipped_count} existing entries")
-        logger.info("=" * 80)
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error configuring hosts resolving: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
 def set_timezone(
     config,
     logger,
@@ -1682,25 +1482,7 @@ def prepare_appliance_for_patching(
     cloudsupport_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Prepare appliance for patching by copying patch files (*.sig) to /var/IBM/Guardium/log/patches/
     
-    This function:
-    1. Copies *.sig files from local patches directory to appliance's /tmp/ as cloudsupport user
-    2. Uses sudo to move files from /tmp/ to /var/IBM/Guardium/log/patches/
-    3. Sets ownership to tomcat:tomcat
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        patches_source_dir: Local directory containing patch files (default: /opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/)
-        cloudsupport_password: Password for cloudsupport user (optional, uses custom_variables)
-        debug: Enable debug output
-    
-    Returns:
-        True if successful, False otherwise
-    """
     import os
     import glob
     import subprocess
@@ -1971,29 +1753,7 @@ def copy_files_to_appliance(
     cloudsupport_password: Optional[str] = None,
     debug: bool = False
 ) -> bool:
-    """
-    Copy files from raptor to appliance using SCP.
     
-    This is a generic function that:
-    1. Connects to appliance as cloudsupport user
-    2. Uses SCP to pull files from raptor to /tmp/ on appliance
-    3. Uses sudo to move files to target directory
-    4. Sets ownership
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        source_dir: Source directory on raptor (e.g., /opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/)
-        file_pattern: File pattern to copy (e.g., "*.sig", "*.gim")
-        target_dir: Target directory on appliance (e.g., /var/IBM/Guardium/log/patches/)
-        owner: Owner:group for files (default: tomcat:tomcat)
-        cloudsupport_password: Password for cloudsupport user (optional, uses custom_variables)
-        debug: Enable debug output
-    
-    Returns:
-        True if successful, False otherwise
-    """
     import os
     import glob
     import time
@@ -2206,22 +1966,7 @@ def copy_single_file_to_appliance(
     cloudsupport_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Copy a single file to appliance.
     
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        source_file_path: Full path to the source file on raptor
-        target_dir: Target directory on appliance (default: /var/IBM/Guardium/log/patches/)
-        owner: File owner (default: tomcat:tomcat)
-        cloudsupport_password: Password for cloudsupport user
-        debug: Enable debug output
-    
-    Returns:
-        True if successful, False otherwise
-    """
     import os
     
     if not appliance_name:
@@ -2470,29 +2215,7 @@ def install_patch_on_appliance(
     password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Install patches on a Guardium appliance using interactive CLI.
     
-    This function:
-    1. Connects to appliance as CLI user
-    2. Executes 'store system patch install sys'
-    3. Responds to patch selection prompt with patch_selection
-    4. Responds to reinstall prompt with reinstall_answer
-    5. Waits for command completion
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        patch_selection: Comma-separated patch positions (e.g., "2,1,3" or "1-3")
-        reinstall_answer: Answer to reinstall question ("y" or "n", default: "y")
-        user: SSH username (optional, uses 'cli' by default)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        debug: Enable debug output
-    
-    Returns:
-        True if installation started successfully, False otherwise
-    """
     import socket
     
     if not appliance_name:
@@ -2729,27 +2452,7 @@ def monitor_patch_installation(
     password: Optional[str] = None,
     debug: bool = False
 ) -> bool:
-    """
-    Monitor patch installation progress on an appliance.
     
-    This function periodically checks 'show system patch install sys' to monitor installation progress.
-    It checks each patch by number and verifies status is "DONE: Patch installation Succeeded."
-    For patch 9997, WARNING is also accepted as success.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        patch_numbers: List of patch numbers to monitor (e.g., ['9997', '1033', '223']). If None, monitors all patches.
-        check_interval: Seconds between status checks (default: 60)
-        max_checks: Maximum number of checks before giving up (default: 60 = 1 hour with 60s interval)
-        user: SSH username (optional, uses 'cli' by default)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        debug: Enable debug output
-    
-    Returns:
-        True if all patches installed successfully, False otherwise
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -2970,26 +2673,7 @@ def install_and_monitor_patches(
     password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Install patches on an appliance and monitor the installation progress.
     
-    This is a convenience function that combines install_patch_on_appliance and monitor_patch_installation.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        patch_selection: Comma-separated patch positions (e.g., "2,1,3")
-        reinstall_answer: Answer to reinstall question ("y" or "n", default: "y")
-        check_interval: Seconds between status checks (default: 60)
-        max_checks: Maximum number of checks (default: 60)
-        user: SSH username (optional, uses 'cli' by default)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        debug: Enable debug output
-    
-    Returns:
-        True if installation and monitoring completed successfully, False otherwise
-    """
     logger.info("=" * 80)
     logger.info(f"INSTALL AND MONITOR PATCHES: {appliance_name}")
     logger.info("=" * 80)
