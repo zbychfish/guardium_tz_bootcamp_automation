@@ -663,7 +663,7 @@ def import_atap_definitions(
                 logger.error(f"✗ File not found: {file_path}")
                 return False
             
-            logger.info(f"\n➜ Importing: {filename}")
+            logger.info(f"➜ Importing: {filename}")
             result = api.import_definitions(file_path=file_path)
             
             if debug:

@@ -552,10 +552,6 @@ def register_appliance(
     timeout: int = 240) -> bool:
     import traceback
 
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
         return False
@@ -1001,6 +997,7 @@ def prepare_appliance_for_patching(
     patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
     cloudsupport_password: Optional[str] = None,
     debug: bool = True) -> bool:
+    
     import os
     import glob
     import paramiko

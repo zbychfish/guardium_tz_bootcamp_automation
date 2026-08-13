@@ -727,8 +727,7 @@ def prepare_appliances_for_patching_all(
     verbose: bool = True,
     patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     _header(logger, "PREPARE ALL APPLIANCES FOR PATCHING")
 
     all_appliances = _get_all_appliances(config, logger)
