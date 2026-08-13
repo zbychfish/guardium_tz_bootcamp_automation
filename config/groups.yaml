@@ -314,7 +314,6 @@ groups:
         description: "Prepare ALL appliances for patching by copying *.sig files to /var/log/guard/patches/ (parallel execution, max 20)"
         args:
           patches_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
-          # cloudsupport_password: "password"  # Optional - defaults to cloudsupport_pwd from machines_info.json
           debug: false
 
       - name: install_and_monitor_patches_all
