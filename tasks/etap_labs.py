@@ -8,6 +8,7 @@ from packaging.version import Version
 from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_client import ApplianceClient
+from core.ssh_client import SSHClient
 from core.utils import execute_local_command, run_local_command
 
 logger = get_logger(__name__)
@@ -36,19 +37,30 @@ def _load_etap_secret(config, token_var: str, token_file: str, logger) -> str:
         logger.error(f"{token_var} not found in custom_variables or {token_file}")
     return token
 
-def _open_firewall_port(port: str, logger) -> bool:
-    try:
-        listed = run_local_command(command="firewall-cmd --list-ports", shell=True, timeout=10, check=False)
-        if f"{port}/tcp" in (listed.stdout or ""):
+def _open_firewall_port(port: str, logger, ssh=None) -> bool:
+    if ssh:
+        check = ssh.execute_command("firewall-cmd --list-ports", print_output=False)
+        if f"{port}/tcp" in (check.get('stdout') or ""):
             logger.info(f"  port {port}/tcp already open")
             return True
-    except Exception:
-        pass
-    logger.info(f"➜ firewall-cmd --add-port={port}/tcp")
-    result = run_local_command(command=f"firewall-cmd --permanent --add-port={port}/tcp && firewall-cmd --reload", shell=True, timeout=30, check=False)
-    if result.returncode != 0:
-        logger.error(f"✗ firewall-cmd failed (rc={result.returncode}): {result.stderr}")
-        return False
+        logger.info(f"➜ firewall-cmd --add-port={port}/tcp")
+        result = ssh.execute_command(f"firewall-cmd --permanent --add-port={port}/tcp && firewall-cmd --reload", print_output=False)
+        if result.get('rc') != 0:
+            logger.error(f"✗ firewall-cmd failed: {result.get('stderr')}")
+            return False
+    else:
+        try:
+            listed = run_local_command(command="firewall-cmd --list-ports", shell=True, timeout=10, check=False)
+            if f"{port}/tcp" in (listed.stdout or ""):
+                logger.info(f"  port {port}/tcp already open")
+                return True
+        except Exception:
+            pass
+        logger.info(f"➜ firewall-cmd --add-port={port}/tcp")
+        result = run_local_command(command=f"firewall-cmd --permanent --add-port={port}/tcp && firewall-cmd --reload", shell=True, timeout=30, check=False)
+        if result.returncode != 0:
+            logger.error(f"✗ firewall-cmd failed (rc={result.returncode}): {result.stderr}")
+            return False
     logger.info(f"✓ port {port}/tcp opened")
     return True
 
@@ -536,8 +548,25 @@ def deploy_etap_for_oracle_container_on_sauropod(
     if not etap_token:
         return False
 
-    if not _open_firewall_port("63334", logger):
+    sauropod_password = config.get_custom_variable('pwd')
+    ssh_cfg = config.get('ssh', {})
+    ssh = SSHClient(
+        host=sauropod_ip,
+        username=ssh_cfg.get('username', 'root'),
+        password=sauropod_password,
+        port=ssh_cfg.get('port', 2223),
+        timeout=60
+    )
+    logger.info(f"➜ connect to sauropod ({sauropod_ip}) for firewall")
+    if not ssh.connect():
+        logger.error("✗ failed to connect to sauropod")
         return False
+    try:
+        for port in ("1521", "1522", "63334"):
+            if not _open_firewall_port(port, logger, ssh=ssh):
+                return False
+    finally:
+        ssh.disconnect()
 
     return _deploy_etap_container(
         config=config, logger=logger, verbose=verbose,
