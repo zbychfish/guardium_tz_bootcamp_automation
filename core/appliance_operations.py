@@ -225,7 +225,6 @@ def restart_appliance(
     logger.error(f"[{appliance_name}] ✗ restart failed after all retries")
     return False
 
-
 def setup_appnode(
     config,
     logger,

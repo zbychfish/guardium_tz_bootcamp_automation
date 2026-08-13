@@ -920,7 +920,6 @@ def install_patch_on_appliance_single(
     )
 
 
-
 def copy_single_file_to_appliance_task(
     config,
     logger,
