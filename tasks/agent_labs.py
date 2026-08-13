@@ -8,7 +8,8 @@ import traceback
 from typing import Optional
 from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
-from core.appliance_operations import copy_files_to_appliance, install_gim_module
+from core.appliance_operations import copy_files_to_appliance, install_gim_module, _get_appliance_connection_params
+from core.appliance_client import ApplianceClient
 from core.guardium_rest_api import create_guardium_api
 from core.ssh_client import SSHClient
 from core.utils import execute_local_command, execute_commands, run_local_command
@@ -358,7 +359,6 @@ def db2_exit_configuration(config, logger, verbose: bool = False) -> bool:
     logger.info("✓ DB2 exit configured")
     return True
 
-
 def configure_db2_exit_ie(
     config,
     logger,
@@ -399,15 +399,13 @@ def configure_db2_exit_ie(
     logger.info("✓ DB2 Exit IE configured")
     return True
 
-
 def import_verification_definitions(
     config,
     logger,
     verbose: bool = False,
     cm_appliance: Optional[str] = None,
     definitions_dir: Optional[str] = None,
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
 
     if not _require(logger, cm_appliance=cm_appliance, definitions_dir=definitions_dir):
         return False
@@ -433,7 +431,6 @@ def import_verification_definitions(
 
     logger.info("✓ ATAP definitions imported")
     return True
-
 
 def install_filebeat_on_sauropod(
     config,
@@ -544,6 +541,41 @@ def stop_databases_atap(config, logger, verbose: bool = False, **kwargs) -> bool
         logger.info(f"✓ {svc} stopped and disabled")
     logger.info("✓ all ATAP databases stopped and disabled")
     return True
+
+def set_stap_network_latency(
+    config,
+    logger,
+    verbose: bool = False,
+    collector_appliance: str = "coll1",
+    latency: int = 10,
+    **kwargs) -> bool:
+    _header(logger, "SET STAP NETWORK LATENCY ON COLLECTOR")
+
+    params = _get_appliance_connection_params(config, logger, collector_appliance)
+    if not params:
+        return False
+
+    client = ApplianceClient(
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
+        timeout=60, strip_ansi=True
+    )
+
+    logger.info(f"[{collector_appliance}] ➜ connect {params['host']}")
+    if not client.connect():
+        logger.error(f"[{collector_appliance}] ✗ failed to connect")
+        return False
+
+    try:
+        cmd = f"store stap network_latency {latency}"
+        logger.info(f"[{collector_appliance}] ➜ {cmd}")
+        result = client.execute_command(cmd)
+        if verbose:
+            logger.info(f"[{collector_appliance}]   {result.strip()}")
+        logger.info(f"[{collector_appliance}] ✓ network_latency set to {latency}")
+        return True
+    finally:
+        client.disconnect()
 
 
 # Made with Bob

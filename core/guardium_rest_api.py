@@ -35,8 +35,8 @@ def api_retry(max_retries: int = 3, retry_delay: int = 60):
                         raise
                     
                     if logger:
-                        logger.warning(f"⚠ API call failed (attempt {attempt}/{max_retries}): {func.__name__}")
-                        logger.warning(f"  Error: {str(e)}")
+                        logger.debug(f"⚠ API call failed (attempt {attempt}/{max_retries}): {func.__name__}")
+                        logger.debug(f"  Error: {str(e)}")
                         logger.info(f"⏳ Waiting {retry_delay} seconds before retry...")
                     
                     time.sleep(retry_delay)

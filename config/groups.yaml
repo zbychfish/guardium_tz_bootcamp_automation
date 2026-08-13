@@ -417,6 +417,14 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+      - name: set_stap_network_latency
+        function: set_stap_network_latency
+        module: tasks.agent_labs
+        description: "Set STAP network latency on coll1 (store stap network_latency 10)"
+        args:
+          collector_appliance: "coll1"
+          latency: 10
+
       - name: stop_databases_atap
         function: stop_databases_atap
         module: tasks.agent_labs
