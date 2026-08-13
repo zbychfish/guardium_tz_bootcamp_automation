@@ -8,55 +8,60 @@ Handles Cassandra installation and configuration on remote machine (sauropod)
 import sys
 from pathlib import Path
 
-# Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from core import ConfigLoader
 from core.ssh_client import SSHClient
 
 
+def _header(logger, title: str):
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
+def _ssh_cmd(ssh, cmd, logger, desc: str, timeout: int = 30) -> bool:
+    result = ssh.execute_command(cmd, timeout=timeout, print_output=False)
+    if result['rc'] != 0:
+        logger.error(f"✗ Failed to {desc}: {result['stderr'].strip()}")
+        return False
+    return True
+
+
+def _ssh_cmds(ssh, commands, logger, desc: str, timeout: int = 30, stop_on_error: bool = True) -> bool:
+    results = ssh.execute_commands(commands=commands, timeout=timeout, print_output=False, stop_on_error=stop_on_error)
+    failed = [r for r in results if r['rc'] != 0]
+    if failed:
+        logger.error(f"✗ Failed to {desc}: {failed[0]['stderr'].strip()}")
+        return False
+    return True
+
+
 def deploy_cassandra_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
-    
-    logger.info("=" * 80)
-    logger.info("Apache Cassandra 4.1 deployment on sauropod")
-    logger.info("=" * 80)
-    
-    # Get sauropod machine IP (use private IP for internal communication)
+    _header(logger, "Apache Cassandra 4.1 deployment on sauropod")
+
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
-        logger.error("Could not find sauropod machine in configuration")
+        logger.error("✗ sauropod IP not found in configuration")
         return False
-    
-    # Get SSH configuration
+
     ssh_config = config.get('ssh', {})
     ssh_port = ssh_config.get('port', 2223)
     ssh_username = ssh_config.get('username', 'root')
-    
-    # Get root password from custom_variables
+
     root_password = config.get_custom_variable('pwd')
     if not root_password:
-        logger.error("Root password (pwd) not found in custom_variables")
+        logger.error("✗ pwd not found in custom_variables")
         return False
-    
-    logger.info(f"Connecting to sauropod at {sauropod_ip}:{ssh_port}")
-    
-    # Connect to sauropod via SSH
-    ssh = SSHClient(
-        host=sauropod_ip,
-        port=ssh_port,
-        username=ssh_username,
-        password=root_password,
-        timeout=60
-    )
-    
+
+    logger.info(f"  ➜ SSH {ssh_username}@{sauropod_ip}:{ssh_port}")
+    ssh = SSHClient(host=sauropod_ip, port=ssh_port, username=ssh_username, password=root_password, timeout=60)
     if not ssh.connect():
-        logger.error("Failed to connect to sauropod via SSH")
+        logger.error("✗ Failed to connect to sauropod via SSH")
         return False
-    
+    logger.info("  ✓ Connected to sauropod")
+
     try:
-        # Step 1: Create Cassandra repository configuration
-        logger.info("Step 1: Creating Cassandra repository configuration")
-        
         repo_content = """[cassandra]
 name=Apache Cassandra
 baseurl=https://redhat.cassandra.apache.org/41x/
@@ -64,117 +69,52 @@ gpgcheck=0
 repo_gpgcheck=0
 gpgkey=https://downloads.apache.org/cassandra/KEYS
 """
-        
-        create_repo_cmd = f"cat << 'EOF' > /etc/yum.repos.d/cassandra.repo\n{repo_content}EOF"
-        result = ssh.execute_command(
-            create_repo_cmd,
-            timeout=30,
-            print_output=verbose
-        )
-        
-        if result['rc'] != 0:
-            logger.error("Failed to create Cassandra repository configuration")
+        logger.info("  ➜ write /etc/yum.repos.d/cassandra.repo")
+        if not _ssh_cmd(ssh, f"cat << 'EOF' > /etc/yum.repos.d/cassandra.repo\n{repo_content}EOF",
+                        logger, "create Cassandra repo"):
             return False
-        
-        logger.info("✓ Cassandra repository configured")
-        
-        # Step 2: Install Cassandra
-        logger.info("Step 2: Installing Cassandra (this may take a few minutes)")
-        
-        install_cmd = "dnf -y install cassandra"
-        result = ssh.execute_command(
-            install_cmd,
-            timeout=600,
-            print_output=verbose
-        )
-        
-        if result['rc'] != 0:
-            logger.error("Failed to install Cassandra")
+        logger.info("  ✓ Cassandra repository configured")
+
+        logger.info("  ➜ dnf install cassandra")
+        if not _ssh_cmd(ssh, "dnf -y install cassandra", logger, "install Cassandra", timeout=600):
             return False
-        
-        logger.info("✓ Cassandra installed successfully")
-        
-        # Step 3: Configure audit logging in cassandra.yaml
-        logger.info("Step 3: Configuring audit logging in cassandra.yaml")
-        
-        configure_yaml_cmd = r"sed -i '/^audit_logging_options:/,/^[[:space:]]*- class_name:/c\audit_logging_options:\n  enabled: true\n  logger:\n    - class_name: FileAuditLogger' /etc/cassandra/conf/cassandra.yaml"
-        result = ssh.execute_command(
-            configure_yaml_cmd,
-            timeout=30,
-            print_output=verbose
-        )
-        
-        if result['rc'] != 0:
-            logger.error("Failed to configure audit logging in cassandra.yaml")
+        logger.info("  ✓ Cassandra installed")
+
+        logger.info("  ➜ sed cassandra.yaml: audit_logging_options enabled FileAuditLogger")
+        if not _ssh_cmd(ssh,
+                        r"sed -i '/^audit_logging_options:/,/^[[:space:]]*- class_name:/c\audit_logging_options:\n  enabled: true\n  logger:\n    - class_name: FileAuditLogger' /etc/cassandra/conf/cassandra.yaml",
+                        logger, "configure audit logging in cassandra.yaml"):
             return False
-        
-        logger.info("✓ Audit logging configured in cassandra.yaml")
-        
-        # Step 4: Configure audit logging in logback.xml
-        logger.info("Step 4: Configuring audit logging in logback.xml")
-        
-        logback_commands = [
+        logger.info("  ✓ Audit logging configured in cassandra.yaml")
+
+        logger.info("  ➜ sed logback.xml: uncomment AUDIT appender + logger")
+        if not _ssh_cmds(ssh, [
             "sed -i '/<!-- <appender name=\"AUDIT\"/,/SizeAndTimeBasedRollingPolicy/ { s/<!-- //; s/ -->// }' /etc/cassandra/conf/logback.xml",
             "sed -i 's|<!-- *<fileNamePattern>\\(.*\\)</fileNamePattern> *-->|<fileNamePattern>\\1</fileNamePattern>|' /etc/cassandra/conf/logback.xml",
             "sed -i '/<!-- *<maxFileSize>/,/<\\/appender> *-->/ { s/<!-- //; s/ -->// }' /etc/cassandra/conf/logback.xml",
-            "sed -i '/<!-- *<logger name=\"org.apache.cassandra.audit\"/,/<\\/logger> *-->/ { s/<!-- //; s/ -->// }' /etc/cassandra/conf/logback.xml"
-        ]
-        
-        results = ssh.execute_commands(
-            commands=logback_commands,
-            timeout=30,
-            print_output=verbose,
-            stop_on_error=True
-        )
-        
-        failed = [r for r in results if r['rc'] != 0]
-        if failed:
-            logger.error("Failed to configure audit logging in logback.xml")
+            "sed -i '/<!-- *<logger name=\"org.apache.cassandra.audit\"/,/<\\/logger> *-->/ { s/<!-- //; s/ -->// }' /etc/cassandra/conf/logback.xml",
+        ], logger, "configure audit logging in logback.xml"):
             return False
-        
-        logger.info("✓ Audit logging configured in logback.xml")
-        
-        # Step 5: Start Cassandra service (twice to ensure it's running)
-        logger.info("Step 5: Starting Cassandra service")
-        
-        start_commands = [
-            "service cassandra start",
-            "sleep 5",
-            "service cassandra start"
-        ]
-        
-        results = ssh.execute_commands(
-            commands=start_commands,
-            timeout=60,
-            print_output=verbose,
-            stop_on_error=False
-        )
-        
-        logger.info("✓ Cassandra service started")
-        
-        # Step 6: Verify Cassandra is running
-        logger.info("Step 6: Verifying Cassandra service status")
-        
-        verify_cmd = "service cassandra status"
-        result = ssh.execute_command(
-            verify_cmd,
-            timeout=30,
-            print_output=verbose
-        )
-        
+        logger.info("  ✓ Audit logging configured in logback.xml")
 
+        logger.info("  ➜ service cassandra start (x2 with sleep 5)")
+        ssh.execute_commands(
+            commands=["service cassandra start", "sleep 5", "service cassandra start"],
+            timeout=60, print_output=False, stop_on_error=False
+        )
+        logger.info("  ✓ Cassandra service started")
+
+        logger.info("  ➜ service cassandra status")
+        result = ssh.execute_command("service cassandra status", timeout=30, print_output=False)
         if result['rc'] == 0:
-            logger.info("✓ Cassandra is running")
+            logger.info("  ✓ Cassandra is running")
         else:
-            logger.warning("Cassandra service status check returned non-zero, but this may be normal during startup")
-        
-        logger.info("=" * 80)
-        logger.info("Cassandra deployment completed successfully")
-        logger.info("=" * 80)
-        logger.info("Note: Cassandra may take a few minutes to fully start up")
-        
+            logger.warning("  Cassandra status check returned non-zero — may still be starting up")
+
+        logger.info("✓ Cassandra deployment completed")
+        logger.info("  Note: Cassandra may take a few minutes to fully start up")
         return True
-    
+
     finally:
         ssh.disconnect()
 
