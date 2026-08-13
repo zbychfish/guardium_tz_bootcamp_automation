@@ -285,7 +285,6 @@ groups:
         module: tasks.setup_appliances
         description: "Register all Collectors and AppNodes on Central Manager sequentially (one by one, 10 min timeout per appliance)"
         args:
-          # cm_ip: "10.240.64.9"  # Optional - auto-detected from appliances.yaml
           cm_port: 8443
           timeout: 300  # 10 minutes per appliance
           registration_check_delay: 120  # Seconds to wait before checking status after timeout or "Fail:" (default: 120)
