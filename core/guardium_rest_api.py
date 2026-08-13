@@ -161,6 +161,7 @@ class GuardiumRestAPI:
         response.raise_for_status()
         
         return response.json()
+    
     def update_user(
         self,
         username: str,
@@ -171,8 +172,7 @@ class GuardiumRestAPI:
         email: Optional[str] = None,
         country: Optional[str] = None,
         disabled: Optional[bool] = None,
-        disable_pwd_expiry: Optional[bool] = None
-    ) -> dict:
+        disable_pwd_expiry: Optional[bool] = None) -> dict:
         if password and confirm_password and password != confirm_password:
             raise ValueError("Password and confirmPassword must match")
         
@@ -361,8 +361,7 @@ class GuardiumRestAPI:
         units: Optional[str] = None,
         max_retries: int = 3,
         retry_delay: int = 60,
-        debug: bool = False
-    ) -> dict:
+        debug: bool = False) -> dict:
         import time
         
         url = f'{self.base_url}/restAPI/policy_install'

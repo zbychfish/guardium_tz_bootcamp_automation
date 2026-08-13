@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import time
+import traceback
 from typing import Dict, Any, Optional
 from core.logger import get_logger
 from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
+from core.guardium_rest_api import create_guardium_api
 from core.appliance_operations import (
     restart_appliance as core_restart_appliance,
     configure_aggr_settings,
@@ -196,10 +199,6 @@ def install_policy_on_collector(
     max_outer_retries: int = 5,
     outer_retry_delay: int = 120,
     debug: bool = True) -> bool:
-    import time
-    import traceback
-    from core.guardium_rest_api import create_guardium_api
-
     _header(logger, "INSTALL POLICY ON COLLECTOR")
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
@@ -254,11 +253,8 @@ def install_policy_on_collector(
                 time.sleep(outer_retry_delay)
                 continue
 
-            logger.error(f"✗ install_policy failed after {outer_attempt} attempts: Code={error_code}, Message={error_message}")
+            logger.error(f"✗ install_policy failed: Code={error_code}, Message={error_message}")
             return False
-
-        logger.error(f"✗ install_policy: Code={error_code}, Message={error_message}")
-        return False
 
     except Exception as e:
         logger.error(f"✗ {e}")
@@ -813,8 +809,8 @@ def prepare_appliance_for_patching_single(
     appliance_name: Optional[str] = None,
     patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -827,7 +823,6 @@ def prepare_appliance_for_patching_single(
         cloudsupport_password=cloudsupport_password,
         debug=debug
     )
-
 
 def install_patch_on_appliance_single(
     config,
