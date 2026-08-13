@@ -345,7 +345,7 @@ groups:
      
       - name: import_gim_modules
         function: import_gim_modules
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Import GIM module files to Guardium appliance"
         args:
           appliance_name: "cm"
