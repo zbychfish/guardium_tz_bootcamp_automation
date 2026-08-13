@@ -23,8 +23,9 @@ def setup_raptor_to_deploy_etap(
     config,
     logger,
     verbose: bool = False,
-    debug: bool = False
-) -> bool:
+    local_tar: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar",
+    debug: bool = False) -> bool:
+
     _header(logger, "SETUP RAPTOR TO DEPLOY ETAP")
 
     logger.info("➜ dnf install podman-docker skopeo")
@@ -68,12 +69,7 @@ def setup_raptor_to_deploy_etap(
     except Exception as e:
         logger.warning(f"⚠ skopeo failed ({e}) — falling back to local image")
 
-    # ── TEMPORARY WORKAROUND: ICR registry unavailable ───────────────────────
-    # When skopeo cannot reach icr.io, load the ETAP image from a local tar
-    # and extract the version from the archive filename.
-    # Remove this block once ICR access is restored.
     if etap_version is None:
-        local_tar = "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar"
         logger.warning("⚠ ICR unreachable — loading local ETAP image (TEMPORARY WORKAROUND)")
         tar_match = re.search(r"guardium_external_s-tap_v(\d+\.\d+\.\d+)\.tar", local_tar)
         if not tar_match:
@@ -89,7 +85,6 @@ def setup_raptor_to_deploy_etap(
         except Exception as e:
             logger.error(f"✗ podman load failed: {e}")
             return False
-    # ── END TEMPORARY WORKAROUND ─────────────────────────────────────────────
 
     os.makedirs("/opt/ETAP/ca", exist_ok=True)
     with open("/opt/ETAP/ca/guardium_etap_version.txt", "w", encoding="utf-8") as f:
@@ -97,7 +92,6 @@ def setup_raptor_to_deploy_etap(
     config.set_custom_variable('guardium_etap_version', etap_version)
     logger.info(f"✓ ETAP version saved: {etap_version}")
     return True
-
 
 def setup_etap_certificates_mysql(
     config,

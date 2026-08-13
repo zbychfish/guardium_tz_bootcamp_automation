@@ -475,7 +475,7 @@ groups:
         module: tasks.etap_labs
         description: "Install required packages and determine latest ETAP version for deployment"
         args:
-          debug: false
+          local_tar: "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar" # used only if repo is not working
 
       - name: setup_etap_certificates_mysql
         function: setup_etap_certificates_mysql
