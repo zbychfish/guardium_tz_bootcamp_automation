@@ -819,28 +819,7 @@ def register_appliance(
     timeout: int = 600,
     registration_check_delay: int = 120
 ) -> bool:
-    """
-    Register appliance (Collector or AppNode) on Central Manager.
     
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance to register
-        cm_ip: Central Manager IP address (optional, auto-detected from machines_info.json)
-        cm_port: Central Manager port (default: 8443)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-        timeout: Command timeout in seconds (default: 600 - 10 minutes)
-        registration_check_delay: Delay in seconds before checking registration status after timeout or "Fail:" (default: 120)
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        register_appliance(config, logger, 'coll1', cm_ip='10.240.64.9')
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
