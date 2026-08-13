@@ -89,61 +89,37 @@ def set_shared_secret_all(
     shared_secret: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    
-    from core.appliance_operations import set_shared_secret, execute_on_appliances_async
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("SET SHARED SECRET ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
+    _header(logger, "SET SHARED SECRET ON ALL APPLIANCES")
+
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
-    
+
     if not all_appliances:
         logger.error("No appliances found in machines_info.json")
         return False
-    
+
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
     sorted_appliances = sorted(
         all_appliances.items(),
         key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
     )
-    
     appliance_names = [name for name, _ in sorted_appliances]
-    
+
     logger.info(f"Found {len(appliance_names)} appliances")
     for name, cfg in sorted_appliances:
         logger.info(f"  - {name} ({cfg.get('type')})")
-    
+
     results, errors = execute_on_appliances_async(
         appliances=appliance_names,
         operation_func=set_shared_secret,
         operation_name="set_shared_secret",
         logger=logger,
         config=config,
-        shared_secret=shared_secret,
         debug=debug
     )
-    
-    logger.info("\n" + "=" * 80)
-    logger.info("SET SHARED SECRET SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    failed_count = len(results) - success_count
-    
-    logger.info(f"✓ Successful: {success_count}/{len(results)}")
-    if failed_count > 0:
-        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
-        for appliance_name, success in results.items():
-            if not success:
-                error_msg = errors.get(appliance_name, "Unknown error")
-                logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    logger.info("=" * 80)
-    
-    return failed_count == 0
+
+    _log_summary(logger, "SET SHARED SECRET SUMMARY", results, errors)
+    return all(results.values())
 
 def configure_aggr_settings_all(
     config,
@@ -151,38 +127,26 @@ def configure_aggr_settings_all(
     verbose: bool = True,
     debug: bool = True
 ) -> bool:
-    """
-    Configure aggregation settings on all appliances:
-    - store run_cleanup_orphans_daily off
-    - store purge_age_period 0 (with confirmation, only on CM)
-    """
-    
-    from core.appliance_operations import configure_aggr_settings, execute_on_appliances_async
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("CONFIGURE AGGREGATION SETTINGS ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
+    _header(logger, "CONFIGURE AGGREGATION SETTINGS ON ALL APPLIANCES")
+
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
-    
+
     if not all_appliances:
         logger.error("No appliances found in machines_info.json")
         return False
-    
+
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
     sorted_appliances = sorted(
         all_appliances.items(),
         key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
     )
-    
     appliance_names = [name for name, _ in sorted_appliances]
-    
+
     logger.info(f"Found {len(appliance_names)} appliances")
     for name, cfg in sorted_appliances:
         logger.info(f"  - {name} ({cfg.get('type')})")
-    
+
     results, errors = execute_on_appliances_async(
         appliances=appliance_names,
         operation_func=configure_aggr_settings,
@@ -191,25 +155,9 @@ def configure_aggr_settings_all(
         config=config,
         debug=debug
     )
-    
-    logger.info("\n" + "=" * 80)
-    logger.info("CONFIGURE STORE SETTINGS SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    failed_count = len(results) - success_count
-    
-    logger.info(f"✓ Successful: {success_count}/{len(results)}")
-    if failed_count > 0:
-        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
-        for appliance_name, success in results.items():
-            if not success:
-                error_msg = errors.get(appliance_name, "Unknown error")
-                logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    logger.info("=" * 80)
-    
-    return failed_count == 0
+
+    _log_summary(logger, "CONFIGURE AGGREGATION SETTINGS SUMMARY", results, errors)
+    return all(results.values())
 
 
 def import_definitions_on_cm(
@@ -821,25 +769,7 @@ def restart_appliance_all(
     retry_interval: int = 10,
     max_retries: int = 60
 ) -> bool:
-    """
-    Restart all appliances asynchronously in order: CM → Collectors → AppNodes
-    Uses parallel execution to restart multiple appliances simultaneously (max 20 parallel).
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose output
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-        wait_for_availability: Wait for appliances to come back online
-        retry_interval: Seconds between retry attempts (default: 10)
-        max_retries: Maximum number of retry attempts (default: 60, total timeout = max_retries * retry_interval)
-    
-    Returns:
-        True if all appliances restarted successfully, False otherwise
-    """
+
     from core.appliance_config_loader import ApplianceConfigLoader
     from core.appliance_operations import execute_on_appliances_async
     

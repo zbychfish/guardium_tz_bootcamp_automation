@@ -676,141 +676,83 @@ def configure_aggr_settings(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Configure aggregation settings on Guardium appliance:
-    - store run_cleanup_orphans_daily off (all appliances)
-    - store purge_age_period 0 (only on CM appliances, with confirmation)
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    logger.info("=" * 80)
-    logger.info(f"CONFIGURE AGGREGATION SETTINGS: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Get connection parameters using helper function
+    import traceback
+    from .appliance_client import strip_ansi
+
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
         return False
-    
-    host = params['host']
-    user = params['user']
-    password = params['password']
-    prompt_regex = params['prompt_regex']
+
     appliance_type = params['appliance_type']
-    
-    # Validate required parameters (should not be None after _get_appliance_connection_params)
-    if not user or not password or not prompt_regex:
-        logger.error(f"Missing required connection parameters for appliance '{appliance_name}'")
-        return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
+
     try:
-        # Connect to appliance
         client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
+            host=params['host'],
+            user=params['user'],
+            password=params['password'],
+            prompt_regex=params['prompt_regex'],
             initial_pattern=None,
             timeout=60,
             strip_ansi=True,
             debug=debug
         )
-        
+
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        
-        # Execute first command: store run_cleanup_orphans_daily off
-        logger.info("\n➜ Executing: store run_cleanup_orphans_daily off")
+
+        logger.info(f"[{appliance_name}] ➜ store run_cleanup_orphans_daily off")
         result1 = client.execute_command("store run_cleanup_orphans_daily off")
-        
         if "The parameter has been changed" in result1:
-            logger.info("✓ run_cleanup_orphans_daily set to off")
+            logger.info(f"[{appliance_name}] ✓ run_cleanup_orphans_daily=off")
         else:
-            logger.warning(f"Unexpected response: {result1}")
-        
-        # Execute second command: store purge_age_period 0 (only on CM appliances)
+            logger.warning(f"[{appliance_name}] ⚠ unexpected response: {result1}")
+
         if appliance_type != 'cm':
-            logger.info(f"\n⊘ Skipping 'store purge_age_period 0' - only applicable to CM appliances (current type: {appliance_type})")
+            logger.info(f"[{appliance_name}] ⊘ purge_age_period skipped (type={appliance_type})")
             client.disconnect()
-            logger.info("=" * 80)
-            logger.info("Store settings configured successfully")
-            logger.info("=" * 80)
             return True
-        
-        logger.info("\n➜ Executing: store purge_age_period 0")
-        logger.info("This command requires ONLY on Central Manager (CM) appliances")
-        logger.info("This command requires confirmation (y/n)")
-        
-        # Send command
+
         if not client.channel:
-            logger.error("Channel not available")
+            logger.error(f"[{appliance_name}] channel not available")
             return False
-            
+
+        logger.info(f"[{appliance_name}] ➜ store purge_age_period 0")
         client.channel.send(b"store purge_age_period 0\n")
         time.sleep(1)
-        
-        # Wait for confirmation prompt
+
         output = ""
         start_time = time.time()
         while time.time() - start_time < 10:
             if client.channel.recv_ready():
                 chunk = client.channel.recv(4096).decode('utf-8', errors='ignore')
                 output += chunk
-                
-                # Check if we got the confirmation prompt
                 if "Are you sure you want to continue? (y/n)" in output:
-                    logger.info("Received confirmation prompt, sending 'y'")
                     client.channel.send(b"y\n")
                     time.sleep(2)
-                    
-                    # Read remaining output
-                    final_output = ""
                     final_start = time.time()
                     while time.time() - final_start < 5:
                         if client.channel.recv_ready():
-                            final_chunk = client.channel.recv(4096).decode('utf-8', errors='ignore')
-                            final_output += final_chunk
+                            output += client.channel.recv(4096).decode('utf-8', errors='ignore')
                         else:
                             time.sleep(0.1)
-                    
-                    output += final_output
                     break
             else:
                 time.sleep(0.1)
-        
+
         if client.strip_ansi_flag:
-            from .appliance_client import strip_ansi
             output = strip_ansi(output)
-        
+
         if "The purge_age period has been changed" in output:
-            logger.info("✓ purge_age_period set to 0")
+            logger.info(f"[{appliance_name}] ✓ purge_age_period=0")
         else:
-            logger.warning(f"Unexpected response: {output}")
-        
+            logger.warning(f"[{appliance_name}] ⚠ unexpected response: {output}")
+
         client.disconnect()
-        
-        logger.info("=" * 80)
-        logger.info("Store settings configured successfully")
-        logger.info("=" * 80)
         return True
-        
+
     except Exception as e:
-        logger.error(f"Error configuring store settings: {e}")
-        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -824,103 +766,43 @@ def set_shared_secret(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Set shared secret on Guardium appliance.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of the appliance
-        shared_secret: Shared secret value (optional, uses value from machines_info.json custom_variables if not provided)
-        user: SSH username (optional, uses default from appliance type)
-        password: SSH password (optional, uses cli_pwd from custom_variables)
-        prompt_regex: CLI prompt regex (optional, uses default from appliance type)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        set_shared_secret(config, logger, 'cm02', shared_secret='guardium')
-    """
-    logger.info("=" * 80)
-    logger.info(f"SET SHARED SECRET: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Get connection parameters using helper function
+    import traceback
+
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
         return False
-    
-    host = params['host']
-    user = params['user']
-    password = params['password']
-    prompt_regex = params['prompt_regex']
-    appliance_type = params['appliance_type']
-    
-    # Validate required parameters (should not be None after _get_appliance_connection_params)
-    if not user or not password or not prompt_regex:
-        logger.error(f"Missing required connection parameters for appliance '{appliance_name}'")
-        return False
-    
-    # Get shared secret value
-    target_shared_secret = shared_secret or config.get_custom_variable('shared_secret') or "guardium"
-    if shared_secret:
-        logger.info("Using provided shared_secret")
-    elif config.get_custom_variable('shared_secret'):
-        logger.info("Using shared_secret from custom_variables")
-    else:
-        logger.info("Using default shared_secret: guardium")
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
+
+    target_shared_secret = config.get_custom_variable('shared_secret') or "guardium"
+
     try:
-        # Connect to appliance
         client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
+            host=params['host'],
+            user=params['user'],
+            password=params['password'],
+            prompt_regex=params['prompt_regex'],
             initial_pattern=None,
             timeout=60,
             strip_ansi=True,
             debug=debug
         )
-        
+
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        
-        # Set shared secret
-        command = f"store system shared secret {target_shared_secret}"
-        logger.info(f"\n➜ Executing: store system shared secret ***")
-        output = client.execute_command(command)
-        logger.info(f"Command output:\n{output}")
-        
+
+        logger.info(f"[{appliance_name}] ➜ store system shared secret ***")
+        output = client.execute_command(f"store system shared secret {target_shared_secret}")
         client.disconnect()
-        
-        # Verify success
-        # Note: execute_command filters out "ok" line, so we check for "Command ran on:" or absence of error
+
         if "error" in output.lower() or "failed" in output.lower():
-            logger.error(f"✗ Command failed: {output}")
+            logger.error(f"[{appliance_name}] ✗ {output}")
             return False
-        elif "Command ran on:" in output or not output.strip():
-            # Success: either has timestamp or empty output (ok was filtered)
-            logger.info("=" * 80)
-            logger.info("✓ Shared secret set successfully")
-            logger.info("=" * 80)
-            return True
-        else:
-            logger.warning(f"⚠ Unexpected output (assuming success): {output}")
-            logger.info("=" * 80)
-            logger.info("✓ Shared secret set successfully")
-            logger.info("=" * 80)
-            return True
-        
+
+        logger.info(f"[{appliance_name}] ✓ shared secret set")
+        return True
+
     except Exception as e:
-        logger.error(f"Error setting shared secret: {e}")
-        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -1392,26 +1274,6 @@ def set_timezone(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Set timezone on Guardium appliance.
-    
-    Args:
-        config: Configuration object with machines_info
-        logger: Logger instance
-        appliance_name: Name of the appliance (e.g., 'cm', 'collector1')
-        timezone: Timezone to set (default: Europe/Warsaw or from machines_info.json)
-        user: SSH user (optional, uses config if not provided)
-        password: SSH password (optional, uses config if not provided)
-        prompt_regex: CLI prompt regex (optional, uses config if not provided)
-        debug: Enable debug output
-    
-    Returns:
-        bool: True if successful, False otherwise
-    
-    Example:
-        set_timezone(config, logger, 'cm')
-        set_timezone(config, logger, 'cm', timezone='America/New_York')
-    """
     try:
         if not appliance_name:
             logger.error("appliance_name is required")
@@ -1539,8 +1401,7 @@ def set_timezone(
         logger.info("=" * 80)
         logger.info(f"✓ Timezone configuration completed")
         logger.info("=" * 80)
-        return True
-        
+        return True        
     except Exception as e:
         logger.error(f"Error setting timezone: {str(e)}")
         if debug:
