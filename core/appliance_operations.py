@@ -554,8 +554,7 @@ def register_appliance(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 600,
-    registration_check_delay: int = 120
+    timeout: int = 240
 ) -> bool:
     import traceback
 
@@ -629,9 +628,8 @@ def register_appliance(
                 logger.info(f"[{appliance_name}] {output.strip()}")
 
             if fail_detected:
-                logger.warning(f"[{appliance_name}] ⚠ Fail: detected, waiting {registration_check_delay}s before recheck")
+                logger.warning(f"[{appliance_name}] ⚠ Fail: detected")
                 client.disconnect()
-                time.sleep(registration_check_delay)
                 reconnected = _reconnect()
                 if not reconnected:
                     logger.error(f"[{appliance_name}] failed to reconnect")
@@ -655,8 +653,7 @@ def register_appliance(
             return managed
 
         except TimeoutError:
-            logger.warning(f"[{appliance_name}] ⚠ timeout, waiting {registration_check_delay}s before recheck")
-            time.sleep(registration_check_delay)
+            logger.debug(f"[{appliance_name}] ⚠ timeout, reconnecting")
             reconnected = _reconnect()
             if not reconnected:
                 logger.error(f"[{appliance_name}] failed to reconnect after timeout")
@@ -665,7 +662,7 @@ def register_appliance(
             if managed:
                 logger.info(f"[{appliance_name}] ✓ registered (after timeout)")
             else:
-                logger.warning(f"[{appliance_name}] ⚠ timeout, not Managed")
+                logger.debug(f"[{appliance_name}] ⚠ timeout, not Managed")
             return managed
 
     except Exception as e:

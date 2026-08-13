@@ -679,8 +679,7 @@ def register_appliances_all(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 600,
-    registration_check_delay: int = 120
+    timeout: int = 240
 ) -> bool:
     _header(logger, "REGISTER APPLIANCES ON CENTRAL MANAGER")
 
@@ -721,8 +720,7 @@ def register_appliances_all(
         password=password,
         prompt_regex=prompt_regex,
         debug=debug,
-        timeout=timeout,
-        registration_check_delay=registration_check_delay
+        timeout=timeout
     )
 
     _log_summary(logger, "APPLIANCE REGISTRATION SUMMARY", results, errors)
