@@ -1133,130 +1133,79 @@ def copy_files_to_appliance(
     owner: str = "tomcat:tomcat",
     cloudsupport_password: Optional[str] = None,
     debug: bool = False) -> bool:
-    
+
     import os
     import glob
     import time
     import paramiko
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
+
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
         return False
-    
-    logger.info("=" * 80)
-    logger.info(f"COPY FILES TO APPLIANCE: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Load appliance configuration
-    from core.appliance_config_loader import ApplianceConfigLoader
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        return False
-    
-    host = appliance_config.get('ip')
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Get cloudsupport password
+
+    host = params['host']
+
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_password:
-            logger.error("cloudsupport_pwd not found in custom_variables")
+            logger.error(f"[{appliance_name}] cloudsupport_pwd not found in custom_variables")
             return False
-    
-    # Check if source directory exists
+
     if not os.path.exists(source_dir):
-        logger.error(f"Source directory not found: {source_dir}")
+        logger.error(f"[{appliance_name}] source dir not found: {source_dir}")
         return False
-    
-    # Find files matching pattern
+
     files_to_copy = glob.glob(os.path.join(source_dir, file_pattern))
     if not files_to_copy:
-        logger.error(f"No files matching '{file_pattern}' found in {source_dir}")
+        logger.error(f"[{appliance_name}] no files matching '{file_pattern}' in {source_dir}")
         return False
-    
-    logger.info(f"Found {len(files_to_copy)} file(s) to copy:")
-    for file_path in files_to_copy:
-        logger.info(f"  - {os.path.basename(file_path)}")
-    
+
+    _header(logger, f"COPY FILES TO APPLIANCE: {appliance_name}")
+    logger.info(f"[{appliance_name}] {len(files_to_copy)} file(s) → {target_dir}")
+
     try:
-        # Get raptor IP
         raptor_ip = config.get_machine_ip('raptor', use_private=True)
         if not raptor_ip:
-            logger.error("Could not find raptor IP in machines_info.json")
+            logger.error(f"[{appliance_name}] raptor IP not found")
             return False
-        
-        # Get root password for raptor
+
         raptor_root_password = config.get_custom_variable('pwd')
         if not raptor_root_password:
-            logger.error("pwd not found in custom_variables")
+            logger.error(f"[{appliance_name}] pwd not found in custom_variables")
             return False
-        
-        # Get SSH port
+
         ssh_port = config.config.get('ssh', {}).get('port', 22)
-        
-        logger.info(f"Raptor IP: {raptor_ip}, SSH port: {ssh_port}")
-        logger.info(f"Target appliance: {host}")
-        
-        # Connect as cloudsupport
-        logger.info(f"\n➜ Connecting to {host} as cloudsupport user...")
-        
+
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        ssh_client.connect(
-            hostname=host,
-            username='cloudsupport',
-            password=cloudsupport_password,
-            look_for_keys=False,
-            allow_agent=False,
-            timeout=30
-        )
-        
-        logger.info(f"✓ Connected successfully")
-        
-        # Copy files from raptor to appliance /tmp/
-        logger.info(f"\n➜ Copying files from raptor:{source_dir} to {host}:/tmp/...")
-        
-        # Check if sshpass is available
-        stdin, stdout, stderr = ssh_client.exec_command('which sshpass')
+        ssh_client.connect(hostname=host, username='cloudsupport', password=cloudsupport_password,
+                           look_for_keys=False, allow_agent=False, timeout=30)
+
+        stdin, stdout, _ = ssh_client.exec_command('which sshpass')
         sshpass_available = stdout.channel.recv_exit_status() == 0
-        
+
         for file_path in files_to_copy:
             filename = os.path.basename(file_path)
-            logger.info(f"  Copying {filename}...")
-            
+            logger.info(f"[{appliance_name}] ➜ scp {filename}")
             if sshpass_available:
-                # Use sshpass
-                scp_command = f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{file_path} /tmp/{filename}"
+                scp_command = (f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} "
+                               f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                               f"root@{raptor_ip}:{file_path} /tmp/{filename}")
                 stdin, stdout, stderr = ssh_client.exec_command(scp_command)
-                exit_status = stdout.channel.recv_exit_status()
-                
-                if exit_status != 0:
-                    error = stderr.read().decode()
-                    logger.error(f"Failed to copy {filename}: {error}")
+                if stdout.channel.recv_exit_status() != 0:
+                    logger.error(f"[{appliance_name}] ✗ scp {filename}: {stderr.read().decode()}")
                     ssh_client.close()
                     return False
             else:
-                # Use interactive SCP
-                logger.info("  Using interactive SCP (sshpass not available)...")
                 channel = ssh_client.invoke_shell()
                 time.sleep(0.5)
-                
                 if channel.recv_ready():
                     channel.recv(65535)
-                
-                scp_cmd = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{file_path} /tmp/{filename}\n"
-                channel.send(scp_cmd.encode())
-                
-                # Wait for password prompt
+                channel.send((f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                               f"root@{raptor_ip}:{file_path} /tmp/{filename}\n").encode())
                 output = ""
-                timeout_time = time.time() + 30
-                while time.time() < timeout_time:
+                deadline = time.time() + 30
+                while time.time() < deadline:
                     if channel.recv_ready():
                         chunk = channel.recv(4096).decode(errors='ignore')
                         output += chunk
@@ -1264,76 +1213,41 @@ def copy_files_to_appliance(
                             channel.send(f"{raptor_root_password}\n".encode())
                             break
                     time.sleep(0.1)
-                
                 time.sleep(2)
                 while channel.recv_ready():
                     channel.recv(4096)
-                
                 channel.close()
-                
-                # Verify file was copied
-                stdin, stdout, stderr = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
-                result = stdout.read().decode().strip()
-                
-                if result != "OK":
-                    logger.error(f"Failed to copy {filename}")
+                stdin, stdout, _ = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
+                if stdout.read().decode().strip() != "OK":
+                    logger.error(f"[{appliance_name}] ✗ scp {filename} failed")
                     ssh_client.close()
                     return False
-        
-        logger.info(f"✓ All {len(files_to_copy)} file(s) copied to /tmp/")
-        
-        # Move files to target directory
-        logger.info(f"\n➜ Moving files to {target_dir} and setting permissions...")
-        
-        # Create target directory
-        logger.info(f"  Creating {target_dir} directory if needed...")
+
+        logger.info(f"[{appliance_name}] ✓ {len(files_to_copy)} file(s) in /tmp/")
+
         stdin, stdout, stderr = ssh_client.exec_command(f'sudo mkdir -p {target_dir}')
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            error = stderr.read().decode()
-            logger.error(f"Failed to create directory: {error}")
+        if stdout.channel.recv_exit_status() != 0:
+            logger.error(f"[{appliance_name}] ✗ mkdir {target_dir}: {stderr.read().decode()}")
             ssh_client.close()
             return False
-        
-        # Move files
-        logger.info(f"  Moving files from /tmp/ to {target_dir}...")
-        stdin, stdout, stderr = ssh_client.exec_command(f'sudo mv /tmp/{file_pattern} {target_dir}')
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            error = stderr.read().decode()
-            logger.error(f"Failed to move files: {error}")
+
+        logger.info(f"[{appliance_name}] ➜ mv /tmp/{file_pattern} {target_dir} && chown {owner}")
+        stdin, stdout, stderr = ssh_client.exec_command(
+            f'sudo mv /tmp/{file_pattern} {target_dir} && sudo chown {owner} {target_dir}/{file_pattern}')
+        if stdout.channel.recv_exit_status() != 0:
+            logger.error(f"[{appliance_name}] ✗ mv/chown: {stderr.read().decode()}")
             ssh_client.close()
             return False
-        
-        # Set ownership
-        logger.info(f"  Setting ownership to {owner}...")
-        stdin, stdout, stderr = ssh_client.exec_command(f'sudo chown {owner} {target_dir}/{file_pattern}')
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            error = stderr.read().decode()
-            logger.error(f"Failed to set ownership: {error}")
-            ssh_client.close()
-            return False
-        
-        # Verify files
-        logger.info("  Verifying files...")
-        stdin, stdout, stderr = ssh_client.exec_command(f'sudo ls -la {target_dir}/{file_pattern}')
-        output = stdout.read().decode()
-        logger.info(f"Files in {target_dir}:\n{output}")
-        
+
         ssh_client.close()
-        
-        logger.info(f"\n✓ Files copied successfully to {appliance_name}")
-        logger.info("=" * 80)
-        
+        logger.info(f"[{appliance_name}] ✓ files in {target_dir}")
         return True
-        
+
     except Exception as e:
-        logger.error(f"✗ Failed to copy files: {e}")
+        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         if debug:
-            import traceback
             logger.error(traceback.format_exc())
-        logger.error("=" * 80)
         return False
 
 def copy_single_file_to_appliance(
@@ -1345,8 +1259,10 @@ def copy_single_file_to_appliance(
     owner: str = "tomcat:tomcat",
     cloudsupport_password: Optional[str] = None,
     debug: bool = True) -> bool:
-    
+
     import os
+    import time
+    import paramiko
 
     if not source_file_path:
         logger.error("source_file_path is required")
@@ -1358,87 +1274,61 @@ def copy_single_file_to_appliance(
 
     host = params['host']
 
-    logger.info("=" * 80)
-    logger.info(f"COPY FILE TO APPLIANCE: {appliance_name}")
-    logger.info("=" * 80)
-
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_password:
-            logger.error("cloudsupport_pwd not found in machines_info.json custom_variables")
+            logger.error(f"[{appliance_name}] cloudsupport_pwd not found in custom_variables")
             return False
-        logger.info("Using cloudsupport password from custom_variables")
-    
+
     if not os.path.exists(source_file_path):
-        logger.error(f"Source file not found: {source_file_path}")
+        logger.error(f"[{appliance_name}] source file not found: {source_file_path}")
         return False
-    
+
     filename = os.path.basename(source_file_path)
-    logger.info(f"File to copy: {filename}")
-    logger.info(f"Source: {source_file_path}")
-    logger.info(f"Target: {target_dir}")
-    
+    _header(logger, f"COPY FILE TO APPLIANCE: {appliance_name}")
+    logger.info(f"[{appliance_name}] {filename} → {target_dir}")
+
     try:
         raptor_ip = config.get_machine_ip('raptor', use_private=True)
         if not raptor_ip:
-            logger.error("Could not find raptor IP in machines_info.json")
+            logger.error(f"[{appliance_name}] raptor IP not found")
             return False
-        
+
         raptor_root_password = config.get_custom_variable('pwd')
         if not raptor_root_password:
-            logger.error("pwd not found in machines_info.json custom_variables")
+            logger.error(f"[{appliance_name}] pwd not found in custom_variables")
             return False
-        
+
         ssh_port = config.config.get('ssh', {}).get('port', 22)
-        
-        logger.info(f"Raptor IP: {raptor_ip}, SSH port: {ssh_port}")
-        
-        import paramiko
-        
+
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        ssh_client.connect(
-            hostname=host,
-            username='cloudsupport',
-            password=cloudsupport_password,
-            look_for_keys=False,
-            allow_agent=False,
-            timeout=30
-        )
-        
-        logger.info(f"✓ Connected to {host}")
-        logger.info(f"\n➜ Copying {filename} from raptor to appliance /tmp/...")
-        
-        stdin, stdout, stderr = ssh_client.exec_command('which sshpass')
+        ssh_client.connect(hostname=host, username='cloudsupport', password=cloudsupport_password,
+                           look_for_keys=False, allow_agent=False, timeout=30)
+
+        stdin, stdout, _ = ssh_client.exec_command('which sshpass')
         sshpass_available = stdout.channel.recv_exit_status() == 0
-        
+
+        logger.info(f"[{appliance_name}] ➜ scp {filename}")
         if sshpass_available:
-            logger.info("  Using sshpass for file transfer...")
-            scp_cmd = f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{source_file_path} /tmp/{filename}"
+            scp_cmd = (f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} "
+                       f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                       f"root@{raptor_ip}:{source_file_path} /tmp/{filename}")
             stdin, stdout, stderr = ssh_client.exec_command(scp_cmd, timeout=300)
-            exit_status = stdout.channel.recv_exit_status()
-            
-            if exit_status != 0:
-                error = stderr.read().decode()
-                logger.error(f"SCP failed: {error}")
+            if stdout.channel.recv_exit_status() != 0:
+                logger.error(f"[{appliance_name}] ✗ scp failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
         else:
-            logger.info("  Using interactive SCP (sshpass not available)...")
             channel = ssh_client.invoke_shell()
-            
-            import time
             time.sleep(0.5)
             while channel.recv_ready():
                 channel.recv(65535)
-            
-            scp_cmd = f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@{raptor_ip}:{source_file_path} /tmp/{filename}\n"
-            channel.send(scp_cmd.encode())
-            
+            channel.send((f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+                          f"root@{raptor_ip}:{source_file_path} /tmp/{filename}\n").encode())
             output = ""
-            timeout_time = time.time() + 30
-            while time.time() < timeout_time:
+            deadline = time.time() + 30
+            while time.time() < deadline:
                 if channel.recv_ready():
                     chunk = channel.recv(4096).decode(errors='ignore')
                     output += chunk
@@ -1446,65 +1336,42 @@ def copy_single_file_to_appliance(
                         channel.send(f"{raptor_root_password}\n".encode())
                         break
                 time.sleep(0.1)
-            
             time.sleep(2)
             while channel.recv_ready():
                 channel.recv(4096)
-            
             channel.close()
-        
-        stdin, stdout, stderr = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
-        result = stdout.read().decode().strip()
-        
-        if result != "OK":
-            logger.error(f"Failed to copy {filename}")
+
+        stdin, stdout, _ = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
+        if stdout.read().decode().strip() != "OK":
+            logger.error(f"[{appliance_name}] ✗ scp {filename} failed")
             ssh_client.close()
             return False
-        
-        logger.info(f"✓ File copied to /tmp/")
-        logger.info(f"\n➜ Moving file to {target_dir} and setting permissions...")
-        
+
+        logger.info(f"[{appliance_name}] ✓ {filename} in /tmp/")
+
         stdin, stdout, stderr = ssh_client.exec_command(f'sudo mkdir -p {target_dir}')
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            error = stderr.read().decode()
-            logger.error(f"Failed to create directory: {error}")
+        if stdout.channel.recv_exit_status() != 0:
+            logger.error(f"[{appliance_name}] ✗ mkdir {target_dir}: {stderr.read().decode()}")
             ssh_client.close()
             return False
-        
-        stdin, stdout, stderr = ssh_client.exec_command(f'sudo mv /tmp/{filename} {target_dir}')
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            error = stderr.read().decode()
-            logger.error(f"Failed to move file: {error}")
+
+        logger.info(f"[{appliance_name}] ➜ mv /tmp/{filename} {target_dir} && chown {owner}")
+        stdin, stdout, stderr = ssh_client.exec_command(
+            f'sudo mv /tmp/{filename} {target_dir} && sudo chown {owner} {target_dir}/{filename}')
+        if stdout.channel.recv_exit_status() != 0:
+            logger.error(f"[{appliance_name}] ✗ mv/chown: {stderr.read().decode()}")
             ssh_client.close()
             return False
-        
-        stdin, stdout, stderr = ssh_client.exec_command(f'sudo chown {owner} {target_dir}/{filename}')
-        exit_status = stdout.channel.recv_exit_status()
-        if exit_status != 0:
-            error = stderr.read().decode()
-            logger.error(f"Failed to set ownership: {error}")
-            ssh_client.close()
-            return False
-        
-        stdin, stdout, stderr = ssh_client.exec_command(f'sudo ls -la {target_dir}/{filename}')
-        output = stdout.read().decode()
-        logger.info(f"File in {target_dir}:\n{output}")
-        
+
         ssh_client.close()
-        
-        logger.info(f"\n✓ File copied successfully to {appliance_name}")
-        logger.info("=" * 80)
-        
+        logger.info(f"[{appliance_name}] ✓ {filename} in {target_dir}")
         return True
-        
+
     except Exception as e:
-        logger.error(f"✗ Failed to copy file: {e}")
+        import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         if debug:
-            import traceback
             logger.error(traceback.format_exc())
-        logger.error("=" * 80)
         return False
 
 def get_patch_installation_order(
@@ -1512,64 +1379,44 @@ def get_patch_installation_order(
     logger,
     appliance_name: str,
     patch_order_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    debug: bool = True
-) -> Optional[str]:
-    
+    debug: bool = True) -> Optional[str]:
+
     import os
-    
-    logger.info("=" * 80)
-    logger.info(f"GET PATCH INSTALLATION ORDER")
-    logger.info("=" * 80)
-    
+
+    _header(logger, "GET PATCH INSTALLATION ORDER")
+
     if not os.path.exists(patch_order_file):
-        logger.error(f"Patch order file not found: {patch_order_file}")
+        logger.error(f"patch order file not found: {patch_order_file}")
         return None
-    
-    logger.info(f"➜ Reading patch order from: {patch_order_file}")
+
     try:
         with open(patch_order_file, 'r') as f:
             patch_order = [line.strip() for line in f if line.strip()]
-        
-        logger.info(f"Desired installation order ({len(patch_order)} patches):")
-        for i, patch_name in enumerate(patch_order, 1):
-            logger.info(f"  {i}. {patch_name}")
     except Exception as e:
-        logger.error(f"Failed to read patch order file: {e}")
+        logger.error(f"failed to read patch order file: {e}")
         return None
-    
+
     if not patch_order:
-        logger.error("No patches found in patch_order.txt")
+        logger.error("no patches found in patch_order.txt")
         return None
-    
+
     sorted_patches = sorted(patch_order)
-    
-    logger.info(f"\nAlphabetically sorted (CM order) ({len(sorted_patches)} patches):")
-    for i, patch_name in enumerate(sorted_patches, 1):
-        logger.info(f"  Position {i}: {patch_name}")
-    
-    logger.info("\n➜ Mapping desired order to CM positions...")
+
     patch_positions = []
-    
     for patch_spec in patch_order:
         try:
             position = sorted_patches.index(patch_spec) + 1
             patch_positions.append(str(position))
             logger.info(f"  {patch_spec} → position {position}")
         except ValueError:
-            logger.warning(f"  {patch_spec} → NOT FOUND in sorted list!")
-    
+            logger.warning(f"  {patch_spec} → NOT FOUND in sorted list")
+
     if not patch_positions:
-        logger.error("No patches mapped from patch_order.txt")
+        logger.error("no patches mapped from patch_order.txt")
         return None
-    
+
     patch_selection = ','.join(patch_positions)
-    
-    logger.info("=" * 80)
-    logger.info(f"✓ Patch installation order: {patch_selection}")
-    logger.info("=" * 80)
-    
+    logger.info(f"✓ patch order: {patch_selection}")
     return patch_selection
 
 def install_patch_on_appliance(
@@ -1580,8 +1427,7 @@ def install_patch_on_appliance(
     reinstall_answer: str = "y",
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     
     import socket
 

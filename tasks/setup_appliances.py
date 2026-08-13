@@ -763,40 +763,30 @@ def install_and_monitor_patches_all(
     config,
     logger,
     verbose: bool = True,
-    patch_selection: Optional[str] = None,
     reinstall_answer: str = "y",
     check_interval: int = 60,
     max_checks: int = 60,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
     debug: bool = True) -> bool:
-    
+
     _header(logger, "INSTALL AND MONITOR PATCHES ON ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
         return False
 
+    cm_appliances = {n: c for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm'}
+    if not cm_appliances:
+        logger.error("no Central Manager found in machines_info.json")
+        return False
+    cm_name = next(iter(cm_appliances))
+    logger.info(f"➜ get_patch_installation_order from {cm_name}")
+    patch_selection = get_patch_installation_order(config=config, logger=logger, appliance_name=cm_name, debug=debug)
     if not patch_selection:
-        cm_appliances = {n: c for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm'}
-        if not cm_appliances:
-            logger.error("No Central Manager found in machines_info.json")
-            return False
-        cm_name = next(iter(cm_appliances))
-        logger.info(f"➜ get_patch_installation_order from {cm_name}")
-        patch_selection = get_patch_installation_order(
-            config=config, logger=logger, appliance_name=cm_name,
-            user=user, password=password, debug=debug
-        )
-        if not patch_selection:
-            logger.error("Failed to determine patch installation order from CM")
-            return False
-        logger.info(f"✓ patch_selection={patch_selection}")
-    else:
-        logger.info(f"patch_selection={patch_selection}")
+        logger.error("failed to determine patch installation order from CM")
+        return False
 
     appliance_names = list(all_appliances.keys())
-    logger.info(f"Found {len(appliance_names)} appliances")
+    logger.info(f"found {len(appliance_names)} appliances")
     for name in appliance_names:
         logger.info(f"  - {name} ({all_appliances[name].get('type', 'unknown')})")
 
@@ -810,8 +800,6 @@ def install_and_monitor_patches_all(
         reinstall_answer=reinstall_answer,
         check_interval=check_interval,
         max_checks=max_checks,
-        user=user,
-        password=password,
         debug=debug
     )
 
