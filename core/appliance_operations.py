@@ -388,8 +388,6 @@ def setup_kafka_node(
         logger.error(traceback.format_exc())
         return False
 
-
-
 def configure_aggr_settings(
     config,
     logger,
@@ -983,24 +981,11 @@ def prepare_appliance_for_patching(
     import paramiko
     import traceback
 
-    if not appliance_name:
-        logger.error("appliance_name is required")
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
         return False
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    if not appliance_config:
-        logger.error(f"[{appliance_name}] not found in machines_info.json")
-        return False
-
-    host = appliance_config.get('ip')
-    if not host:
-        logger.error(f"[{appliance_name}] no IP address configured")
-        return False
-
-    appliance_type = appliance_config.get('type')
-    cli_prompt_regex = (appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None) \
-        or r'[\w-]+(\.demo\.guardium)?> '
+    host, prompt_regex = params['host'], params['prompt_regex']
 
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
@@ -1129,7 +1114,7 @@ def prepare_appliance_for_patching(
 
         cli_client = ApplianceClient(
             host=host, user='cli', password=cli_password,
-            prompt_regex=cli_prompt_regex, initial_pattern=None,
+            prompt_regex=prompt_regex, initial_pattern=None,
             timeout=300, strip_ansi=True, debug=debug
         )
 
@@ -1374,33 +1359,21 @@ def copy_single_file_to_appliance(
     debug: bool = True) -> bool:
     
     import os
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
+
     if not source_file_path:
         logger.error("source_file_path is required")
         return False
-    
+
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
+        return False
+
+    host = params['host']
+
     logger.info("=" * 80)
     logger.info(f"COPY FILE TO APPLIANCE: {appliance_name}")
     logger.info("=" * 80)
-    
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    host = appliance_config.get('ip')
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
+
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_password:
@@ -1623,62 +1596,31 @@ def install_patch_on_appliance(
 ) -> bool:
     
     import socket
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-    
+
     if not patch_selection:
         logger.error("patch_selection is required")
         return False
-    
+
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password)
+    if not params:
+        return False
+
+    host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
+    appliance_type = params['appliance_type']
+
     logger.info("=" * 80)
     logger.info(f"INSTALL PATCHES: {appliance_name}")
     logger.info("=" * 80)
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Get prompt regex for CLI user
-    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
-    if not cli_prompt_regex:
-        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
-    
-    # Get user (default to 'cli')
-    if not user:
-        user = 'cli'
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if not password:
-            logger.error("cli_pwd not found in machines_info.json custom_variables")
-            return False
-    
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"Patch selection: {patch_selection}")
     logger.info(f"Reinstall answer: {reinstall_answer}")
-    
+
     try:
-        # Connect to appliance
         client = ApplianceClient(
             host=host,
             user=user,
             password=password,
-            prompt_regex=cli_prompt_regex,
+            prompt_regex=prompt_regex,
             initial_pattern=None,
             timeout=60,
             strip_ansi=True,
@@ -1776,7 +1718,7 @@ def install_patch_on_appliance(
                             time.sleep(0.5)
                     
                     # Check if we're back at prompt (command completed)
-                    if patch_selected and (cli_prompt_regex and re.search(cli_prompt_regex, buf_clean)):
+                    if patch_selected and (prompt_regex and re.search(prompt_regex, buf_clean)):
                         # Wait a moment for any final output
                         time.sleep(1)
                         try:
@@ -1858,46 +1800,16 @@ def monitor_patch_installation(
     debug: bool = False
 ) -> bool:
     
-    if not appliance_name:
-        logger.error("appliance_name is required")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password)
+    if not params:
         return False
-    
+
+    host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
+    appliance_type = params['appliance_type']
+
     logger.info("=" * 80)
     logger.info(f"MONITOR PATCH INSTALLATION: {appliance_name}")
     logger.info("=" * 80)
-    
-    # Load appliance configuration
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    # Get prompt regex for CLI user
-    cli_prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None
-    if not cli_prompt_regex:
-        cli_prompt_regex = r'[\w-]+(\.demo\.guardium)?> '
-    
-    # Get user (default to 'cli')
-    if not user:
-        user = 'cli'
-    
-    # Get password from custom_variables if not provided
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-        if not password:
-            logger.error("cli_pwd not found in machines_info.json custom_variables")
-            return False
-    
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"Check interval: {check_interval} seconds")
     logger.info(f"Max checks: {max_checks} (timeout: {check_interval * max_checks} seconds)")
@@ -1916,7 +1828,7 @@ def monitor_patch_installation(
                 host=host,
                 user=user,
                 password=password,
-                prompt_regex=cli_prompt_regex,
+                prompt_regex=prompt_regex,
                 initial_pattern=None,
                 timeout=60,
                 strip_ansi=True,
@@ -2213,50 +2125,7 @@ def install_gim_module(
     installation_delay: int = 10,
     debug: bool = False
 ) -> bool:
-    """
-    Universal function to install GIM module on a client using Guardium REST API.
     
-    This function:
-    1. Authenticates to Guardium appliance
-    2. Assigns GIM module to client
-    3. Sets module parameters (if provided)
-    4. Schedules installation
-    5. Optionally monitors installation progress
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Name of Guardium appliance (CM) to connect to
-        client_ip: IP address of the client where module will be installed
-        module: GIM module name (e.g., "BUNDLE-STAP", "BUNDLE-ATAP")
-        module_version: Module version (e.g., "12.2.2.0_r123489_")
-        params: Dictionary of module parameters {param_name: param_value}
-        demo_user: Demo user username (default: "demo")
-        demo_password: Demo user password (optional, uses custom_variables if not provided)
-        monitor_installation: Whether to monitor installation progress (default: True)
-        installation_delay: Delay in seconds before monitoring (default: 10)
-        debug: Enable debug output
-    
-    Returns:
-        True if installation successful, False otherwise
-    
-    Example:
-        # Install STAP module
-        install_gim_module(
-            config=config,
-            logger=logger,
-            appliance_name="cm01",
-            client_ip="10.10.9.70",
-            module="BUNDLE-STAP",
-            module_version="12.2.2.0_r123489_",
-            params={
-                "STAP_SQLGUARD_IP": "10.10.9.219",
-                "STAP_USE_TLS": "1",
-                "STAP_STATISTICS": "-3",
-                "STAP_CONNECTION_POOL_SIZE": "2"
-            }
-        )
-    """
     from core.guardium_rest_api import create_guardium_api
     import time
     
@@ -2485,59 +2354,18 @@ def enable_ltr_on_appnode(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Enable LTR (Lake Threat Response) on appnode by executing datalake commands.
     
-    Steps:
-    1. store datalake install - verify "Datalake installation was successful"
-    2. store datalake all_in_one xxsmall - verify "Datalake all_in_one was brought up correctly"
-    3. store datalake service start
-    4. show datalake status - verify "Datalake is running!"
-    """
     
-    if not appliance_name:
-        logger.error("appliance_name is required")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
-    
+
+    host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
+    appliance_type = params['appliance_type']
+
     logger.info("=" * 80)
     logger.info(f"ENABLE LTR ON APPNODE: {appliance_name}")
     logger.info("=" * 80)
-    
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
     
@@ -2627,27 +2455,12 @@ def import_datalake_s3_certificate(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Import S3 certificate for datalake on CM appliance.
     
-    Steps:
-    1. Read certificate from raptor:/home/minio/ca/certs/ca.crt
-    2. Connect to CM CLI
-    3. Execute 'store certificate application datalake s3 console'
-    4. Paste certificate content
-    5. Send CTRL+D
-    6. Verify "SUCCESS: Certificate imported successfully"
-    """
-    
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
     
     logger.info("=" * 80)
     logger.info(f"IMPORT DATALAKE S3 CERTIFICATE: {appliance_name}")
     logger.info("=" * 80)
-    
-    # Read certificate from local file (script runs on raptor)
+
     logger.info(f"Reading certificate from local file: {certificate_file_path}")
     
     try:
@@ -2667,42 +2480,13 @@ def import_datalake_s3_certificate(
         logger.error(f"Error reading certificate file: {e}")
         return False
     
-    # Now connect to CM and import certificate
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
+
+    host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
+    appliance_type = params['appliance_type']
+
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"User: {user}")
     
@@ -2823,29 +2607,7 @@ def distribute_datalake_certificate(
     check_interval: int = 10,
     debug: bool = False
 ) -> bool:
-    """
-    Distribute datalake S3 certificate to all managed appliances and monitor synchronization.
     
-    Steps:
-    1. Execute 'distribute application certificate datalake all_managed true' on CM
-    2. Monitor with 'distribute certificate showlog all' until complete
-    3. Verify Success status for all appnodes (2 entries per appnode) and collectors (1 entry per collector)
-    4. Verify INFO status for CM (2 entries)
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        appliance_name: Name of CM appliance (default: 'cm')
-        user: SSH username (optional)
-        password: SSH password (optional)
-        prompt_regex: Prompt regex (optional)
-        timeout: Maximum time to wait for distribution (seconds, default: 300)
-        check_interval: Interval between status checks (seconds, default: 10)
-        debug: Enable debug output
-    
-    Returns:
-        True if distribution successful, False otherwise
-    """
     from .appliance_config_loader import ApplianceConfigLoader
     from .appliance_client import ApplianceClient
     import time
@@ -3025,42 +2787,7 @@ def activate_ltr(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    """
-    Activate LTR (Long Term Retention) by configuring complete cold storage on CM appliance.
     
-    Executes grdapi configure_complete_cold_storage command with parameters:
-    - protocol: CUSTOM
-    - objectStorageEndpoint: https://raptor.demo.guardium:9000
-    - accessKey: minioadmin
-    - secretKey: from custom_variables (pwd)
-    - dataBucket: guardium-ltr
-    - resultSchema: datalake_reports
-    - region: US_EAST_1
-    - coldCatalogEndpoint: thrift://appnode1.demo.guardium:9083
-    - coldCatalogSchema: datalake
-    - coldStorageName: datalake
-    - queryEngineHost: appnode1.demo.guardium
-    - debug: 3
-    
-    Expected success output:
-    - "Cold Storage Maintenance Setup Completed"
-    - "Cold Storage ID: 1"
-    - "Cold Storage Name: datalake"
-    - Status: Success
-    - Message: "Complete cold storage configuration successful"
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        appliance_name: Name of CM appliance (default: 'cm')
-        user: SSH username (optional)
-        password: SSH password (optional)
-        prompt_regex: Prompt regex (optional)
-        debug: Enable debug output
-    
-    Returns:
-        True if activation successful, False otherwise
-    """
     from .appliance_config_loader import ApplianceConfigLoader
     from .appliance_client import ApplianceClient
     
@@ -3201,8 +2928,7 @@ def prepare_log_guard_dir(
     logger,
     appliance_name: str,
     cloudsupport_password: Optional[str] = None,
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
     import paramiko
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
