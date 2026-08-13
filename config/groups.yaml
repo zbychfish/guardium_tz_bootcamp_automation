@@ -238,14 +238,6 @@ groups:
         module: tasks.setup_appliances
         description: "CONSOLIDATED: Configure ALL system settings in single CLI session per appliance (hostname, domain, small_disk, timeouts, network IP, timezone, NTP, hosts resolving, product GID). Executes in parallel (max 20), CM → Collectors → AppNodes order."
         args:
-          # hostname: "custom"  # Optional - override hostname for all appliances
-          # domain: "demo.guardium"  # Optional - defaults to demo.guardium
-          # ip_address: "10.240.64.9"  # Optional - uses IP from appliances.yaml if not provided
-          # prefix: "/24"  # Optional - network prefix (default: /24)
-          timezone: "Europe/London"  # Optional - defaults to Europe/Warsaw or from machines_info.json
-          # ntp_servers: ['time.google.com', 'time.cloudflare.com']  # Optional - defaults to pool.ntp.org
-          configure_hosts: true  # Optional - whether to configure /etc/hosts (default: true)
-          # gid: 12345  # Optional - product GID, generates random 1000-100000 if not provided
           debug: false
       
       - name: set_shared_secret_all

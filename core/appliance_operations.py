@@ -51,51 +51,48 @@ def execute_on_appliances_async(
     if not appliances:
         logger.warning("No appliances provided for async execution")
         return {}, {}
-    
-    # Determine number of workers (max 20 parallel operations)
+
     max_workers = min(len(appliances), 20)
-    
-    logger.info(f"Starting async {operation_name} on {len(appliances)} appliances (max {max_workers} parallel)")
-    logger.info(f"Appliances: {', '.join(appliances)}")
-    logger.info("")
-    
+    total = len(appliances)
+
+    logger.info(f"➜ {operation_name} — {total} appliances, {max_workers} parallel")
+    for a in appliances:
+        logger.info(f"  ○ {a}")
+
     results = {}
     errors = {}
-    
-    def execute_single(appliance_name: str) -> Tuple[str, bool, Optional[str]]:
-        """Execute operation on single appliance and return result"""
+    completed_count = 0
+
+    def execute_single(appliance_name: str) -> Tuple[str, bool, Optional[str], float]:
+        t0 = time.time()
         try:
-            logger.info(f"[{appliance_name}] Starting {operation_name}...")
             success = operation_func(
                 appliance_name=appliance_name,
                 logger=logger,
                 **operation_kwargs
             )
-            if success:
-                logger.info(f"[{appliance_name}] ✓ {operation_name} completed successfully")
-            else:
-                logger.error(f"[{appliance_name}] ✗ {operation_name} failed")
-            return appliance_name, success, None
+            return appliance_name, success, None, time.time() - t0
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"[{appliance_name}] ✗ {operation_name} failed with exception: {error_msg}")
-            return appliance_name, False, error_msg
-    
-    # Execute operations in parallel using ThreadPoolExecutor
+            return appliance_name, False, str(e), time.time() - t0
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
         future_to_appliance = {
-            executor.submit(execute_single, appliance): appliance 
+            executor.submit(execute_single, appliance): appliance
             for appliance in appliances
         }
-        
-        # Wait for all tasks to complete
         for future in concurrent.futures.as_completed(future_to_appliance):
-            appliance_name, success, error = future.result()
+            appliance_name, success, error, elapsed = future.result()
             results[appliance_name] = success
             if error:
                 errors[appliance_name] = error
-    
+            completed_count += 1
+            elapsed_str = f"{elapsed:.0f}s" if elapsed < 60 else f"{int(elapsed)//60}m{int(elapsed)%60:02d}s"
+            if success:
+                logger.info(f"  ✓ [{completed_count}/{total}] {appliance_name} ({elapsed_str})")
+            else:
+                msg = f" — {error}" if error else ""
+                logger.error(f"  ✗ [{completed_count}/{total}] {appliance_name} ({elapsed_str}){msg}")
+
     return results, errors
 
 def _get_appliance_connection_params(
@@ -1568,118 +1565,79 @@ def configure_system_settings_consolidated(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    
+    import traceback
+
     try:
         if not appliance_name:
             logger.error("appliance_name is required")
             return False
-        
-        logger.info("=" * 80)
+
         logger.info(f"CONFIGURE SYSTEM SETTINGS (CONSOLIDATED): {appliance_name}")
-        logger.info("=" * 80)
-        
-        # Load appliance configuration
+
         appliance_loader = ApplianceConfigLoader(config_loader=config)
         appliance_config = appliance_loader.get_appliance(appliance_name)
-        
+
         if not appliance_config:
             logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-            available = list(appliance_loader.get_all_appliances().keys())
-            logger.error(f"Available appliances: {', '.join(available)}")
+            logger.error(f"Available: {', '.join(appliance_loader.get_all_appliances())}")
             return False
-        
+
         appliance_type = appliance_config.get('type')
         host = appliance_config.get('ip')
-        
+
         if not host:
             logger.error(f"No IP address configured for appliance '{appliance_name}'")
             return False
-        
-        # Get user from config if not provided
+
         if not user:
-            if appliance_type:
-                user = appliance_loader.get_default_user(appliance_type)
-            else:
-                user = "cli"
-        
-        # Get password from custom_variables if not provided
+            user = appliance_loader.get_default_user(appliance_type) if appliance_type else "cli"
+
         if not password:
             password = config.get_custom_variable('cli_pwd')
-            if password:
-                logger.info("Using password from custom_variables (cli_pwd)")
-        
+
         if not password:
-            logger.error("Password not provided and cli_pwd not found in custom_variables")
+            logger.error("cli_pwd not found in custom_variables")
             return False
-        
-        # Get prompt regex from config if not provided
+
         if not prompt_regex:
-            if appliance_type:
-                prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False)
-            if not prompt_regex:
-                logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-                return False
-        
-        # Determine hostname - remove suffix after last dash
+            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False) if appliance_type else None
+        if not prompt_regex:
+            logger.error(f"No prompt_regex for type '{appliance_type}'")
+            return False
+
         if not hostname:
             hostname = appliance_name.rsplit('-', 1)[0] if '-' in appliance_name else appliance_name
-            logger.info(f"Using hostname from appliance_name: {appliance_name} -> {hostname}")
-        
-        # Determine domain
         if not domain:
             domain = "demo.guardium"
-        
-        # Use IP from machines_info.json if not provided
         if not ip_address:
             ip_address = host
-            logger.info(f"Using IP address from machines_info.json: {ip_address}")
-        
-        # Determine timezone to use
-        target_timezone = timezone
-        if not target_timezone:
-            machines_info = config.get('machines_info', {})
-            target_timezone = machines_info.get('timezone', 'Europe/Warsaw')
-        
-        # Determine NTP servers to use
+
+        machines_info = config.get('machines_info', {})
+        target_timezone = timezone or machines_info.get('timezone', 'Europe/Warsaw')
         if not ntp_servers:
-            machines_info = config.get('machines_info', {})
             ntp_servers = machines_info.get('ntp_servers', ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org'])
-        
         if not isinstance(ntp_servers, list):
             ntp_servers = ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org']
-        
-        logger.info(f"Configuration parameters:")
-        logger.info(f"  - Hostname: {hostname}")
-        logger.info(f"  - Domain: {domain}")
-        logger.info(f"  - IP: {ip_address}{prefix}")
-        logger.info(f"  - Timezone: {target_timezone}")
-        logger.info(f"  - NTP servers: {' '.join(ntp_servers)}")
-        logger.info(f"  - Configure hosts: {configure_hosts}")
-        
-        # ===== SINGLE CONNECTION FOR ALL OPERATIONS =====
-        logger.info(f"\n➜ Connecting to {appliance_name} ({host})...")
-        
+
+        logger.info(f"  hostname={hostname} domain={domain} ip={ip_address}{prefix} tz={target_timezone} ntp={' '.join(ntp_servers)}")
+
+        logger.info(f"➜ connect {appliance_name} ({host})")
         client = ApplianceClient(
             host=host,
             user=user,
             password=password,
             prompt_regex=prompt_regex,
-            timeout=300,  # 5 minutes for all operations
+            timeout=300,
             debug=debug
         )
-        
+
         if not client.connect():
             logger.error(f"Failed to connect to {appliance_name}")
             return False
-        
         logger.info(f"✓ Connected to {appliance_name}")
-        
-        # ===== OPERATION 1: Set hostname and domain =====
-        logger.info(f"\n{'='*60}")
-        logger.info("OPERATION 1: Configure hostname and domain")
-        logger.info(f"{'='*60}")
-        
-        logger.info(f"➜ Setting hostname to: {hostname}")
+
+        # hostname + domain
+        logger.info(f"➜ store system hostname {hostname}")
         try:
             output = client.execute_command_with_confirmation(
                 command=f"store system hostname {hostname}",
@@ -1687,23 +1645,21 @@ def configure_system_settings_consolidated(
                 response="y"
             )
             if debug and output:
-                logger.info(f"  Command output: {output}")
-            logger.info(f"✓ Hostname set to: {hostname}")
-        except TimeoutError as e:
-            logger.warning(f"Timeout during hostname change, continuing...")
-        
-        logger.info(f"➜ Setting domain to: {domain}")
+                logger.info(f"  {output}")
+            logger.info(f"✓ hostname={hostname}")
+        except TimeoutError:
+            logger.warning("Timeout during hostname change, continuing...")
+
+        logger.info(f"➜ store system domain {domain}")
         try:
             output = client.execute_command(f"store system domain {domain}")
             if debug and output:
-                logger.info(f"  Command output: {output}")
-            logger.info(f"✓ Domain set to: {domain}")
-        except TimeoutError as e:
-            logger.warning(f"Timeout during domain change, continuing...")
+                logger.info(f"  {output}")
+            logger.info(f"✓ domain={domain}")
+        except TimeoutError:
+            logger.warning("Timeout during domain change, continuing...")
 
-        # restart network is required after hostname/domain change
-        # After sending 'y' the SSH connection may drop (network restart) - that is normal
-        logger.info("➜ Restarting network (up to 10 minutes)...")
+        logger.info("➜ restart network")
         _prev_timeout = client.timeout
         client.timeout = 600
         try:
@@ -1713,15 +1669,14 @@ def configure_system_settings_consolidated(
                 response="y"
             )
             if debug and output:
-                logger.info(f"  Command output: {output}")
-            logger.info("✓ Network restarted")
+                logger.info(f"  {output}")
+            logger.info("✓ network restarted")
         except (TimeoutError, RuntimeError):
-            # RuntimeError("Channel closed") is expected when SSH drops during network restart
-            logger.info("✓ Network restart in progress (connection dropped - normal)")
+            logger.info("✓ network restart in progress (connection dropped - normal)")
         finally:
             client.timeout = _prev_timeout
 
-        logger.info("➜ Configuring small disk and timeouts...")
+        logger.info("➜ store system small_disk")
         output = client.execute_command_simple_confirmation(
             command="store system small_disk",
             confirmation_text="I agree",
@@ -1729,198 +1684,101 @@ def configure_system_settings_consolidated(
             timeout=60
         )
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ Small disk mode enabled")
-        
-        logger.info("➜ Configuring GUI session timeout (9999 minutes)...")
+            logger.info(f"  {output}")
+        logger.info("✓ small_disk enabled")
+
+        logger.info("➜ store gui session_timeout 9999")
         output = client.execute_command("store gui session_timeout 9999")
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ GUI session timeout set to 9999 minutes")
-        
-        logger.info("➜ Configuring CLI session timeout (600 seconds)...")
+            logger.info(f"  {output}")
+        logger.info("✓ gui session_timeout=9999")
+
+        logger.info("➜ store timeout cli_session 600")
         output = client.execute_command("store timeout cli_session 600")
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ CLI session timeout set to 600 seconds")
-        
-        logger.info("➜ Restarting GUI...")
+            logger.info(f"  {output}")
+        logger.info("✓ cli_session timeout=600")
+
+        logger.info("➜ restart gui")
         output = client.execute_command_with_confirmation(
             command="restart gui",
             confirmation_pattern=r"Are you sure you want to restart GUI\s*\(y/n\)\?",
             response="y"
         )
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ GUI restarted")
-        
-        # ===== OPERATION 2: Configure network IP =====
-        logger.info(f"\n{'='*60}")
-        logger.info("OPERATION 2: Configure network IP")
-        logger.info(f"{'='*60}")
-        
-        logger.info(f"➜ Setting IP: {ip_address}{prefix}")
-        command = f"store network interface ip {ip_address}{prefix}"
-        output = client.execute_command(command)
+            logger.info(f"  {output}")
+        logger.info("✓ gui restarted")
+
+        # network IP
+        logger.info(f"➜ store network interface ip {ip_address}{prefix}")
+        output = client.execute_command(f"store network interface ip {ip_address}{prefix}")
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        
+            logger.info(f"  {output}")
         if "This change will take effect after the next network restart" in output or "ok" in output:
-            logger.info(f"✓ Network IP set to: {ip_address}{prefix}")
+            logger.info(f"✓ ip={ip_address}{prefix}")
         else:
-            logger.warning(f"⚠ Network IP configuration may have failed")
-        
-        # ===== OPERATION 3: Set timezone =====
-        logger.info(f"\n{'='*60}")
-        logger.info("OPERATION 3: Configure timezone")
-        logger.info(f"{'='*60}")
-        
-        logger.info(f"➜ Setting timezone to: {target_timezone}")
-        command = f"store system clock timezone {target_timezone}"
+            logger.warning("⚠ network IP configuration may have failed")
+
+        # timezone
+        logger.info(f"➜ store system clock timezone {target_timezone}")
         output = client.execute_command_with_confirmation(
-            command=command,
+            command=f"store system clock timezone {target_timezone}",
             response="y"
         )
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info(f"✓ Timezone set to: {target_timezone}")
-        
-        # ===== OPERATION 4: Configure NTP =====
-        logger.info(f"\n{'='*60}")
-        logger.info("OPERATION 4: Configure NTP")
-        logger.info(f"{'='*60}")
-        
-        logger.info(f"➜ Configuring NTP servers: {' '.join(ntp_servers)}")
-        ntp_command = f"store system time_server hostname {' '.join(ntp_servers)}"
-        output = client.execute_command(ntp_command)
+            logger.info(f"  {output}")
+        logger.info(f"✓ timezone={target_timezone}")
+
+        # NTP
+        logger.info(f"➜ store system time_server hostname {' '.join(ntp_servers)}")
+        output = client.execute_command(f"store system time_server hostname {' '.join(ntp_servers)}")
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info(f"✓ NTP servers configured")
-        
-        logger.info("➜ Enabling time synchronization...")
+            logger.info(f"  {output}")
+        logger.info("✓ NTP servers configured")
+
+        logger.info("➜ store system time_server state on")
         output = client.execute_command("store system time_server state on")
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info("✓ Time synchronization enabled")
-        
-        # Track operation number
-        operation_num = 5
-        
-        # ===== OPERATION 5: Configure hosts resolving =====
-        if configure_hosts:
-            logger.info(f"\n{'='*60}")
-            logger.info(f"OPERATION {operation_num}: Configure hosts resolving")
-            logger.info(f"{'='*60}")
-            
-            # Get machines from config
-            machines = config.get('machines', {})
-            all_appliances = appliance_loader.get_all_appliances()
-            
-            if machines or all_appliances:
-                logger.info(f"Found {len(machines)} Unix machines and {len(all_appliances)} appliances")
-                
-                # Get existing hosts
-                logger.info("➜ Checking existing hosts...")
-                existing_output = client.execute_command("support show hosts")
-                existing_hosts = set()
-                for line in existing_output.split('\n'):
-                    line = line.strip()
-                    if line and not line.startswith('#') and ' ' in line:
-                        parts = line.split()
-                        if len(parts) >= 2:
-                            existing_hosts.add((parts[0], parts[1]))
-                
-                logger.info(f"Found {len(existing_hosts)} existing host entries")
-                
-                configured_count = 0
-                skipped_count = 0
-                
-                # Add Unix machines
-                logger.info("➜ Configuring Unix machines:")
-                for machine_name, machine_config in machines.items():
-                    private_ip = machine_config.get('private_ip', '')
-                    if not private_ip:
-                        continue
-                    
-                    short_name = machine_name
-                    fqdn = f"{short_name}.demo.guardium"
-                    
-                    if (private_ip, fqdn) in existing_hosts or (private_ip, short_name) in existing_hosts:
-                        skipped_count += 1
-                        continue
-                    
-                    command = f"support store hosts {private_ip} {fqdn}"
-                    output = client.execute_command(command)
-                    configured_count += 1
-                    logger.info(f"  ✓ Added: {fqdn} ({private_ip})")
-                
-                # Add other appliances
-                logger.info("➜ Configuring Guardium appliances:")
-                for other_name, other_config in all_appliances.items():
-                    if other_name == appliance_name:
-                        continue
-                    
-                    other_ip = other_config.get('ip', '')
-                    if not other_ip:
-                        continue
-                    
-                    other_hostname = other_name.rsplit('-', 1)[0] if '-' in other_name else other_name
-                    other_fqdn = f"{other_hostname}.demo.guardium"
-                    
-                    if (other_ip, other_fqdn) in existing_hosts or (other_ip, other_hostname) in existing_hosts:
-                        skipped_count += 1
-                        continue
-                    
-                    command = f"support store hosts {other_ip} {other_fqdn}"
-                    output = client.execute_command(command)
-                    configured_count += 1
-                    logger.info(f"  ✓ Added: {other_fqdn} ({other_ip})")
-                
-                logger.info(f"✓ Hosts configuration complete: {configured_count} added, {skipped_count} skipped")
-            else:
-                logger.info("⊘ No machines or appliances to configure")
-            operation_num += 1
-        else:
-            logger.info(f"\n⊘ Skipping OPERATION {operation_num}: hosts configuration (configure_hosts=False)")
-            operation_num += 1
-        
-        # ===== OPERATION 6: Set product GID (ALWAYS) =====
-        logger.info(f"\n{'='*60}")
-        logger.info(f"OPERATION {operation_num}: Set product GID")
-        logger.info(f"{'='*60}")
-        
-        target_gid = gid
-        if target_gid is None:
-            # Generate random GID
-            target_gid = random.randint(1000, 100000)
-            logger.info(f"Generated random GID: {target_gid}")
-        
-        command = f"store product gid {target_gid}"
-        logger.info(f"➜ Setting product GID to: {target_gid}")
-        output = client.execute_command(command)
+            logger.info(f"  {output}")
+        logger.info("✓ time sync enabled")
+
+        # hosts resolving — all known environment machines
+        hosts = {}
+
+        for name, cfg in config.get_regular_machines().items():
+            ip = cfg.get('private_ip', '')
+            if ip:
+                hosts[f"{name}.demo.guardium"] = ip
+
+        for name, cfg in appliance_loader.get_all_appliances().items():
+            if name == appliance_name:
+                continue
+            ip = cfg.get('ip', '')
+            if ip:
+                short = name.rsplit('-', 1)[0] if '-' in name else name
+                hosts[f"{short}.demo.guardium"] = ip
+
+        logger.info(f"➜ support store hosts ({len(hosts)} entries)")
+        for fqdn, ip in hosts.items():
+            client.execute_command(f"support store hosts {ip} {fqdn}")
+            logger.info(f"  ✓ {fqdn} ({ip})")
+        logger.info(f"✓ hosts configured: {len(hosts)} entries")
+
+        # product GID
+        target_gid = gid if gid is not None else random.randint(1000, 100000)
+        logger.info(f"➜ store product gid {target_gid}")
+        output = client.execute_command(f"store product gid {target_gid}")
         if debug and output:
-            logger.info(f"  Command output: {output}")
-        logger.info(f"✓ Product GID set to: {target_gid}")
-        operation_num += 1
-        
-        # Disconnect
+            logger.info(f"  {output}")
+        logger.info(f"✓ gid={target_gid}")
+
         client.disconnect()
-        
-        logger.info("\n" + "=" * 80)
-        logger.info(f"✓ ALL OPERATIONS COMPLETED SUCCESSFULLY")
-        logger.info(f"  1. System settings: hostname={hostname}, domain={domain}")
-        logger.info(f"  2. Network IP: {ip_address}{prefix}")
-        logger.info(f"  3. Timezone: {target_timezone}")
-        logger.info(f"  4. NTP: {' '.join(ntp_servers)}")
-        logger.info(f"  5. Hosts: {'configured' if configure_hosts else 'skipped'}")
-        logger.info(f"  6. Product GID: {target_gid}")
-        logger.info("=" * 80)
+        logger.info(f"✓ {appliance_name} done: hostname={hostname} ip={ip_address}{prefix} tz={target_timezone} gid={target_gid}")
         return True
-        
+
     except Exception as e:
-        logger.error(f"Error in consolidated configuration: {str(e)}")
+        logger.error(f"✗ {appliance_name}: {e}")
         if debug:
-            import traceback
             logger.error(traceback.format_exc())
         return False
 

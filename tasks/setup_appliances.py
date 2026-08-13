@@ -941,63 +941,32 @@ def configure_system_settings_all(
     prompt_regex: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    from core.appliance_operations import configure_system_settings_consolidated
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("CONFIGURE ALL SYSTEM SETTINGS (CONSOLIDATED)")
-    logger.info("=" * 80)
-    
-    # Load all appliances
+    _header(logger, "CONFIGURE ALL SYSTEM SETTINGS (CONSOLIDATED)")
+
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
-    
+
     if not all_appliances:
         logger.error("No appliances found in machines_info.json")
         return False
-    
-    # Group appliances by type
-    cms = []
-    collectors = []
-    appnodes = []
-    others = []
-    
-    for name, appliance_config in all_appliances.items():
-        appliance_type = appliance_config.get('type', '').lower()
-        if appliance_type == 'cm':
-            cms.append(name)
-        elif appliance_type == 'collector':
-            collectors.append(name)
-        elif appliance_type == 'appnode':
-            appnodes.append(name)
-        else:
-            others.append(name)
-    
-    # Order: CM → Collectors → AppNodes → Others
+
+    cms        = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm']
+    collectors = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'collector']
+    appnodes   = [n for n, c in all_appliances.items() if c.get('type', '').lower() == 'appnode']
+    others     = [n for n, c in all_appliances.items() if c.get('type', '').lower() not in ('cm', 'collector', 'appnode')]
     ordered_appliances = cms + collectors + appnodes + others
-    
+
     logger.info(f"Found {len(ordered_appliances)} appliances:")
     logger.info(f"  - CMs: {len(cms)} ({', '.join(cms) if cms else 'none'})")
     logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors) if collectors else 'none'})")
     logger.info(f"  - AppNodes: {len(appnodes)} ({', '.join(appnodes) if appnodes else 'none'})")
     if others:
         logger.info(f"  - Others: {len(others)} ({', '.join(others)})")
-    logger.info("")
-    
-    # Define operation function
-    def configure_consolidated_operation(appliance_name: str, **kwargs) -> bool:
-        return configure_system_settings_consolidated(
-            appliance_name=appliance_name,
-            **kwargs
-        )
-    
-    # Execute operation on all appliances asynchronously
-    from core.appliance_operations import execute_on_appliances_async
-    
+
     results, errors = execute_on_appliances_async(
         appliances=ordered_appliances,
-        operation_func=configure_consolidated_operation,
-        operation_name="configure all system settings (consolidated)",
+        operation_func=configure_system_settings_consolidated,
+        operation_name="configure_system_settings_consolidated",
         logger=logger,
         config=config,
         hostname=hostname,
@@ -1013,35 +982,9 @@ def configure_system_settings_all(
         prompt_regex=prompt_regex,
         debug=debug
     )
-    
-    # Summary
-    logger.info("\n" + "=" * 80)
-    logger.info("CONSOLIDATED CONFIGURATION SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    total_count = len(results)
-    
-    logger.info(f"Total appliances: {total_count}")
-    logger.info(f"✓ Successful: {success_count}")
-    logger.info(f"✗ Failed: {total_count - success_count}")
-    
-    if errors:
-        logger.error("\nErrors encountered:")
-        for appliance_name, error_msg in errors.items():
-            logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    all_success = all(results.values())
-    
-    if all_success:
-        logger.info("\n✓ All appliances configured successfully")
-        logger.info("Note: All operations completed in single CLI session per appliance")
-    else:
-        logger.error("\n✗ Some appliances failed configuration")
-    
-    logger.info("=" * 80)
-    
-    return all_success
+
+    _log_summary(logger, "CONSOLIDATED CONFIGURATION SUMMARY", results, errors)
+    return all(results.values())
 
 def register_appliances_all(
     config,
