@@ -401,7 +401,11 @@ def deploy_etap_mysql(
 
     sshd_config = "/etc/ssh/sshd_config"
     check_cmd = f"python3 -c \"import pathlib, re; text = pathlib.Path('{sshd_config}').read_text(); raise SystemExit(0 if re.search(r'^\\s*Port\\s+22\\s*$', text, re.MULTILINE) else 1)\""
-    if execute_local_command(check_cmd, logger=logger, verbose=False)['rc'] != 0:
+    try:
+        port22_present = run_local_command(command=check_cmd, shell=True, timeout=10, check=False).returncode == 0
+    except Exception:
+        port22_present = False
+    if not port22_present:
         logger.info("➜ add Port 22 to sshd_config")
         result = execute_local_command(f"printf '\\n# Temporary port for ETAP\\nPort 22\\n' >> {sshd_config}", logger=logger, verbose=verbose)
         if result['rc'] != 0:
