@@ -680,24 +680,12 @@ groups:
 
       - name: deploy_etap_for_oracle
         function: deploy_etap_for_oracle_container_on_sauropod
-        module: tasks.labs
-        description: "Generate CSR for Oracle ETAP, sign with existing CA, import certificate to collector"
+        module: tasks.etap_labs
+        description: "Generate CSR for Oracle ETAP, sign with existing CA, import certificate to collector, deploy oracle-etap container on sauropod"
         args:
-          collector_appliance: "coll1"
-          ca_dir: "/opt/ETAP/ca"
-          etap_alias: "oracle-etap"
-          etap_common_name: "oracle-etap"
-          etap_san1: "coll1.demo.com"
-          etap_organizational_unit: "Demo"
-          etap_organization: "Guardium"
           etap_locality: "Nowa Sol"
           etap_state: "Lubuskie"
-          etap_country: "PL"
           etap_email: "guardadmin@gmail.com"
-          etap_encryption_algorithm: "2"
-          etap_keysize: "2"
-          etap_san2: ""
-          ca_alias: "etapca"
 
       - name: setup_stap_with_oua_on_sauropod
         function: setup_stap_with_oua_on_sauropod
