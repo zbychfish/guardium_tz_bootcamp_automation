@@ -350,8 +350,6 @@ def initial_collector_settings(
     if not password:
         try:
             password = config.get_custom_variable('cli_pwd')
-            if password:
-                logger.info("Using password from custom_variables (cli_pwd)")
         except:
             pass
     
@@ -690,9 +688,6 @@ def set_unit_type_manager(
     
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False

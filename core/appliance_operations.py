@@ -143,9 +143,6 @@ def _get_appliance_connection_params(
     # Get password from custom_variables if not provided
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return None
@@ -224,9 +221,6 @@ def restart_appliance(
     # Get password from custom_variables if not provided
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -399,9 +393,6 @@ def setup_appnode(
     
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -554,9 +545,6 @@ def setup_kafka_node(
 
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -877,9 +865,6 @@ def register_appliance(
     # Get password from custom_variables if not provided
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -1089,9 +1074,6 @@ def set_timezone(
         # Get password from custom_variables if not provided
         if not password:
             password = config.get_custom_variable('cli_pwd')
-            if password:
-                logger.info("Using password from custom_variables (cli_pwd)")
-        
         if not password:
             logger.error("Password not provided and cli_pwd not found in custom_variables")
             return False
@@ -2261,7 +2243,6 @@ def install_patch_on_appliance(
         if not password:
             logger.error("cli_pwd not found in machines_info.json custom_variables")
             return False
-        logger.info("Using password from custom_variables (cli_pwd)")
     
     logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
     logger.info(f"Patch selection: {patch_selection}")
@@ -3122,9 +3103,6 @@ def enable_ltr_on_appnode(
     
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -3290,9 +3268,6 @@ def import_datalake_s3_certificate(
     
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -3500,9 +3475,6 @@ def distribute_datalake_certificate(
     
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
@@ -3703,9 +3675,6 @@ def activate_ltr(
     
     if not password:
         password = config.get_custom_variable('cli_pwd')
-        if password:
-            logger.info("Using password from custom_variables (cli_pwd)")
-    
     if not password:
         logger.error("Password not provided and cli_pwd not found in custom_variables")
         return False
