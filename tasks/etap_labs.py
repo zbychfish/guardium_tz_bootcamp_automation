@@ -36,6 +36,22 @@ def _load_etap_secret(config, token_var: str, token_file: str, logger) -> str:
         logger.error(f"{token_var} not found in custom_variables or {token_file}")
     return token
 
+def _open_firewall_port(port: str, logger) -> bool:
+    try:
+        listed = run_local_command(command="firewall-cmd --list-ports", shell=True, timeout=10, check=False)
+        if f"{port}/tcp" in (listed.stdout or ""):
+            logger.info(f"  port {port}/tcp already open")
+            return True
+    except Exception:
+        pass
+    logger.info(f"➜ firewall-cmd --add-port={port}/tcp")
+    result = run_local_command(command=f"firewall-cmd --permanent --add-port={port}/tcp && firewall-cmd --reload", shell=True, timeout=30, check=False)
+    if result.returncode != 0:
+        logger.error(f"✗ firewall-cmd failed (rc={result.returncode}): {result.stderr}")
+        return False
+    logger.info(f"✓ port {port}/tcp opened")
+    return True
+
 def _setup_etap_certs(
     config, logger, debug,
     collector_ip, cli_password,
@@ -430,6 +446,9 @@ def deploy_etap_mysql(
             return False
         logger.info(f"✓ {desc}")
 
+    if not _open_firewall_port("63333", logger):
+        return False
+
     return _deploy_etap_container(
         config=config, logger=logger, verbose=verbose,
         container_name="mysql-etap", db_type="mysql", db_port="3306", publish_port="63333",
@@ -515,6 +534,9 @@ def deploy_etap_for_oracle_container_on_sauropod(
 
     etap_token = _load_etap_secret(config, "oracle_etap_token", os.path.join(ca_dir, "oracle_etap_token.txt"), logger)
     if not etap_token:
+        return False
+
+    if not _open_firewall_port("63334", logger):
         return False
 
     return _deploy_etap_container(
