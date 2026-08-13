@@ -19,8 +19,7 @@ def execute_on_appliances_async(
     operation_func: Callable,
     operation_name: str,
     logger,
-    **operation_kwargs
-) -> Tuple[Dict[str, bool], Dict[str, str]]:
+    **operation_kwargs) -> Tuple[Dict[str, bool], Dict[str, str]]:
     
     if not appliances:
         logger.warning("No appliances provided for async execution")
@@ -234,8 +233,7 @@ def setup_appnode(
     prompt_regex: Optional[str] = None,
     debug: bool = True,
     retry_interval: int = 60,
-    max_retries: int = 10
-) -> bool:
+    max_retries: int = 10) -> bool:
     import traceback
 
     if not appliance_name:
@@ -323,8 +321,7 @@ def setup_kafka_node(
     prompt_regex: Optional[str] = None,
     debug: bool = True,
     retry_interval: int = 60,
-    max_retries: int = 10
-) -> bool:
+    max_retries: int = 10) -> bool:
     import traceback
 
     if not appliance_name:
@@ -412,8 +409,7 @@ def configure_aggr_settings(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import traceback
     from .appliance_client import strip_ansi
 
@@ -502,8 +498,7 @@ def set_shared_secret(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import traceback
 
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
@@ -554,8 +549,7 @@ def register_appliance(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 240
-) -> bool:
+    timeout: int = 240) -> bool:
     import traceback
 
     if not appliance_name:
@@ -678,8 +672,7 @@ def set_timezone(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import traceback
 
     if not appliance_name:
@@ -759,8 +752,7 @@ def configure_system_settings_consolidated(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import traceback
 
     def _log(msg, level='info'):
@@ -929,8 +921,7 @@ def reset_cli_password(
     appliance_name: str,
     cloudsupport_password: Optional[str] = None,
     cli_password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import paramiko
     import traceback
 
@@ -1009,8 +1000,7 @@ def prepare_appliance_for_patching(
     appliance_name: str,
     patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import os
     import glob
     import paramiko
@@ -1192,8 +1182,7 @@ def copy_files_to_appliance(
     target_dir: str,
     owner: str = "tomcat:tomcat",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
     
     import os
     import glob
@@ -1405,8 +1394,7 @@ def copy_single_file_to_appliance(
     target_dir: str = "/var/IBM/Guardium/log/patches/",
     owner: str = "tomcat:tomcat",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     
     import os
     

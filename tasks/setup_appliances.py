@@ -159,7 +159,7 @@ def import_definitions_on_cm(
     config,
     logger,
     verbose: bool = True,
-    cm_appliance: str = "cm02",
+    cm_appliance: str = "cm",
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
     debug: bool = True) -> bool:
     from core.guardium_rest_api import import_definitions_files
@@ -182,10 +182,8 @@ def import_definitions_on_cm(
         definitions_dir=definitions_dir,
         debug=debug
     )
-
     if success:
         logger.info("✓ All definitions imported successfully")
-
     return success
 
 def install_policy_on_collector(
@@ -519,8 +517,7 @@ def set_unit_type_manager(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     import traceback
 
     if not appliance_name:
@@ -575,8 +572,7 @@ def restart_appliance_all(
     debug: bool = True,
     wait_for_availability: bool = True,
     retry_interval: int = 10,
-    max_retries: int = 60
-) -> bool:
+    max_retries: int = 60) -> bool:
     _header(logger, "RESTART ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -679,8 +675,7 @@ def register_appliances_all(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 240
-) -> bool:
+    timeout: int = 240) -> bool:
     _header(logger, "REGISTER APPLIANCES ON CENTRAL MANAGER")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -823,8 +818,6 @@ def install_and_monitor_patches_all(
 
     _log_summary(logger, "PATCH INSTALLATION SUMMARY", results, errors)
     return all(results.values())
-
-
 
 def prepare_appliance_for_patching_single(
     config,
