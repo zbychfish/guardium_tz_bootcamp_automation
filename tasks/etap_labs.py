@@ -12,12 +12,10 @@ from core.utils import execute_local_command, run_local_command
 
 logger = get_logger(__name__)
 
-
 def _header(logger, title: str) -> None:
     logger.info("=" * 60)
     logger.info(title)
     logger.info("=" * 60)
-
 
 def setup_raptor_to_deploy_etap(
     config,
@@ -113,8 +111,8 @@ def setup_etap_certificates_mysql(
     etap_san2: str = "",
     ca_common_name: str = "ETAP CA",
     ca_alias: str = "etapca",
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
+
     _header(logger, "SETUP ETAP CERTIFICATES")
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
@@ -228,14 +226,13 @@ def setup_etap_certificates_mysql(
     logger.info("✓ ETAP certificates setup completed")
     return True
 
-
 def deploy_etap_mysql(
     config,
     logger,
     verbose: bool = False,
     collector_appliance: str = "coll1",
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
+
     _header(logger, "DEPLOY ETAP MYSQL")
 
     raptor_info = config.get_machine("raptor")
