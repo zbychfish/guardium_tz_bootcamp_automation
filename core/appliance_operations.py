@@ -21,33 +21,7 @@ def execute_on_appliances_async(
     logger,
     **operation_kwargs
 ) -> Tuple[Dict[str, bool], Dict[str, str]]:
-    """
-    Execute an operation on multiple appliances asynchronously.
-    This is a reusable function for parallel execution of appliance operations.
     
-    Args:
-        appliances: List of appliance names to operate on
-        operation_func: Function to execute on each appliance (must accept appliance_name as first arg)
-        operation_name: Name of the operation (for logging)
-        logger: Logger instance
-        **operation_kwargs: Additional keyword arguments to pass to operation_func
-    
-    Returns:
-        Tuple of (results_dict, errors_dict) where:
-        - results_dict: {appliance_name: success_bool}
-        - errors_dict: {appliance_name: error_message}
-    
-    Example:
-        results, errors = execute_on_appliances_async(
-            appliances=['cm02', 'coll1', 'appnode1'],
-            operation_func=restart_appliance,
-            operation_name="restart",
-            logger=logger,
-            config=config,
-            debug=True,
-            wait_for_availability=True
-        )
-    """
     if not appliances:
         logger.warning("No appliances provided for async execution")
         return {}, {}
@@ -101,16 +75,8 @@ def _get_appliance_connection_params(
     appliance_name: str,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    prompt_regex: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
-    """
-    Helper function to get appliance connection parameters.
-    Reduces code duplication across appliance operation functions.
+    prompt_regex: Optional[str] = None) -> Optional[Dict[str, Any]]:
     
-    Returns:
-        Dict with keys: appliance_config, host, user, password, prompt_regex, appliance_type
-        or None if validation fails
-    """
     if not appliance_name:
         logger.error("appliance_name is required")
         return None
@@ -176,46 +142,24 @@ def restart_appliance(
     retry_interval: int = 10,
     max_retries: int = 60,
     mysql_busy_retries: int = 5,
-    mysql_busy_wait: int = 60
-) -> bool:
+    mysql_busy_wait: int = 60) -> bool:
     import traceback
 
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-
-    if not appliance_config:
-        logger.error(f"[{appliance_name}] not found in machines_info.json")
+    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+    if not params:
         return False
 
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-
-    if not host:
-        logger.error(f"[{appliance_name}] no IP address configured")
-        return False
-
-    if not user:
-        user = appliance_loader.get_default_user(appliance_type) if appliance_type else "cli"
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error(f"[{appliance_name}] cli_pwd not found in custom_variables")
-        return False
-    if not prompt_regex:
-        prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False) if appliance_type else None
-    if not prompt_regex:
-        logger.error(f"[{appliance_name}] no prompt_regex for type '{appliance_type}'")
-        return False
+    host = params['host']
 
     for mysql_attempt in range(1, mysql_busy_retries + 1):
         try:
             client = ApplianceClient(
-                host=host, user=user, password=password,
-                prompt_regex=prompt_regex, initial_pattern=None,
+                host=host, user=params['user'], password=params['password'],
+                prompt_regex=params['prompt_regex'], initial_pattern=None,
                 timeout=60, strip_ansi=True, debug=debug
             )
 
@@ -243,8 +187,8 @@ def restart_appliance(
                 for retry_count in range(1, max_retries + 1):
                     try:
                         test_client = ApplianceClient(
-                            host=host, user=user, password=password,
-                            prompt_regex=prompt_regex, initial_pattern=None,
+                            host=host, user=params['user'], password=params['password'],
+                            prompt_regex=params['prompt_regex'], initial_pattern=None,
                             timeout=30, strip_ansi=True, debug=False
                         )
                         if test_client.connect():
@@ -831,35 +775,12 @@ def configure_system_settings_consolidated(
             logger.error("appliance_name is required")
             return False
 
+        params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
+        if not params:
+            return False
+
         appliance_loader = ApplianceConfigLoader(config_loader=config)
-        appliance_config = appliance_loader.get_appliance(appliance_name)
-
-        if not appliance_config:
-            _log(f"not found in machines_info.json", 'error')
-            return False
-
-        appliance_type = appliance_config.get('type')
-        host = appliance_config.get('ip')
-
-        if not host:
-            _log("no IP address configured", 'error')
-            return False
-
-        if not user:
-            user = appliance_loader.get_default_user(appliance_type) if appliance_type else "cli"
-
-        if not password:
-            password = config.get_custom_variable('cli_pwd')
-
-        if not password:
-            _log("cli_pwd not found in custom_variables", 'error')
-            return False
-
-        if not prompt_regex:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=False) if appliance_type else None
-        if not prompt_regex:
-            _log(f"no prompt_regex for type '{appliance_type}'", 'error')
-            return False
+        host = params['host']
 
         if not hostname:
             hostname = appliance_name.rsplit('-', 1)[0] if '-' in appliance_name else appliance_name
@@ -876,8 +797,8 @@ def configure_system_settings_consolidated(
             ntp_servers = ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org']
 
         client = ApplianceClient(
-            host=host, user=user, password=password,
-            prompt_regex=prompt_regex, timeout=300, debug=debug
+            host=host, user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], timeout=300, debug=debug
         )
 
         if not client.connect():
@@ -1017,23 +938,19 @@ def reset_cli_password(
     import paramiko
     import traceback
 
-    logger.info(f"RESET CLI PASSWORD: {appliance_name}")
-
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
-
     if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        logger.error(f"Available: {', '.join(appliance_loader.get_all_appliances())}")
+        logger.error(f"[{appliance_name}] not found in machines_info.json")
         return False
 
     host = appliance_config.get('ip')
     if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
+        logger.error(f"[{appliance_name}] no IP address configured")
         return False
 
     if not cloudsupport_password:
@@ -1109,17 +1026,16 @@ def prepare_appliance_for_patching(
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
-
     if not appliance_config:
         logger.error(f"[{appliance_name}] not found in machines_info.json")
         return False
 
-    appliance_type = appliance_config.get('type')
     host = appliance_config.get('ip')
     if not host:
         logger.error(f"[{appliance_name}] no IP address configured")
         return False
 
+    appliance_type = appliance_config.get('type')
     cli_prompt_regex = (appliance_loader.get_default_prompt(appliance_type, configured=True) if appliance_type else None) \
         or r'[\w-]+(\.demo\.guardium)?> '
 
