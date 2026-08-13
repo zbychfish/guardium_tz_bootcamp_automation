@@ -410,7 +410,7 @@ groups:
 
       - name: import_atap_definitions
         function: import_atap_definitions
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Import ATAP lab definitions to CM via REST API"
         args:
           cm_appliance: "cm"
@@ -444,7 +444,7 @@ groups:
     stages:
       - name: install_filebeat_on_sauropod
         function: install_filebeat_on_sauropod
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Install and configure Filebeat on sauropod for Cassandra audit logs"
         args:
           rpms_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/rpms"

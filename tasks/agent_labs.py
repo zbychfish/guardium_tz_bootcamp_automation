@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import glob
 import os
+import re
+import time
 import traceback
 from typing import Optional
 from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_operations import copy_files_to_appliance, install_gim_module
 from core.guardium_rest_api import create_guardium_api
+from core.ssh_client import SSHClient
 from core.utils import execute_local_command, execute_commands, run_local_command
 
 logger = get_logger(__name__)
@@ -28,6 +32,44 @@ def _get_pwd(config, logger) -> Optional[str]:
     if not pwd:
         logger.error("pwd not found in custom_variables")
     return pwd
+
+def _get_api(config, logger, appliance_name: str):
+    pwd = _get_pwd(config, logger)
+    if not pwd:
+        return None
+    api = create_guardium_api(config, logger, appliance_name)
+    api.get_token(username='demo', password=pwd)
+    return api
+
+
+def _monitor_gim(api, client_ip: str, logger) -> bool:
+    """Poll gim_list_client_modules until all modules reach INSTALLED state."""
+    logger.info("⌛ waiting 10s before monitoring")
+    time.sleep(10)
+    pending = ["initial"]
+    check_count = 0
+    while pending:
+        check_count += 1
+        modules = api.gim_list_client_modules(client_ip=client_ip)
+        if "ErrorCode" in modules or "ErrorMessage" in modules:
+            logger.error(f"✗ API error: {modules.get('ErrorCode')} — {modules.get('ErrorMessage')}")
+            return False
+        entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
+        result_mods = []
+        for entry in entries:
+            m_name  = re.search(r"NAME:\s+([A-Z0-9\-]+)", entry)
+            m_state = re.search(r"STATE:\s+([A-Z\-]+)", entry)
+            result_mods.append({
+                "name":  m_name.group(1)  if m_name  else "?",
+                "state": m_state.group(1) if m_state else "?",
+            })
+        pending = [m for m in result_mods if m["state"] != "INSTALLED"]
+        if pending:
+            logger.info(f"  ⌛ [{check_count}] {len(pending)} module(s) pending: {[m['name'] for m in pending]}")
+            time.sleep(30)
+        else:
+            logger.info(f"  ✓ [{check_count}] all modules INSTALLED")
+    return True
 
 def import_gim_modules(
     config,
@@ -228,7 +270,6 @@ def enable_atap_for_postgres_on_raptor(
     logger.info("✓ ATAP enabled for PostgreSQL")
     return True
 
-
 def correct_mysql_ie(
     config,
     logger,
@@ -252,12 +293,9 @@ def correct_mysql_ie(
     if not api_target_host:
         logger.error(f"Collector '{collector_appliance}' has no IP")
         return False
-
-    pwd = _get_pwd(config, logger)
-    if not pwd:
+    api = _get_api(config, logger, cm_appliance)
+    if not api:
         return False
-    api = create_guardium_api(config, logger, cm_appliance)
-    api.get_token(username='demo', password=pwd)
 
     logger.info(f"➜ delete MySQL IE {stap_host} on {api_target_host}")
     api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1", api_target_host=api_target_host)
@@ -279,6 +317,10 @@ def correct_mysql_ie(
     logger.info(f"➜ STAP_DISCOVERY_ENABLED=0 on {stap_host}")
     api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_ENABLED", param_value="0")
     api.gim_schedule_install(client_ip=stap_host, date="now")
+
+    if not _monitor_gim(api, stap_host, logger):
+        return False
+
     logger.info("✓ MySQL IE corrected")
     return True
 
@@ -344,11 +386,9 @@ def configure_db2_exit_ie(
         logger.error(f"Collector '{collector_appliance}' has no IP")
         return False
 
-    pwd = _get_pwd(config, logger)
-    if not pwd:
+    api = _get_api(config, logger, cm_appliance)
+    if not api:
         return False
-    api = create_guardium_api(config, logger, cm_appliance)
-    api.get_token(username='demo', password=pwd)
 
     logger.info(f"➜ delete Db2 IE {stap_host} on {api_target_host}")
     api.delete_inspection_engine(stap_host=stap_host, type="Db2", wait_for_response="1", api_target_host=api_target_host)
@@ -361,5 +401,136 @@ def configure_db2_exit_ie(
     )
     logger.info("✓ DB2 Exit IE configured")
     return True
+
+
+def import_atap_definitions(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: Optional[str] = None,
+    definitions_dir: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+
+    if not _require(logger, cm_appliance=cm_appliance, definitions_dir=definitions_dir):
+        return False
+
+    _header(logger, "IMPORT ATAP LAB DEFINITIONS")
+
+    definition_files = ["exp_datasource_verification_atap_lab.sql"]
+
+    api = _get_api(config, logger, cm_appliance)
+    if not api:
+        return False
+
+    for filename in definition_files:
+        file_path = os.path.join(definitions_dir, filename)
+        if not os.path.exists(file_path):
+            logger.error(f"✗ file not found: {file_path}")
+            return False
+        logger.info(f"➜ import {filename}")
+        result = api.import_definitions(file_path=file_path)
+        if debug:
+            logger.info(f"  response: {result}")
+        logger.info(f"✓ {filename} imported")
+
+    logger.info("✓ ATAP definitions imported")
+    return True
+
+
+def install_filebeat_on_sauropod(
+    config,
+    logger,
+    verbose: bool = False,
+    rpms_dir: Optional[str] = None,
+    filebeat_pattern: Optional[str] = None,
+    debug: bool = False
+) -> bool:
+
+    if not _require(logger, rpms_dir=rpms_dir, filebeat_pattern=filebeat_pattern):
+        return False
+
+    _header(logger, "INSTALL FILEBEAT ON SAUROPOD")
+
+    machines = config.get('machines', {})
+    sauropod_info = machines.get('sauropod', {})
+    sauropod_ip = sauropod_info.get('private_ip')
+    sauropod_password = sauropod_info.get('password')
+
+    if not _require(logger, sauropod_ip=sauropod_ip, sauropod_password=sauropod_password):
+        return False
+
+    filebeat_rpms = glob.glob(os.path.join(rpms_dir, filebeat_pattern))
+    if not filebeat_rpms:
+        logger.error(f"✗ no filebeat RPM found: {os.path.join(rpms_dir, filebeat_pattern)}")
+        return False
+
+    filebeat_rpm = filebeat_rpms[0]
+    filebeat_filename = os.path.basename(filebeat_rpm)
+    logger.info(f"  found: {filebeat_filename}")
+
+    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
+    try:
+        logger.info("➜ connect to sauropod")
+        if not ssh.connect():
+            logger.error("✗ failed to connect to sauropod")
+            return False
+        logger.info("✓ connected")
+
+        logger.info("➜ mkdir /root/gn-trainings")
+        result = ssh.execute_command("mkdir -p /root/gn-trainings", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ mkdir failed: {result['stderr']}")
+            return False
+
+        remote_rpm_path = f"/root/gn-trainings/{filebeat_filename}"
+        logger.info(f"➜ upload {filebeat_filename}")
+        if not ssh.upload_file(filebeat_rpm, remote_rpm_path):
+            logger.error("✗ failed to upload filebeat RPM")
+            return False
+        logger.info("✓ RPM uploaded")
+
+        logger.info(f"➜ dnf install {filebeat_filename}")
+        result = ssh.execute_command(f"dnf -y install {remote_rpm_path}", timeout=300, print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ dnf install failed: {result['stderr']}")
+            return False
+        logger.info("✓ filebeat installed")
+
+        logger.info("➜ configure filebeat for Cassandra audit logs")
+        config_commands = [
+            r"sed -i '/^- type: filestream/,/^[^[:space:]]/c\- type: filestream\n  id: \"cassandra\"\n  enabled: true\n  paths:\n    - /var/log/cassandra/audit/audit.log\n  exclude_lines: [\"AuditLogManager\"]\n  tags: [\"cassandra\"]\n  multiline.type: pattern\n  multiline.pattern: \"^INFO\"\n  multiline.negate: true\n  multiline.match: after' /etc/filebeat/filebeat.yml",
+            r"sed -i '/^output.elasticsearch:/,/^[^[:space:]]/ { s/^/# / }' /etc/filebeat/filebeat.yml",
+            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.com:5047\"]| }' /etc/filebeat/filebeat.yml",
+        ]
+        for cmd in config_commands:
+            result = ssh.execute_command(cmd, print_output=verbose)
+            if result['rc'] != 0:
+                logger.warning(f"⚠ config command failed (rc={result['rc']}): {cmd[:60]}…")
+                if debug:
+                    logger.debug(f"  stderr: {result['stderr']}")
+        logger.info("✓ filebeat configured")
+
+        logger.info("➜ systemctl start filebeat")
+        result = ssh.execute_command("systemctl start filebeat", print_output=verbose)
+        if result['rc'] != 0:
+            logger.error(f"✗ start failed: {result['stderr']}")
+            return False
+
+        result = ssh.execute_command("systemctl enable filebeat", print_output=verbose)
+        if result['rc'] != 0:
+            logger.warning(f"⚠ enable failed: {result['stderr']}")
+
+        logger.info("✓ filebeat started and enabled")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        ssh.disconnect()
+
 
 # Made with Bob
