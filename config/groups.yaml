@@ -363,7 +363,7 @@ groups:
       
       - name: install_gim_on_raptor
         function: install_gim_on_raptor
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Install GIM (Guardium Installation Manager) on raptor machine"
         args:
           gim_installer_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
@@ -371,7 +371,7 @@ groups:
     
       - name: install_stap_on_raptor
         function: install_stap_on_raptor
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Install STAP (S-TAP) agent on raptor using GIM"
         args:
           appliance_name: "cm"
