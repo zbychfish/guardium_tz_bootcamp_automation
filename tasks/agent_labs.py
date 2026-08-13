@@ -41,7 +41,6 @@ def _get_api(config, logger, appliance_name: str):
     api.get_token(username='demo', password=pwd)
     return api
 
-
 def _monitor_gim(api, client_ip: str, logger) -> bool:
     """Poll gim_list_client_modules until all modules reach INSTALLED state."""
     logger.info("⌛ waiting 10s before monitoring")
@@ -323,7 +322,6 @@ def correct_mysql_ie(
 
     logger.info("✓ MySQL IE corrected")
     return True
-
 
 def enable_atap_for_mongo(config, logger, verbose: bool = False, **kwargs) -> bool:
     _header(logger, "ENABLE ATAP FOR MONGODB ON RAPTOR")
