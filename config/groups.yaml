@@ -655,7 +655,7 @@ groups:
 
   oracle_lab:
     name: "Oracle Lab"
-    description: "Install GIM and STAP on sauropod for Oracle monitoring"
+    description: "Oracle lab content before UC 2.0"
     deployed_with: [standard_demo]
     dependencies: [winstap_lab]
     stages:
