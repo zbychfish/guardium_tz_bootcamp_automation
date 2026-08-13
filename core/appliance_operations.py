@@ -144,10 +144,6 @@ def restart_appliance(
     mysql_busy_wait: int = 60) -> bool:
     import traceback
 
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
         return False
@@ -236,10 +232,6 @@ def setup_appnode(
     max_retries: int = 10) -> bool:
     import traceback
 
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
         return False
@@ -323,10 +315,6 @@ def setup_kafka_node(
     retry_interval: int = 60,
     max_retries: int = 10) -> bool:
     import traceback
-
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
 
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
@@ -671,10 +659,6 @@ def set_timezone(
     debug: bool = True) -> bool:
     import traceback
 
-    if not appliance_name:
-        logger.error("appliance_name is required")
-        return False
-
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
         return False
@@ -755,10 +739,6 @@ def configure_system_settings_consolidated(
         getattr(logger, level)(f"[{appliance_name}] {msg}")
 
     try:
-        if not appliance_name:
-            logger.error("appliance_name is required")
-            return False
-
         params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
         if not params:
             return False
