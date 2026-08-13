@@ -16,16 +16,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def api_retry(max_retries: int = 3, retry_delay: int = 60):
-    """
-    Decorator for retrying API calls with exponential backoff.
     
-    Args:
-        max_retries: Maximum number of retry attempts (default: 3)
-        retry_delay: Base delay in seconds between retries (default: 60)
-    
-    Returns:
-        Decorated function with retry logic
-    """
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -68,16 +59,7 @@ class GuardiumRestAPI:
         verify_ssl: bool = False,
         logger=None
     ):
-        """
-        Initializes the REST API client.
-        
-        Args:
-            base_url: Base API URL (e.g., 'https://10.10.9.219')
-            client_id: OAuth client ID (default 'BOOTCAMP')
-            client_secret: OAuth client secret (required)
-            verify_ssl: Whether to verify SSL certificate (default False)
-            logger: Optional logger instance for retry logging
-        """
+    
         self.base_url = base_url.rstrip('/')
         self.client_id = client_id
         self.verify_ssl = verify_ssl
@@ -91,21 +73,7 @@ class GuardiumRestAPI:
     
     @api_retry(max_retries=3, retry_delay=60)
     def get_token(self, username: str, password: str) -> str:
-        """
-        Retrieves access token from Guardium OAuth.
-        Automatically retries on connection errors (3 attempts, 60s delay).
-        
-        Args:
-            username: Guardium username
-            password: Guardium user password
-        
-        Returns:
-            Access token
-        
-        Raises:
-            requests.exceptions.RequestException: In case of HTTP error
-            KeyError: If response does not contain access_token
-        """
+    
         data = {
             'client_id': self.client_id,
             'client_secret': self.client_secret,
@@ -125,15 +93,6 @@ class GuardiumRestAPI:
         return access_token
     
     def get_headers(self) -> dict:
-        """
-        Returns HTTP headers with authorization token.
-        
-        Returns:
-            Dictionary with headers
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-        """
         if not self.access_token:
             raise RuntimeError("Access token not available. Call get_token() first.")
         
@@ -143,16 +102,6 @@ class GuardiumRestAPI:
         }
     
     def get_users(self) -> dict:
-        """
-        Retrieves list of users from Guardium.
-        
-        Returns:
-            Dictionary with user data
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        """
         url = f'{self.base_url}/restAPI/user'
         headers = self.get_headers()
         
@@ -171,30 +120,8 @@ class GuardiumRestAPI:
         email: Optional[str] = None,
         country: Optional[str] = None,
         disabled: bool = False,
-        disable_pwd_expiry: bool = False
-    ) -> dict:
-        """
-        Creates a new user in Guardium.
-        
-        Args:
-            username: Username (required)
-            password: Password (required, min. 8 characters, uppercase/lowercase letter, digit, special character)
-            confirm_password: Password confirmation (required, must match password)
-            first_name: First name (required)
-            last_name: Last name (required)
-            email: Email address (optional)
-            country: ISO 3166 2-letter country code, e.g., 'US', 'PL' (optional)
-            disabled: Whether user is disabled (default False)
-            disable_pwd_expiry: Whether to disable password change requirement on first login (default False)
-        
-        Returns:
-            Dictionary with API response
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-            ValueError: If password != confirm_password
-        """
+        disable_pwd_expiry: bool = False) -> dict:
+    
         if password != confirm_password:
             raise ValueError("Password and confirmPassword must match")
         
@@ -222,21 +149,6 @@ class GuardiumRestAPI:
         return response.json()
     
     def set_user_roles(self, username: str, roles: str) -> dict:
-        """
-        Assigns or updates user roles in Guardium.
-        
-        Args:
-            username: Username (required)
-            roles: Role or roles to assign (required)
-                   For multiple roles use comma without spaces, e.g., "role1,role2,role3"
-        
-        Returns:
-            Dictionary with API response
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        """
         url = f'{self.base_url}/restAPI/user_roles'
         headers = self.get_headers()
         
@@ -261,28 +173,6 @@ class GuardiumRestAPI:
         disabled: Optional[bool] = None,
         disable_pwd_expiry: Optional[bool] = None
     ) -> dict:
-        """
-        Updates an existing user in Guardium.
-        
-        Args:
-            username: Username (required)
-            password: New password (optional)
-            confirm_password: Password confirmation (optional, must match password if provided)
-            first_name: First name (optional)
-            last_name: Last name (optional)
-            email: Email address (optional)
-            country: ISO 3166 2-letter country code (optional)
-            disabled: Whether user is disabled (optional)
-            disable_pwd_expiry: Whether to disable password expiry (optional)
-        
-        Returns:
-            Dictionary with API response
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-            ValueError: If password != confirm_password
-        """
         if password and confirm_password and password != confirm_password:
             raise ValueError("Password and confirmPassword must match")
         
@@ -314,23 +204,6 @@ class GuardiumRestAPI:
         return response.json()
     
     def get_gim_package(self, filename: str) -> dict:
-        """
-        Retrieves GIM (Guardium Installation Manager) package from Guardium.
-        
-        Args:
-            filename: GIM package filename (required). Use wildcards like "*.gim" to get all packages.
-        
-        Returns:
-            Dictionary with API response containing GIM package information
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        
-        Example:
-            api.get_gim_package("*.gim")  # Get all GIM packages
-            api.get_gim_package("specific_package.gim")  # Get specific package
-        """
         url = f'{self.base_url}/restAPI/gim_package'
         headers = self.get_headers()
         
@@ -349,28 +222,6 @@ class GuardiumRestAPI:
         module: str,
         module_version: str
     ) -> dict:
-        """
-        Assigns GIM module to client.
-        
-        Args:
-            client_ip: Client IP address (required)
-            module: GIM module name (required)
-            module_version: Module version (required)
-        
-        Returns:
-            Dictionary with API response
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        
-        Example:
-            api.gim_client_assign(
-                client_ip="10.10.9.100",
-                module="BUNDLE-STAP",
-                module_version="12.2.2.0_r123489_"
-            )
-        """
         url = f'{self.base_url}/restAPI/gim_client_assign'
         headers = self.get_headers()
         
@@ -391,35 +242,6 @@ class GuardiumRestAPI:
         param_name: str,
         param_value: Optional[str] = None
     ) -> dict:
-        """
-        Sets GIM client parameters.
-        
-        Args:
-            client_ip: Target client IP address (required)
-            param_name: Parameter name (required)
-            param_value: Parameter value (optional)
-        
-        Returns:
-            Dictionary with API response
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        
-        Example:
-            # Set STAP parameters
-            api.gim_client_params(
-                client_ip="10.10.9.100",
-                param_name="STAP_SQLGUARD_IP",
-                param_value="10.10.9.219"
-            )
-            
-            api.gim_client_params(
-                client_ip="10.10.9.100",
-                param_name="STAP_USE_TLS",
-                param_value="1"
-            )
-        """
         url = f'{self.base_url}/restAPI/gim_client_params'
         headers = self.get_headers()
         
@@ -443,36 +265,6 @@ class GuardiumRestAPI:
         date: str,
         module: Optional[str] = None
     ) -> dict:
-        """
-        Schedules GIM module(s) installation on client.
-        
-        Args:
-            client_ip: Client IP address (required)
-            date: Installation date in format "now" or "yyyy-MM-dd HH:mm" (required)
-            module: GIM module name (optional). If not provided, all modules
-                   for the given client will be scheduled for installation.
-        
-        Returns:
-            Dictionary with API response
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        
-        Example:
-            # Schedule installation immediately
-            api.gim_schedule_install(
-                client_ip="10.10.9.100",
-                date="now"
-            )
-            
-            # Schedule installation for specific date
-            api.gim_schedule_install(
-                client_ip="10.10.9.100",
-                date="2026-03-27 14:30",
-                module="BUNDLE-STAP"
-            )
-        """
         url = f'{self.base_url}/restAPI/gim_schedule_install'
         headers = self.get_headers()
         
@@ -490,22 +282,6 @@ class GuardiumRestAPI:
         
         return response.json()
     def gim_list_client_modules(self, client_ip: str) -> dict:
-        """
-        Retrieves list of GIM modules assigned to client.
-        
-        Args:
-            client_ip: Client IP address (required)
-        
-        Returns:
-            Dictionary with list of GIM modules for the given client
-        
-        Raises:
-            RuntimeError: If token has not been retrieved yet
-            requests.exceptions.RequestException: In case of HTTP error
-        
-        Example:
-            modules = api.gim_list_client_modules(client_ip="10.10.9.100")
-        """
         url = f'{self.base_url}/restAPI/gim_list_client_modules'
         headers = self.get_headers()
         
@@ -587,24 +363,6 @@ class GuardiumRestAPI:
         retry_delay: int = 60,
         debug: bool = False
     ) -> dict:
-        """
-        Install policy on target host with retry logic for offline hosts.
-        
-        Args:
-            policy: Policy name
-            install_action: Install action (optional)
-            api_target_host: Target host IP (optional)
-            units: Target unit name e.g. "sauropod.demo.guardium" (optional)
-            max_retries: Maximum number of retries for ErrorCode/ID 15 (default: 3)
-            retry_delay: Delay in seconds between retries (default: 60)
-            debug: Enable debug logging (default: False)
-        
-        Returns:
-            dict: API response with ErrorCode/ID and ErrorMessage/Message
-        
-        Raises:
-            Exception: If policy installation fails after all retries
-        """
         import time
         
         url = f'{self.base_url}/restAPI/policy_install'
