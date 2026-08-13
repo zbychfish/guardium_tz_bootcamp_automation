@@ -769,8 +769,8 @@ def install_and_monitor_patches_all(
     max_checks: int = 60,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
+    
     _header(logger, "INSTALL AND MONITOR PATCHES ON ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)

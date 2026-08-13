@@ -14,6 +14,12 @@ import concurrent.futures
 from typing import Callable, Dict, Any, Tuple
 
 
+def _header(logger, title: str) -> None:
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
 def execute_on_appliances_async(
     appliances: List[str],
     operation_func: Callable,
@@ -1002,10 +1008,6 @@ def prepare_appliance_for_patching(
         logger.error(f"[{appliance_name}] no *.sig files found in {patches_source_dir}")
         return False
 
-    logger.info(f"[{appliance_name}] found {len(patch_files)} patch files")
-    for pf in patch_files:
-        logger.info(f"[{appliance_name}]   - {os.path.basename(pf)}")
-
     try:
         raptor_ip = config.get_machine_ip('raptor', use_private=True)
         if not raptor_ip:
@@ -1018,7 +1020,6 @@ def prepare_appliance_for_patching(
             return False
 
         ssh_port = config.config.get('ssh', {}).get('port', 22)
-        logger.info(f"[{appliance_name}] ➜ SSH {host} as cloudsupport")
 
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -1026,13 +1027,11 @@ def prepare_appliance_for_patching(
             hostname=host, username='cloudsupport', password=cloudsupport_password,
             look_for_keys=False, allow_agent=False, timeout=30
         )
-        logger.info(f"[{appliance_name}] ✓ connected as cloudsupport")
 
         try:
             stdin, stdout, _ = ssh_client.exec_command('which sshpass')
             sshpass_available = stdout.channel.recv_exit_status() == 0
 
-            logger.info(f"[{appliance_name}] ➜ scp {len(patch_files)} files from raptor")
             for patch_file in patch_files:
                 filename = os.path.basename(patch_file)
                 if sshpass_available:
@@ -1075,31 +1074,21 @@ def prepare_appliance_for_patching(
                         ssh_client.close()
                         return False
 
-            logger.info(f"[{appliance_name}] ✓ {len(patch_files)} files in /tmp/")
+            logger.info(f"[{appliance_name}] ✓ {len(patch_files)} patch files copied to /tmp/")
 
-            logger.info(f"[{appliance_name}] ➜ sudo mkdir -p /var/IBM/Guardium/log/patches/")
             stdin, stdout, stderr = ssh_client.exec_command('sudo mkdir -p /var/IBM/Guardium/log/patches/')
             if stdout.channel.recv_exit_status() != 0:
                 logger.error(f"[{appliance_name}] mkdir failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
 
-            logger.info(f"[{appliance_name}] ➜ sudo mv /tmp/*.sig /var/IBM/Guardium/log/patches/")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo mv /tmp/*.sig /var/IBM/Guardium/log/patches/')
+            stdin, stdout, stderr = ssh_client.exec_command('sudo mv /tmp/*.sig /var/IBM/Guardium/log/patches/ && sudo chown tomcat:tomcat /var/IBM/Guardium/log/patches/*.sig')
             if stdout.channel.recv_exit_status() != 0:
-                logger.error(f"[{appliance_name}] mv failed: {stderr.read().decode()}")
+                logger.error(f"[{appliance_name}] mv/chown failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
 
-            logger.info(f"[{appliance_name}] ➜ sudo chown tomcat:tomcat /var/IBM/Guardium/log/patches/*.sig")
-            stdin, stdout, stderr = ssh_client.exec_command('sudo chown tomcat:tomcat /var/IBM/Guardium/log/patches/*.sig')
-            if stdout.channel.recv_exit_status() != 0:
-                logger.error(f"[{appliance_name}] chown failed: {stderr.read().decode()}")
-                ssh_client.close()
-                return False
-
-            stdin, stdout, _ = ssh_client.exec_command('sudo ls -la /var/IBM/Guardium/log/patches/*.sig')
-            logger.info(f"[{appliance_name}] {stdout.read().decode().strip()}")
+            logger.info(f"[{appliance_name}] ✓ patch files moved to /var/IBM/Guardium/log/patches/")
             ssh_client.close()
 
         except Exception as e:
@@ -1122,12 +1111,11 @@ def prepare_appliance_for_patching(
             logger.error(f"[{appliance_name}] failed to connect as CLI user")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ show system patch available")
         patch_output = cli_client.execute_command("show system patch available", timeout=300)
-        logger.info(f"[{appliance_name}] {patch_output.strip()}")
+        logger.info(f"[{appliance_name}] available patches:\n{patch_output.strip()}")
         cli_client.disconnect()
 
-        logger.info(f"[{appliance_name}] ✓ prepared for patching")
+        logger.info(f"[{appliance_name}] ✓ ready for patching")
         return True
 
     except Exception as e:
@@ -1608,183 +1596,126 @@ def install_patch_on_appliance(
     host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
     appliance_type = params['appliance_type']
 
-    logger.info("=" * 80)
-    logger.info(f"INSTALL PATCHES: {appliance_name}")
-    logger.info("=" * 80)
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"Patch selection: {patch_selection}")
-    logger.info(f"Reinstall answer: {reinstall_answer}")
+    _header(logger, f"INSTALL PATCHES: {appliance_name}")
+    logger.info(f"[{appliance_name}] ({appliance_type}) at {host} | selection={patch_selection}")
+
+    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
     try:
+        import socket
         client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=60,
-            strip_ansi=True,
-            debug=debug
+            host=host, user=user, password=password,
+            prompt_regex=prompt_regex, initial_pattern=None,
+            timeout=60, strip_ansi=True, debug=debug
         )
-        
+
         if not client.connect():
-            logger.error("Failed to connect to appliance")
+            logger.error(f"[{appliance_name}] failed to connect")
             return False
-        
-        logger.info("✓ Connected successfully")
-        
-        # Get the SSH channel for interactive communication
+
         channel = client.channel
         if not channel:
-            logger.error("No SSH channel available")
+            logger.error(f"[{appliance_name}] no SSH channel available")
             client.disconnect()
             return False
-        
+
         channel.settimeout(0.1)
-        
-        # Send patch install command
+
         command = "store system patch install sys"
-        logger.info(f"\n➜ Executing: {command}")
-        logger.info("⌛ Waiting for patch selection prompt...")
-        
+        logger.info(f"[{appliance_name}] ➜ {command}")
         channel.send((command + "\r").encode())
-        
-        # Read output and respond to prompts
+
         buf = ""
         patch_selected = False
         reinstall_answered = False
         last_activity = time.time()
-        
+
         while True:
             try:
                 chunk = channel.recv(4096).decode('utf-8', errors='replace')
                 if chunk:
                     buf += chunk
                     last_activity = time.time()
-                    
                     if debug:
-                        # Print chunk without ANSI codes for cleaner output
-                        import re
-                        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                        clean_chunk = ansi_escape.sub('', chunk)
-                        print(clean_chunk, end='', flush=True)
-                    
-                    # Remove ANSI codes for pattern matching
-                    import re
-                    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                        print(ansi_escape.sub('', chunk), end='', flush=True)
                     buf_clean = ansi_escape.sub('', buf)
-                    
-                    # Check for patch selection prompt
+
                     if not patch_selected and ("Please choose patches" in buf_clean or "or q to quit" in buf_clean):
                         last_line = buf_clean.strip().split('\n')[-1]
                         if last_line.endswith(':'):
-                            # Wait a moment to ensure prompt is complete
                             time.sleep(1.0)
                             try:
                                 extra = channel.recv(4096).decode('utf-8', errors='replace')
                                 if extra:
                                     buf += extra
                                     if debug:
-                                        clean_extra = ansi_escape.sub('', extra)
-                                        print(clean_extra, end='', flush=True)
+                                        print(ansi_escape.sub('', extra), end='', flush=True)
                             except:
                                 pass
-                            
-                            logger.info(f"\n>>> Sending patch selection: {patch_selection} <<<")
+                            logger.info(f"[{appliance_name}] ➜ patch selection: {patch_selection}")
                             channel.send((patch_selection + "\r").encode())
                             patch_selected = True
                             last_activity = time.time()
                             time.sleep(0.5)
-                    
-                    # Check for reinstall prompt
+
                     if patch_selected and not reinstall_answered and "Do you really want to install again" in buf_clean:
                         if "(yes or no)?" in buf_clean:
-                            # Wait a moment to ensure prompt is complete
                             time.sleep(1.0)
                             try:
                                 extra = channel.recv(4096).decode('utf-8', errors='replace')
                                 if extra:
                                     buf += extra
                                     if debug:
-                                        clean_extra = ansi_escape.sub('', extra)
-                                        print(clean_extra, end='', flush=True)
+                                        print(ansi_escape.sub('', extra), end='', flush=True)
                             except:
                                 pass
-                            
-                            logger.info(f"\n>>> Sending reinstall answer: {reinstall_answer} <<<")
+                            logger.info(f"[{appliance_name}] ➜ reinstall answer: {reinstall_answer}")
                             channel.send((reinstall_answer + "\r").encode())
                             reinstall_answered = True
                             last_activity = time.time()
                             time.sleep(0.5)
-                    
-                    # Check if we're back at prompt (command completed)
-                    if patch_selected and (prompt_regex and re.search(prompt_regex, buf_clean)):
-                        # Wait a moment for any final output
+
+                    if patch_selected and prompt_regex and re.search(prompt_regex, buf_clean):
                         time.sleep(1)
                         try:
                             while True:
                                 chunk = channel.recv(4096).decode('utf-8', errors='replace')
                                 if chunk:
                                     if debug:
-                                        clean_chunk = ansi_escape.sub('', chunk)
-                                        print(clean_chunk, end='', flush=True)
+                                        print(ansi_escape.sub('', chunk), end='', flush=True)
                                 else:
                                     break
                         except:
                             pass
-                        
-                        logger.info("\n\n=== Patch installation command completed ===")
                         client.disconnect()
-                        
-                        logger.info("=" * 80)
-                        logger.info(f"✓ Patch installation initiated on {appliance_name}")
-                        logger.info("=" * 80)
-                        
-                        # Now monitor the installation to ensure all patches complete successfully
-                        logger.info("\n⏳ Monitoring patch installation progress...")
-                        logger.info("=" * 80)
-                        
-                        # Wait a moment before starting to monitor
+                        logger.info(f"[{appliance_name}] ✓ patch install command completed")
                         time.sleep(10)
-                        
-                        # Monitor the installation (check every 60 seconds, max 60 checks = 1 hour)
-                        monitor_result = monitor_patch_installation(
-                            config=config,
-                            logger=logger,
-                            appliance_name=appliance_name,
-                            patch_numbers=None,  # Monitor all patches
-                            check_interval=60,
-                            max_checks=60,
-                            user=user,
-                            password=password,
-                            debug=debug
+                        return monitor_patch_installation(
+                            config=config, logger=logger, appliance_name=appliance_name,
+                            patch_numbers=None, check_interval=60, max_checks=60,
+                            user=user, password=password, debug=debug
                         )
-                        
-                        return monitor_result
-                
+
             except socket.timeout:
-                # Timeout is normal - no data available
-                # Check if too much time passed without activity
-                if time.time() - last_activity > 300:  # 5 minutes without activity
-                    logger.warning("\n\n⚠ No activity for 5 minutes")
+                if time.time() - last_activity > 300:
+                    logger.warning(f"[{appliance_name}] ⚠ no activity for 5 minutes")
                     break
                 time.sleep(0.1)
             except Exception as e:
-                logger.error(f"\nUnexpected error during patch installation: {e}")
+                logger.error(f"[{appliance_name}] ✗ {e}")
                 break
-            
-            # Check if channel is still open
+
             if channel.closed:
-                logger.warning("\nChannel closed unexpectedly")
+                logger.warning(f"[{appliance_name}] ⚠ channel closed unexpectedly")
                 break
-        
+
         client.disconnect()
-        logger.warning("Patch installation may not have completed successfully")
+        logger.warning(f"[{appliance_name}] ⚠ patch installation may not have completed")
         return False
-        
+
     except Exception as e:
-        logger.error(f"Error installing patches: {e}")
         import traceback
+        logger.error(f"[{appliance_name}] ✗ {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -1797,8 +1728,7 @@ def monitor_patch_installation(
     max_checks: int = 60,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
     
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password)
     if not params:
@@ -1807,23 +1737,16 @@ def monitor_patch_installation(
     host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
     appliance_type = params['appliance_type']
 
-    logger.info("=" * 80)
-    logger.info(f"MONITOR PATCH INSTALLATION: {appliance_name}")
-    logger.info("=" * 80)
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"Check interval: {check_interval} seconds")
-    logger.info(f"Max checks: {max_checks} (timeout: {check_interval * max_checks} seconds)")
-    
+    _header(logger, f"MONITOR PATCH INSTALLATION: {appliance_name}")
+    logger.info(f"[{appliance_name}] interval={check_interval}s max={max_checks} (timeout={check_interval * max_checks}s)")
+
     check_count = 0
-    
+
     while check_count < max_checks:
         check_count += 1
-        logger.info(f"\n{'=' * 80}")
-        logger.info(f"Check #{check_count}/{max_checks} for {appliance_name}")
-        logger.info(f"{'=' * 80}")
-        
+        logger.info(f"[{appliance_name}] check {check_count}/{max_checks}")
+
         try:
-            # Connect to appliance
             client = ApplianceClient(
                 host=host,
                 user=user,
@@ -1836,146 +1759,76 @@ def monitor_patch_installation(
             )
             
             if not client.connect():
-                logger.warning(f"⚠ Failed to connect to {appliance_name} (attempt {check_count}/{max_checks})")
-                logger.info(f"  Appliance may be restarting or unavailable")
-                logger.info(f"  Waiting {check_interval} seconds before next check...")
+                logger.warning(f"[{appliance_name}] ⚠ connect failed, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
-            
-            # Execute show system patch install
-            logger.info(f"➜ Executing: show system patch install")
+
+            logger.info(f"[{appliance_name}] ➜ show system patch install")
             output = client.execute_command("show system patch install")
-            
             client.disconnect()
-            
+
             if not output:
-                logger.warning(f"⚠ No output from 'show system patch install'")
-                logger.info(f"  Waiting {check_interval} seconds before next check...")
+                logger.warning(f"[{appliance_name}] ⚠ no output, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
-            
+
             if debug:
-                logger.info(f"Patch installation status:\n{output}")
-            
-            # Parse output to check each patch status
-            # Format: P#      Who       Description                     Request Time         Status
-            #         9997    CLI       Health Check for GPU and Bundle 2026-06-03 19:13:50  DONE: Patch installation Succeeded.
-            
-            lines = output.split('\n')
-            patch_status = {}  # {patch_number: status_line}
-            
-            for line in lines:
-                line_stripped = line.strip()
-                # Skip header and empty lines
-                if not line_stripped or line_stripped.startswith('P#') or 'Request Time' in line_stripped:
+                logger.info(f"[{appliance_name}] patch status:\n{output}")
+
+            patch_status = {}
+            for line in output.split('\n'):
+                ls = line.strip()
+                if not ls or ls.startswith('P#') or 'Request Time' in ls:
                     continue
-                
-                # Look for lines starting with patch number
-                match = re.match(r'^(\d+)\s+', line_stripped)
-                if match:
-                    patch_number = match.group(1)
-                    patch_status[patch_number] = line_stripped
-            
-            # If patch_numbers not specified, monitor all patches found
-            if not patch_numbers:
-                patch_numbers_to_check = list(patch_status.keys())
-            else:
-                patch_numbers_to_check = patch_numbers
-            
+                m = re.match(r'^(\d+)\s+', ls)
+                if m:
+                    patch_status[m.group(1)] = ls
+
+            patch_numbers_to_check = patch_numbers or list(patch_status.keys())
+
             if not patch_numbers_to_check:
-                logger.warning("⚠ No patches found to monitor")
-                logger.info(f"  Waiting {check_interval} seconds before next check...")
+                logger.warning(f"[{appliance_name}] ⚠ no patches found, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
-            
-            # Check status of each patch
-            patches_in_progress = 0
-            patches_completed = 0
-            patches_failed = 0
-            patches_with_warning = 0
-            
-            logger.info(f"\n📊 Checking status of {len(patch_numbers_to_check)} patch(es):")
-            
+
+            done_patches = []
+            fail_patches = []
+            in_progress = 0
+
             for patch_num in patch_numbers_to_check:
                 if patch_num not in patch_status:
-                    logger.warning(f"  ⚠ Patch {patch_num}: NOT FOUND in output")
-                    patches_failed += 1
+                    fail_patches.append(patch_num)
                     continue
-                
-                status_line = patch_status[patch_num]
-                
-                # Check for success: "DONE: Patch installation Succeeded."
-                if "DONE: Patch installation Succeeded" in status_line:
-                    logger.info(f"  ✓ Patch {patch_num}: Succeeded")
-                    patches_completed += 1
-                # Special case for patch 9997: WARNING is acceptable
-                elif patch_num == "9997" and "WARNING:" in status_line:
-                    logger.warning(f"  ⚠ Patch {patch_num}: Completed with WARNING (acceptable for 9997)")
-                    # Extract warning message
-                    warning_match = re.search(r'WARNING:\s*(.+)', status_line)
-                    if warning_match:
-                        warning_msg = warning_match.group(1)
-                        logger.warning(f"    Warning message: {warning_msg}")
-                    patches_completed += 1
-                    patches_with_warning += 1
-                # Check for in-progress states
-                elif any(keyword in status_line for keyword in ["Preparing", "STEP:", "Executing", "Applying", "POST:"]):
-                    # Extract the status message
-                    status_match = re.search(r'(Preparing|STEP:|Executing|Applying|POST:)\s*(.+)', status_line)
-                    if status_match:
-                        status_msg = status_match.group(0)
-                        logger.info(f"  ⏳ Patch {patch_num}: {status_msg}")
-                    else:
-                        logger.info(f"  ⏳ Patch {patch_num}: In progress")
-                    patches_in_progress += 1
-                # Check for failure
-                elif "FAIL" in status_line.upper() or "ERROR" in status_line.upper():
-                    logger.error(f"  ✗ Patch {patch_num}: FAILED")
-                    logger.error(f"    Status: {status_line}")
-                    patches_failed += 1
+                sl = patch_status[patch_num]
+                if "DONE: Patch installation Succeeded" in sl:
+                    done_patches.append(patch_num)
+                elif patch_num == "9997" and "WARNING:" in sl:
+                    done_patches.append(patch_num)
+                elif "FAIL" in sl.upper() or "ERROR" in sl.upper():
+                    fail_patches.append(patch_num)
                 else:
-                    # Unknown status - treat as in progress
-                    logger.info(f"  ? Patch {patch_num}: Unknown status")
-                    logger.info(f"    Status: {status_line}")
-                    patches_in_progress += 1
-            
-            logger.info(f"\n📊 Summary:")
-            logger.info(f"  ⏳ In progress: {patches_in_progress}")
-            logger.info(f"  ✓ Completed: {patches_completed}")
-            if patches_with_warning > 0:
-                logger.info(f"  ⚠ With warnings: {patches_with_warning}")
-            logger.info(f"  ✗ Failed: {patches_failed}")
-            
-            # Check if installation is complete
-            if patches_in_progress == 0:
-                if patches_failed > 0:
-                    logger.error(f"\n✗ Patch installation completed with {patches_failed} failure(s)")
-                    logger.error("=" * 80)
+                    in_progress += 1
+
+            done_str = ", ".join(done_patches) if done_patches else "—"
+            logger.info(f"[{appliance_name}]: installed={done_str} | ⏳ {in_progress} | ✗ {len(fail_patches)}")
+
+            if in_progress == 0:
+                if fail_patches:
+                    logger.error(f"[{appliance_name}] ✗ failed patches: {', '.join(fail_patches)}")
                     return False
-                else:
-                    if patches_with_warning > 0:
-                        logger.info(f"\n✓ All patches installed successfully ({patches_with_warning} with acceptable warnings)")
-                    else:
-                        logger.info(f"\n✓ All patches installed successfully!")
-                    logger.info("=" * 80)
-                    return True
-            
-            # Still patches in progress
-            logger.info(f"\n⏳ {patches_in_progress} patch(es) still installing...")
-            logger.info(f"  Waiting {check_interval} seconds before next check...")
+                logger.info(f"[{appliance_name}] ✓ all patches installed successfully")
+                return True
+
             time.sleep(check_interval)
-            
+
         except Exception as e:
-            logger.warning(f"⚠ Error checking patch status (attempt {check_count}/{max_checks}): {e}")
+            import traceback
+            logger.warning(f"[{appliance_name}] ⚠ check error: {e}")
             if debug:
-                import traceback
                 logger.error(traceback.format_exc())
-            logger.info(f"  Waiting {check_interval} seconds before next check...")
             time.sleep(check_interval)
-    
-    # Max checks reached
-    logger.error(f"\n✗ Maximum checks ({max_checks}) reached without completion")
-    logger.error("=" * 80)
+
+    logger.error(f"[{appliance_name}] ✗ timeout after {max_checks} checks")
     return False
 
 def install_and_monitor_patches(
@@ -1988,127 +1841,79 @@ def install_and_monitor_patches(
     max_checks: int = 60,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = True
-) -> bool:
+    debug: bool = True) -> bool:
     
-    logger.info("=" * 80)
-    logger.info(f"INSTALL AND MONITOR PATCHES: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Step 1: Get patch numbers from patch_selection
-    # Map positions to patch numbers based on alphabetically sorted *.sig files
-    logger.info("\n📋 Step 1: Determining patch numbers from selection...")
-    
-    # Define patches directory path
+    import os
+    import glob
+
+    _header(logger, f"INSTALL AND MONITOR PATCHES: {appliance_name}")
+
     patches_dir = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
-    
+    patch_numbers = None
+
     try:
-        import os
-        import glob
-        
-        # Get all *.sig files and sort them alphabetically
-        sig_files = glob.glob(os.path.join(patches_dir, "*.sig"))
-        sig_files.sort()
-        
+        sig_files = sorted(glob.glob(os.path.join(patches_dir, "*.sig")))
         if not sig_files:
-            logger.error(f"No *.sig files found in {patches_dir}")
+            logger.error(f"no *.sig files found in {patches_dir}")
             return False
-        
-        logger.info(f"Found {len(sig_files)} patch files:")
-        
-        # Map positions to patch numbers
-        available_patches = {}  # {position: patch_number}
-        position = 0
-        
-        for sig_file in sig_files:
-            position += 1
+
+        available_patches = {}
+        for i, sig_file in enumerate(sig_files, 1):
             filename = os.path.basename(sig_file)
-            
-            # Extract patch number from filename using regex p(\d+)
-            match = re.search(r'p(\d+)', filename)
-            if match:
-                patch_number = match.group(1)
-                available_patches[position] = patch_number
-                logger.info(f"  Position {position}: {filename} → Patch {patch_number}")
+            m = re.search(r'p(\d+)', filename)
+            if m:
+                available_patches[i] = m.group(1)
+                logger.info(f"  {i}: {filename} → patch {m.group(1)}")
             else:
-                logger.warning(f"  Position {position}: {filename} → Could not extract patch number")
-        
+                logger.warning(f"  {i}: {filename} → patch number not found")
+
         if not available_patches:
-            logger.error("Could not extract patch numbers from any *.sig files")
+            logger.error("could not extract patch numbers from *.sig files")
             return False
-        
-        # Map patch_selection positions to patch numbers
+
         patch_numbers = []
-        positions = [p.strip() for p in patch_selection.split(',')]
-        
-        logger.info(f"\nMapping selected positions to patch numbers:")
-        for pos_str in positions:
+        for pos_str in [p.strip() for p in patch_selection.split(',')]:
             try:
                 pos = int(pos_str)
                 if pos in available_patches:
                     patch_numbers.append(available_patches[pos])
-                    logger.info(f"  Position {pos} → Patch {available_patches[pos]}")
+                    logger.info(f"  position {pos} → patch {available_patches[pos]}")
                 else:
-                    logger.warning(f"  Position {pos} → NOT FOUND (valid range: 1-{len(available_patches)})")
+                    logger.warning(f"  position {pos} → not found (range: 1-{len(available_patches)})")
             except ValueError:
-                logger.warning(f"  Invalid position: {pos_str}")
-        
+                logger.warning(f"  invalid position: {pos_str}")
+
         if not patch_numbers:
-            logger.error("Could not determine patch numbers from selection")
+            logger.error("could not determine patch numbers from selection")
             return False
-        
-        logger.info(f"✓ Will monitor patches: {', '.join(patch_numbers)}")
-        
+
+        logger.info(f"➜ monitoring patches: {', '.join(patch_numbers)}")
+
     except Exception as e:
-        logger.error(f"Error reading patch files from {patches_dir}: {e}")
+        import traceback
+        logger.warning(f"[{appliance_name}] ⚠ could not resolve patch numbers: {e} — monitoring all")
         if debug:
-            import traceback
             logger.error(traceback.format_exc())
-        logger.info("Will monitor all patches")
         patch_numbers = None
-    
-    # Step 2: Install patches
-    logger.info("\n📦 Step 2: Installing patches...")
-    install_success = install_patch_on_appliance(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        patch_selection=patch_selection,
-        reinstall_answer=reinstall_answer,
-        user=user,
-        password=password,
-        debug=debug
-    )
-    
-    if not install_success:
-        logger.error(f"✗ Failed to initiate patch installation on {appliance_name}")
+
+    if not install_patch_on_appliance(
+        config=config, logger=logger, appliance_name=appliance_name,
+        patch_selection=patch_selection, reinstall_answer=reinstall_answer,
+        user=user, password=password, debug=debug
+    ):
         return False
-    
-    logger.info(f"\n✓ Patch installation initiated successfully")
-    logger.info(f"⏳ Waiting {check_interval} seconds before starting monitoring...")
+
+    logger.info(f"[{appliance_name}] ⏳ waiting {check_interval}s before monitoring")
     time.sleep(check_interval)
-    
-    # Step 3: Monitor installation
-    logger.info("\n📊 Step 3: Monitoring patch installation...")
-    monitor_success = monitor_patch_installation(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        patch_numbers=patch_numbers,
-        check_interval=check_interval,
-        max_checks=max_checks,
-        user=user,
-        password=password,
-        debug=False  # Less verbose during monitoring
-    )
-    
-    if not monitor_success:
-        logger.error(f"✗ Patch installation monitoring failed for {appliance_name}")
+
+    if not monitor_patch_installation(
+        config=config, logger=logger, appliance_name=appliance_name,
+        patch_numbers=patch_numbers, check_interval=check_interval,
+        max_checks=max_checks, user=user, password=password, debug=False
+    ):
         return False
-    
-    logger.info("=" * 80)
-    logger.info(f"✓ Patches installed and verified successfully on {appliance_name}")
-    logger.info("=" * 80)
+
+    logger.info(f"[{appliance_name}] ✓ patches installed and verified")
     return True
 
 def install_gim_module(
@@ -2127,182 +1932,73 @@ def install_gim_module(
 ) -> bool:
     
     from core.guardium_rest_api import create_guardium_api
-    import time
-    
-    logger.info("=" * 80)
-    logger.info(f"INSTALL GIM MODULE: {module}")
-    logger.info("=" * 80)
-    logger.info(f"Appliance: {appliance_name}")
-    logger.info(f"Client IP: {client_ip}")
-    logger.info(f"Module: {module}")
-    logger.info(f"Version: {module_version}")
-    
-    # Get demo user password
+
+    _header(logger, f"INSTALL GIM MODULE: {module}")
+    logger.info(f"appliance={appliance_name} client={client_ip} module={module} version={module_version}")
+
     if not demo_password:
         demo_password = config.get_custom_variable('pwd')
-        if demo_password:
-            logger.info("Using demo password from custom_variables (pwd)")
-    
     if not demo_password:
-        logger.error("Demo user password is required")
-        logger.error("Provide demo_password in args or set 'pwd' in custom_variables")
+        logger.error("demo password required — set 'pwd' in custom_variables")
         return False
-    
+
     try:
-        # Create REST API client
         api = create_guardium_api(config, logger, appliance_name)
-        logger.info("✓ GuardiumRestAPI client created successfully")
-        
-        if debug:
-            logger.info(f"DEBUG: API Base URL: {api.base_url}")
-        
-        # Get OAuth token
-        logger.info(f"\n{'=' * 80}")
-        logger.info("STEP 1: OAuth Authentication")
-        logger.info(f"{'=' * 80}")
-        logger.info(f"➜ Authenticating as user '{demo_user}'...")
-        
-        if debug:
-            logger.info(f"DEBUG: API Call: get_token(username='{demo_user}', password='***')")
-        
+
+        logger.info(f"➜ authenticate as {demo_user}")
         token = api.get_token(username=demo_user, password=demo_password)
-        logger.info("✓ Authentication successful")
-        
+        logger.info("✓ authenticated")
         if debug:
-            logger.info(f"DEBUG: Access token (first 30 chars): {token[:30]}...")
-        
-        # Assign module to client
-        logger.info(f"\n{'=' * 80}")
-        logger.info("STEP 2: Assign GIM Module to Client")
-        logger.info(f"{'=' * 80}")
-        logger.info(f"➜ Assigning module '{module}' (version: {module_version}) to client {client_ip}...")
-        
+            logger.info(f"  token: {token[:30]}...")
+
+        logger.info(f"➜ gim_client_assign client={client_ip} module={module} version={module_version}")
+        assign_response = api.gim_client_assign(client_ip=client_ip, module=module, module_version=module_version)
+        logger.info("✓ module assigned")
         if debug:
-            logger.info(f"DEBUG: API Call: gim_client_assign(")
-            logger.info(f"DEBUG:   client_ip='{client_ip}',")
-            logger.info(f"DEBUG:   module='{module}',")
-            logger.info(f"DEBUG:   module_version='{module_version}'")
-            logger.info(f"DEBUG: )")
-        
-        assign_response = api.gim_client_assign(
-            client_ip=client_ip,
-            module=module,
-            module_version=module_version
-        )
-        
-        logger.info(f"✓ Module assigned successfully")
-        if debug:
-            logger.info(f"DEBUG: API Response: {assign_response}")
-        
-        # Set module parameters
+            logger.info(f"  response: {assign_response}")
+
         if params:
-            logger.info(f"\n{'=' * 80}")
-            logger.info(f"STEP 3: Set Module Parameters ({len(params)} parameter(s))")
-            logger.info(f"{'=' * 80}")
-            
             for param_name, param_value in params.items():
-                logger.info(f"➜ Setting parameter: {param_name} = {param_value}")
-                
+                logger.info(f"➜ gim_client_params {param_name}={param_value}")
+                param_response = api.gim_client_params(client_ip=client_ip, param_name=param_name, param_value=str(param_value))
                 if debug:
-                    logger.info(f"DEBUG: API Call: gim_client_params(")
-                    logger.info(f"DEBUG:   client_ip='{client_ip}',")
-                    logger.info(f"DEBUG:   param_name='{param_name}',")
-                    logger.info(f"DEBUG:   param_value='{param_value}'")
-                    logger.info(f"DEBUG: )")
-                
-                param_response = api.gim_client_params(
-                    client_ip=client_ip,
-                    param_name=param_name,
-                    param_value=str(param_value)
-                )
-                
-                logger.info(f"  ✓ Parameter set successfully")
-                if debug:
-                    logger.info(f"DEBUG:   API Response: {param_response}")
-            
-            logger.info(f"\n✓ All {len(params)} parameter(s) set successfully")
-        else:
-            logger.info(f"\n{'=' * 80}")
-            logger.info("STEP 3: Set Module Parameters")
-            logger.info(f"{'=' * 80}")
-            logger.info("⊘ No parameters to set")
-        
-        # Schedule installation
-        logger.info(f"\n{'=' * 80}")
-        logger.info("STEP 4: Schedule Installation")
-        logger.info(f"{'=' * 80}")
-        logger.info(f"➜ Scheduling installation for client {client_ip}...")
-        logger.info(f"  Installation time: now")
-        
+                    logger.info(f"  response: {param_response}")
+            logger.info(f"✓ {len(params)} parameter(s) set")
+
+        logger.info(f"➜ gim_schedule_install client={client_ip} date=now")
+        schedule_response = api.gim_schedule_install(client_ip=client_ip, date="now")
+        logger.info("✓ installation scheduled")
         if debug:
-            logger.info(f"DEBUG: API Call: gim_schedule_install(")
-            logger.info(f"DEBUG:   client_ip='{client_ip}',")
-            logger.info(f"DEBUG:   date='now'")
-            logger.info(f"DEBUG: )")
-        
-        schedule_response = api.gim_schedule_install(
-            client_ip=client_ip,
-            date="now"
-        )
-        
-        logger.info(f"✓ Installation scheduled successfully")
-        if debug:
-            logger.info(f"DEBUG: API Response: {schedule_response}")
-        
-        # Monitor installation
+            logger.info(f"  response: {schedule_response}")
+
         if monitor_installation:
-            logger.info(f"\n➜ Waiting {installation_delay} seconds before monitoring...")
+            logger.info(f"⌛ waiting {installation_delay}s before monitoring")
             time.sleep(installation_delay)
-            
-            logger.info(f"➜ Monitoring installation progress for client {client_ip}...")
-            
-            # Monitor until all modules are installed
-            import re
-            pending = ["initial"]  # Initialize to enter loop
+
+            pending = ["initial"]
             check_count = 0
             while pending:
                 check_count += 1
-                logger.info(f"\n  Check #{check_count}: Querying module status...")
-                
+                logger.info(f"➜ gim_list_client_modules check #{check_count}")
                 modules = api.gim_list_client_modules(client_ip=client_ip)
-                
-                if debug:
-                    logger.debug(f"  Full API response: {modules}")
-                
-                # Check for API errors
+
                 if "ErrorCode" in modules or "ErrorMessage" in modules:
-                    error_code = modules.get("ErrorCode", "N/A")
-                    error_msg = modules.get("ErrorMessage", "N/A")
-                    logger.error(f"  ✗ API Error: Code={error_code}, Message={error_msg}")
-                    logger.error(f"  This usually means the client IP is not registered or modules not assigned")
+                    logger.error(f"✗ API error: {modules.get('ErrorCode')} — {modules.get('ErrorMessage')}")
                     return False
-                
+
                 msg = modules.get("Message", "")
-                
-                if debug:
-                    logger.debug(f"  Raw API response Message:\n{msg}")
-                
                 if not msg:
-                    logger.warning(f"  ⚠ API returned empty Message field")
-                    logger.warning(f"  Full response keys: {list(modules.keys())}")
-                
-                # Parse module entries
-                entries = [
-                    e.strip()
-                    for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", msg)
-                    if e.strip()
-                ]
-                
-                logger.info(f"  Found {len(entries)} module entry/entries")
-                
+                    logger.warning("⚠ API returned empty Message")
+
+                entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", msg) if e.strip()]
+
                 result = []
                 for entry in entries:
-                    entry_str: str = str(entry)
-                    def g(p: str) -> Optional[str]:
+                    entry_str = str(entry)
+                    def g(p):
                         m = re.search(p, entry_str)
                         return m.group(1) if m else None
-                    
-                    module_info = {
+                    result.append({
                         "module_id": g(r"MODULE_ID:\s+(-?\d+)"),
                         "name": g(r"NAME:\s+([A-Z0-9\-]+)"),
                         "installed_version": g(r"INSTALLED_VERSION\s+([0-9][^\s]+)"),
@@ -2310,37 +2006,25 @@ def install_gim_module(
                         "state": g(r"STATE:\s+([A-Z\-]+)"),
                         "is_scheduled": g(r"IS_SCHEDULED:\s+([NY])"),
                         "schedule_time": g(r"IS_SCHEDULED:\s+[NY]\s+\(([^)]+)\)")
-                    }
-                    result.append(module_info)
-                    
-                    if debug:
-                        logger.debug(f"  Module: {module_info['name']} | State: {module_info['state']} | Scheduled: {module_info['scheduled_version']}")
-                
-                # Check for pending installations
+                    })
+
                 pending = [m for m in result if m["state"] != "INSTALLED"]
-                
                 if pending:
-                    logger.info(f"  ⌛ {len(pending)} module(s) still installing:")
                     for m in pending:
-                        logger.info(f"    - {m['name']}: {m['state']}")
-                    logger.info(f"  Waiting 30 seconds before next check...")
+                        logger.info(f"  ⌛ {m['name']}: {m['state']}")
                     time.sleep(30)
                 else:
-                    logger.info("  ✓ All modules installed successfully!")
                     for m in result:
-                        logger.info(f"    - {m['name']}: {m['state']} (version: {m['installed_version']})")
-        
-        logger.info("\n" + "=" * 80)
-        logger.info(f"✓ GIM MODULE INSTALLATION COMPLETED")
-        logger.info("=" * 80)
+                        logger.info(f"  ✓ {m['name']}: {m['state']} v{m['installed_version']}")
+
+        logger.info(f"✓ GIM module {module} installed on {client_ip}")
         return True
-        
+
     except Exception as e:
-        logger.error(f"✗ Failed to install GIM module: {e}")
+        import traceback
+        logger.error(f"✗ {e}")
         if debug:
-            import traceback
             logger.error(traceback.format_exc())
-        logger.error("=" * 80)
         return False
 
 
