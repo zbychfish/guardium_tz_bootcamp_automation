@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Setup Appliances Tasks
-Tasks for configuring Guardium appliances
-"""
 
 from typing import Dict, Any, Optional
 from core.logger import get_logger
@@ -24,6 +20,26 @@ from core.appliance_operations import (
 )
 
 logger = get_logger(__name__)
+
+
+def _header(logger, title: str) -> None:
+    logger.info("=" * 60)
+    logger.info(title)
+    logger.info("=" * 60)
+
+
+def _log_summary(logger, title: str, results: dict, errors: dict) -> None:
+    _header(logger, title)
+    success_count = sum(1 for s in results.values() if s)
+    failed_count = len(results) - success_count
+    logger.info(f"✓ Successful: {success_count}/{len(results)}")
+    if failed_count > 0:
+        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
+        for name, success in results.items():
+            if not success:
+                logger.error(f"  - {name}: {errors.get(name, 'Unknown error')}")
+
+
 def reset_cli_password_all(
     config,
     logger,
@@ -32,34 +48,26 @@ def reset_cli_password_all(
     cli_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    
-    from core.appliance_operations import reset_cli_password, execute_on_appliances_async
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("RESET CLI PASSWORD ON ALL APPLIANCES")
-    logger.info("=" * 80)
-    
-    # Load appliances from machines_info.json via ConfigLoader
+    _header(logger, "RESET CLI PASSWORD ON ALL APPLIANCES")
+
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = appliance_loader.get_all_appliances()
-    
+
     if not all_appliances:
         logger.error("No appliances found in machines_info.json")
         return False
-    
+
     type_order = {'cm': 1, 'collector': 2, 'appnode': 3}
     sorted_appliances = sorted(
         all_appliances.items(),
         key=lambda x: type_order.get(x[1].get('type', '').lower(), 999)
     )
-    
     appliance_names = [name for name, _ in sorted_appliances]
-    
+
     logger.info(f"Found {len(appliance_names)} appliances")
     for name, cfg in sorted_appliances:
         logger.info(f"  - {name} ({cfg.get('type')})")
-    
+
     results, errors = execute_on_appliances_async(
         appliances=appliance_names,
         operation_func=reset_cli_password,
@@ -70,25 +78,9 @@ def reset_cli_password_all(
         cli_password=cli_password,
         debug=debug
     )
-    
-    logger.info("\n" + "=" * 80)
-    logger.info("RESET CLI PASSWORD SUMMARY")
-    logger.info("=" * 80)
-    
-    success_count = sum(1 for success in results.values() if success)
-    failed_count = len(results) - success_count
-    
-    logger.info(f"✓ Successful: {success_count}/{len(results)}")
-    if failed_count > 0:
-        logger.error(f"✗ Failed: {failed_count}/{len(results)}")
-        for appliance_name, success in results.items():
-            if not success:
-                error_msg = errors.get(appliance_name, "Unknown error")
-                logger.error(f"  - {appliance_name}: {error_msg}")
-    
-    logger.info("=" * 80)
-    
-    return failed_count == 0
+
+    _log_summary(logger, "RESET CLI PASSWORD SUMMARY", results, errors)
+    return all(results.values())
 
 def set_shared_secret_all(
     config,

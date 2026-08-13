@@ -1932,53 +1932,44 @@ def reset_cli_password(
     cli_password: Optional[str] = None,
     debug: bool = True
 ) -> bool:
-    
-    logger.info("=" * 80)
+    import paramiko
+    import traceback
+
     logger.info(f"RESET CLI PASSWORD: {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Validate appliance exists and get host
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
-    
+
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     appliance_config = appliance_loader.get_appliance(appliance_name)
-    
+
     if not appliance_config:
         logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        available = list(appliance_loader.get_all_appliances().keys())
-        logger.error(f"Available appliances: {', '.join(available)}")
+        logger.error(f"Available: {', '.join(appliance_loader.get_all_appliances())}")
         return False
-    
+
     host = appliance_config.get('ip')
     if not host:
         logger.error(f"No IP address configured for appliance '{appliance_name}'")
         return False
-    
-    # Get passwords from custom_variables if not provided
+
     if not cloudsupport_password:
         cloudsupport_password = config.get_custom_variable('cloudsupport_pwd')
         if not cloudsupport_password:
             logger.error("cloudsupport_pwd not found in custom_variables")
             return False
-        logger.info("Using cloudsupport password from custom_variables")
-    
+
     if not cli_password:
         cli_password = config.get_custom_variable('cli_pwd')
         if not cli_password:
             logger.error("cli_pwd not found in custom_variables")
             return False
-        logger.info("Using CLI password from custom_variables")
-    
+
     try:
-        import paramiko
-        
-        logger.info(f"Connecting to {host} as cloudsupport user...")
-        
+        logger.info(f"➜ SSH {host} as cloudsupport")
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
         ssh_client.connect(
             hostname=host,
             username='cloudsupport',
@@ -1987,36 +1978,33 @@ def reset_cli_password(
             allow_agent=False,
             timeout=30
         )
-        
-        logger.info(f"Connected to {host}")
-        
-        command = f"echo 'cli:{cli_password}' | sudo chpasswd"
-        logger.info(f"Executing: echo 'cli:***' | sudo chpasswd")
-        
-        stdin, stdout, stderr = ssh_client.exec_command(command, timeout=30)
+
+        logger.info("➜ echo 'cli:***' | sudo chpasswd")
+        stdin, stdout, stderr = ssh_client.exec_command(
+            f"echo 'cli:{cli_password}' | sudo chpasswd", timeout=30
+        )
         exit_code = stdout.channel.recv_exit_status()
-        
+
         stdout_text = stdout.read().decode('utf-8').strip()
         stderr_text = stderr.read().decode('utf-8').strip()
-        
+
         if debug and stdout_text:
             logger.info(f"STDOUT: {stdout_text}")
         if stderr_text:
             logger.warning(f"STDERR: {stderr_text}")
-        
+
         ssh_client.close()
-        
+
         if exit_code == 0:
-            logger.info(f"✓ CLI password reset successfully on {appliance_name}")
+            logger.info(f"✓ CLI password reset on {appliance_name}")
             return True
         else:
-            logger.error(f"✗ Failed to reset CLI password on {appliance_name} (exit code: {exit_code})")
+            logger.error(f"✗ chpasswd failed on {appliance_name} (exit code: {exit_code})")
             return False
-            
+
     except Exception as e:
-        logger.error(f"✗ Exception while resetting CLI password on {appliance_name}: {e}")
+        logger.error(f"✗ {appliance_name}: {e}")
         if debug:
-            import traceback
             logger.error(traceback.format_exc())
         return False
 
