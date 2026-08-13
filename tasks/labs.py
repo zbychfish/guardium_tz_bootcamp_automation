@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Lab Setup Tasks
@@ -17,477 +17,6 @@ from core.utils import execute_local_command
 logger = get_logger(__name__)
 
 
-def install_gim_on_raptor(
-    config,
-    logger,
-    verbose: bool = False,
-    gim_installer_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh",
-    install_dir: str = "/opt/guardium",
-    tapip: Optional[str] = None,
-    sqlguardip: Optional[str] = None,
-    debug: bool = False
-) -> bool:
-   
-    import os
-    from core.utils import run_local_command
-    
-    logger.info("=" * 80)
-    logger.info("INSTALL GIM ON RAPTOR")
-    logger.info("=" * 80)
-    
-    # Check if installer exists
-    if not os.path.exists(gim_installer_path):
-        logger.error(f"GIM installer not found: {gim_installer_path}")
-        return False
-    
-    logger.info(f"GIM installer: {gim_installer_path}")
-    
-    # Install required Perl packages
-    logger.info(f"\n➜ Installing required Perl packages...")
-    
-    try:
-        dnf_command = "dnf install -y perl-File-Copy perl-Sys-Hostname"
-        logger.info(f"Executing: {dnf_command}")
-        dnf_result = run_local_command(
-            command=dnf_command,
-            shell=True,
-            timeout=180,  # 3 minutes timeout for package installation
-            check=True
-        )
-        logger.info(f"✓ Perl packages installed successfully")
-        
-        if debug and dnf_result.stdout:
-            logger.debug(f"dnf output: {dnf_result.stdout}")
-            
-    except Exception as e:
-        logger.error(f"✗ Failed to install Perl packages: {e}")
-        logger.error("GIM installation requires perl-File-Copy and perl-Sys-Hostname")
-        return False
-    
-    # Add execute permission to all *.sh files in shell directory
-    shell_dir = os.path.dirname(gim_installer_path)
-    logger.info(f"\n➜ Adding execute permission to *.sh files in {shell_dir}")
-    
-    try:
-        chmod_command = f"chmod +x {shell_dir}/*.sh"
-        chmod_result = run_local_command(
-            command=chmod_command,
-            shell=True,
-            timeout=30,
-            check=True
-        )
-        logger.info(f"✓ Execute permission added to shell scripts")
-        
-        if debug and chmod_result.stdout:
-            logger.debug(f"chmod output: {chmod_result.stdout}")
-            
-    except Exception as e:
-        logger.warning(f"⚠ Failed to add execute permission: {e}")
-        logger.warning("Continuing anyway - installer might still work")
-    
-    # Auto-detect tapip from machines if not provided
-    if not tapip:
-        machines = config.get('machines', {})
-        raptor_info = machines.get('raptor', {})
-        tapip = raptor_info.get('private_ip')
-        
-        if tapip:
-            logger.info(f"Auto-detected TAP IP from machines config: {tapip}")
-        else:
-            logger.error("TAP IP not provided and not found in machines config for raptor")
-            return False
-    
-    # Auto-detect sqlguardip from machines_info.json if not provided (use CM, not collector)
-    if not sqlguardip:
-        appliance_loader = ApplianceConfigLoader(config_loader=config)
-        cms = appliance_loader.get_appliances_by_type('cm')
-        
-        if cms:
-            # Get first CM
-            first_cm_name = list(cms.keys())[0]
-            first_cm = cms[first_cm_name]
-            sqlguardip = first_cm.get('ip')
-            
-            if sqlguardip:
-                logger.info(f"Auto-detected SQL Guard IP from Central Manager ({first_cm_name}): {sqlguardip}")
-            else:
-                logger.error(f"Central Manager '{first_cm_name}' has no IP address configured")
-                return False
-        else:
-            logger.error("SQL Guard IP not provided and no Central Manager found in machines_info.json")
-            return False
-    
-    logger.info(f"Installation parameters:")
-    logger.info(f"  - Install directory: {install_dir}")
-    logger.info(f"  - TAP IP: {tapip}")
-    logger.info(f"  - SQL Guard IP: {sqlguardip}")
-    
-    # Build command string
-    command = f"{gim_installer_path} -- --dir {install_dir} --tapip {tapip} --sqlguardip {sqlguardip}"
-    
-    logger.info(f"\n➜ Executing GIM installer...")
-    logger.info(f"Command: {command}")
-    
-    try:
-        # Run installer using core utility function
-        result = run_local_command(
-            command=command,
-            shell=True,
-            timeout=300,  # 5 minutes timeout
-            check=True
-        )
-        
-        if debug and result.stdout:
-            logger.info(f"Installer output:\n{result.stdout}")
-        
-        if result.stderr and debug:
-            logger.warning(f"Installer stderr:\n{result.stderr}")
-        
-        logger.info("✓ GIM installation completed successfully")
-        logger.info("=" * 80)
-        return True
-        
-    except TimeoutError:
-        logger.error("✗ GIM installation timeout (exceeded 5 minutes)")
-        logger.error("=" * 80)
-        return False
-    except Exception as e:
-        logger.error(f"✗ GIM installation failed: {e}")
-        if debug:
-            import traceback
-            logger.error(traceback.format_exc())
-        logger.error("=" * 80)
-        return False
-
-
-def install_stap_on_raptor(
-    config,
-    logger,
-    verbose: bool = False,
-    appliance_name: Optional[str] = None,
-    collector_name: Optional[str] = None,
-    client_ip: Optional[str] = None,
-    module: str = "BUNDLE-STAP",
-    module_version: str = "STAP-12.2.2.0_r123489_",
-    use_tls: str = "1",
-    statistics: str = "-3",
-    connection_pool_size: str = "2",
-    demo_user: str = "demo",
-    demo_password: Optional[str] = None,
-    debug: bool = False
-) -> bool:
-    
-    from core.appliance_operations import install_gim_module
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    logger.info("=" * 80)
-    logger.info("INSTALL STAP ON RAPTOR")
-    logger.info("=" * 80)
-    
-    # Validate required parameters
-    if not appliance_name:
-        logger.error("appliance_name is required (GIM server, e.g., 'cm02')")
-        return False
-    
-    if not collector_name:
-        logger.error("collector_name is required (collector for SQLGUARD_IP, e.g., 'coll2')")
-        return False
-    
-    # Auto-detect client_ip (raptor IP) if not provided
-    if not client_ip:
-        machines = config.get('machines', {})
-        raptor_info = machines.get('raptor', {})
-        client_ip = raptor_info.get('private_ip')
-        
-        if client_ip:
-            logger.info(f"Auto-detected raptor IP from machines config: {client_ip}")
-        else:
-            logger.error("Client IP not provided and not found in machines config for raptor")
-            return False
-    
-    # Get sqlguard_ip from collector_name
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    collector_config = appliance_loader.get_appliance(collector_name)
-    
-    if not collector_config:
-        logger.error(f"Collector '{collector_name}' not found in machines_info.json")
-        return False
-    
-    sqlguard_ip = collector_config.get('ip')
-    if not sqlguard_ip:
-        logger.error(f"Collector '{collector_name}' has no IP address configured")
-        return False
-    
-    logger.info(f"Using SQL Guard IP from collector '{collector_name}': {sqlguard_ip}")
-    
-    # Install kernel-devel and kernel-headers locally before STAP installation
-    logger.info("\n" + "=" * 80)
-    logger.info("Installing kernel-devel and kernel-headers")
-    logger.info("=" * 80)
-    
-    from core.utils import execute_commands
-    
-    commands = [
-        "dnf install -y kernel-devel-$(uname -r) kernel-headers-$(uname -r)"
-    ]
-    
-    if not execute_commands(commands, logger, verbose=True):
-        logger.error("Failed to install kernel packages")
-        return False
-    
-    logger.info("✓ Kernel packages installed successfully")
-    
-    # Prepare STAP parameters
-    stap_params = {
-        "STAP_SQLGUARD_IP": sqlguard_ip,
-        "STAP_USE_TLS": use_tls,
-        "STAP_STATISTIC": statistics,
-        "STAP_CONNECTION_POOL_SIZE": connection_pool_size
-    }
-    
-    logger.info(f"\n{'=' * 80}")
-    logger.info("STAP Configuration:")
-    logger.info(f"{'=' * 80}")
-    logger.info(f"  - Client IP (raptor): {client_ip}")
-    logger.info(f"  - SQL Guard IP (collector): {sqlguard_ip}")
-    logger.info(f"  - Use TLS: {use_tls}")
-    logger.info(f"  - Statistics: {statistics}")
-    logger.info(f"  - Connection Pool Size: {connection_pool_size}")
-    
-    # Install STAP module using universal function
-    return install_gim_module(
-        config=config,
-        logger=logger,
-        appliance_name=appliance_name,
-        client_ip=client_ip,
-        module=module,
-        module_version=module_version,
-        params=stap_params,
-        demo_user=demo_user,
-        demo_password=demo_password,
-        monitor_installation=True,
-        installation_delay=10,
-        debug=debug
-    )
-
-
-def enable_atap_for_postgres_on_raptor(config, logger, verbose=True, db_user="postgres",
-                                       db_home="/usr", db_user_dir="/var/lib/pgsql",
-                                       db_type="postgres", db_instance="postgres",
-                                       db_version="16", **kwargs):
-    from core.utils import execute_commands
-    
-    guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
-    steps = [
-        (f"{guardctl} --db-user={db_user} --db-home={db_home} --db-user-dir={db_user_dir} --db-type={db_type} --db-instance={db_instance} --db-version={db_version} store-conf", "store configuration"),
-        (f"{guardctl} authorize-user {db_user}", "authorize user"),
-        ("systemctl stop postgresql", "stop service"),
-        (f"{guardctl} --db-instance={db_instance} activate", "activate ATAP"),
-        ("systemctl start postgresql", "start service")
-    ]
-    
-    for cmd, desc in steps:
-        if not execute_commands([cmd], logger, verbose):
-            logger.error(f"Failed to {desc}")
-            return False
-    
-    logger.info("✓ ATAP enabled for PostgreSQL")
-    return True
-
-
-def correct_mysql_ie(config, logger, verbose=True, cm_appliance="cm01", collector_appliance="coll2",
-                     stap_host=None, **kwargs):
-    from core.guardium_rest_api import create_guardium_api
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    if not stap_host:
-        machines = config.get('machines', {})
-        raptor_info = machines.get('raptor', {})
-        stap_host = raptor_info.get('private_ip')
-        if not stap_host:
-            logger.error("stap_host not provided and not found in machines config")
-            return False
-    
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    collector_config = appliance_loader.get_appliance(collector_appliance)
-    if not collector_config:
-        logger.error(f"Collector '{collector_appliance}' not found")
-        return False
-    
-    api_target_host = collector_config.get('ip')
-    if not api_target_host:
-        logger.error(f"Collector '{collector_appliance}' has no IP")
-        return False
-    
-    api = create_guardium_api(config, logger, cm_appliance)
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("Password 'pwd' not found in custom_variables")
-        return False
-    api.get_token(username='demo', password=pwd)
-    
-    if verbose:
-        logger.info(f"Deleting MySQL IE for {stap_host} on collector {api_target_host}")
-    api.delete_inspection_engine(stap_host=stap_host, type="mysql", wait_for_response="1", api_target_host=api_target_host)
-    
-    ie_configs = [
-        {"port_min": "3306", "port_max": "3306", "ktap_db_port": "3306", "unix_socket_marker": "mysql.sock"},
-        {"port_min": "33060", "port_max": "33060", "ktap_db_port": "33060", "unix_socket_marker": "mysql.sock"},
-        {"port_min": "3306", "port_max": "3306", "ktap_db_port": "3306", "unix_socket_marker": "mysqlx.sock"},
-        {"port_min": "33060", "port_max": "33060", "ktap_db_port": "33060", "unix_socket_marker": "mysqlx.sock"}
-    ]
-    
-    for i, ie_config in enumerate(ie_configs, 1):
-        if verbose:
-            logger.info(f"Creating MySQL IE {i}/4: port {ie_config['port_min']}, socket {ie_config['unix_socket_marker']}")
-        api.create_inspection_engine(
-            stap_host=stap_host,
-            protocol="mysql",
-            db_user="mysqld",
-            db_version="8",
-            client="0.0.0.0/0.0.0.0",
-            proc_name="/usr/sbin/mysqld",
-            db_install_dir="/var/lib/mysql",
-            api_target_host=api_target_host,
-            **ie_config
-        )
-
-    if verbose:
-        logger.info(f"Setting STAP_DISCOVERY_ENABLED=0 on raptor ({stap_host})")
-    api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_ENABLED", param_value="0")
-    api.gim_schedule_install(client_ip=stap_host, date="now")
-
-    logger.info("✓ MySQL IE corrected")
-    return True
-
-
-def enable_atap_for_mongo(config, logger, verbose=True, **kwargs):
-    from core.utils import execute_commands
-    
-    guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
-    steps = [
-        ("mv /opt/guardium/etc/guard/root/postgres.conf /opt/guardium/etc/guard", "backup postgres.conf"),
-        (f"{guardctl} --db-user=mongod --db-home=/usr --db-base=/var/lib/mongo --db-type=mongodb --db-instance=mongo4 store-conf", "store configuration"),
-        (f"{guardctl} authorize-user mongod", "authorize user"),
-        ("systemctl stop mongod", "stop service"),
-        (f"{guardctl} --db-instance=mongo4 activate", "activate ATAP"),
-        ("systemctl start mongod", "start service"),
-        ("mv /opt/guardium/etc/guard/postgres.conf /opt/guardium/etc/guard/root", "restore postgres.conf")
-    ]
-    
-    for cmd, desc in steps:
-        if not execute_commands([cmd], logger, verbose):
-            logger.error(f"Failed to {desc}")
-            return False
-    
-    logger.info("✓ ATAP enabled for MongoDB")
-    return True
-
-
-def configure_db2_exit_ie(config, logger, verbose=True, cm_appliance="cm02", collector_appliance="coll2",
-                          stap_host=None, **kwargs):
-    """
-    Configure DB2 Exit Inspection Engine.
-    Deletes existing DB2 IEs and creates new DB2 Exit IE.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        verbose: Enable verbose logging
-        cm_appliance: Central Manager appliance name (default: cm02)
-        collector_appliance: Collector appliance name (default: coll2)
-        stap_host: STAP host IP (optional, auto-detected from raptor)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    from core.guardium_rest_api import create_guardium_api
-    from core.appliance_config_loader import ApplianceConfigLoader
-    
-    if not stap_host:
-        machines = config.get('machines', {})
-        raptor_info = machines.get('raptor', {})
-        stap_host = raptor_info.get('private_ip')
-        if not stap_host:
-            logger.error("stap_host not provided and not found in machines config")
-            return False
-    
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    collector_config = appliance_loader.get_appliance(collector_appliance)
-    if not collector_config:
-        logger.error(f"Collector '{collector_appliance}' not found")
-        return False
-    
-    api_target_host = collector_config.get('ip')
-    if not api_target_host:
-        logger.error(f"Collector '{collector_appliance}' has no IP")
-        return False
-    
-    api = create_guardium_api(config, logger, cm_appliance)
-    pwd = config.get_custom_variable('pwd')
-    if not pwd:
-        logger.error("Password 'pwd' not found in custom_variables")
-        return False
-    api.get_token(username='demo', password=pwd)
-    
-    if verbose:
-        logger.info(f"Deleting DB2 IE for {stap_host} on collector {api_target_host}")
-    api.delete_inspection_engine(stap_host=stap_host, type="Db2", wait_for_response="1", api_target_host=api_target_host)
-    
-    if verbose:
-        logger.info(f"Creating DB2 Exit IE for {stap_host} on collector {api_target_host}")
-    api.create_inspection_engine(
-        stap_host=stap_host,
-        protocol="Db2 Exit",
-        db_user="db2inst1",
-        db_version="11",
-        client="0.0.0.0/0.0.0.0",
-        proc_name="/home/db2inst1/sqllib/adm/db2sysc",
-        db_install_dir="/home/db2inst1",
-        api_target_host=api_target_host
-    )
-    
-    logger.info("✓ DB2 Exit IE configured")
-    return True
-
-
-def db2_exit_configuration(config, logger, verbose: bool = True) -> bool:
-    """
-    Configure DB2 exit for Guardium monitoring on raptor.
-    
-    Args:
-        config: ConfigLoader instance
-        logger: Logger instance
-        verbose: Enable verbose logging (default: True)
-        
-    Returns:
-        True if successful, False otherwise
-    """
-    from core.utils import execute_commands
-    
-    if verbose:
-        logger.info("=" * 80)
-        logger.info("Configuring DB2 exit for Guardium monitoring")
-        logger.info("=" * 80)
-    
-    commands = [
-        "/opt/guardium/modules/ATAP/current/files/bin/guardctl authorize-user db2inst1",
-        "su - db2inst1 -c 'db2stop'",
-        "su - db2inst1 -c 'mkdir -p /home/db2inst1/sqllib/security64/plugin/commexit'",
-        "su - db2inst1 -c 'ln -fs /usr/lib64/libguard_db2_exit_64.so /home/db2inst1/sqllib/security64/plugin/commexit/libguard_db2_exit_64.so'",
-        "su - db2inst1 -c 'db2 update dbm cfg using comm_exit_list libguard_db2_exit_64'",
-        "su - db2inst1 -c 'db2start'"
-    ]
-    
-    if not execute_commands(commands, logger, verbose):
-        logger.error("DB2 exit configuration failed")
-        return False
-    
-    if verbose:
-        logger.info("✓ DB2 exit configured successfully")
-        logger.info("=" * 80)
-    
-    return True
 
 
 def import_atap_definitions(
@@ -523,33 +52,33 @@ def import_atap_definitions(
         
         logger.info("Authenticating as demo user...")
         api.get_token(username='demo', password=demo_password)
-        logger.info("✓ Authentication successful")
+        logger.info("âś“ Authentication successful")
         
         for filename in definition_files:
             file_path = os.path.join(definitions_dir, filename)
             
             if not os.path.exists(file_path):
-                logger.error(f"✗ File not found: {file_path}")
+                logger.error(f"âś— File not found: {file_path}")
                 return False
             
-            logger.info(f"➜ Importing: {filename}")
+            logger.info(f"âžś Importing: {filename}")
             result = api.import_definitions(file_path=file_path)
             
             if debug:
                 logger.info(f"  API Response: {result}")
             
-            logger.info(f"✓ {filename} imported successfully")
+            logger.info(f"âś“ {filename} imported successfully")
         
         logger.info("\n" + "=" * 80)
-        logger.info("✓ ATAP definitions imported successfully")
+        logger.info("âś“ ATAP definitions imported successfully")
         logger.info("=" * 80)
         return True
         
     except FileNotFoundError as e:
-        logger.error(f"✗ File not found: {e}")
+        logger.error(f"âś— File not found: {e}")
         return False
     except Exception as e:
-        logger.error(f"✗ Failed to import definitions: {e}")
+        logger.error(f"âś— Failed to import definitions: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -607,36 +136,36 @@ def install_filebeat_on_sauropod(
     )
     
     try:
-        logger.info("\n➜ Connecting to sauropod...")
+        logger.info("\nâžś Connecting to sauropod...")
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
         
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
         
-        logger.info("\n➜ Creating directory /root/gn-trainings...")
+        logger.info("\nâžś Creating directory /root/gn-trainings...")
         result = ssh.execute_command("mkdir -p /root/gn-trainings", print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"Failed to create directory: {result['stderr']}")
             return False
-        logger.info("✓ Directory created")
+        logger.info("âś“ Directory created")
         
-        logger.info(f"\n➜ Uploading {filebeat_filename} to sauropod...")
+        logger.info(f"\nâžś Uploading {filebeat_filename} to sauropod...")
         remote_rpm_path = f"/root/gn-trainings/{filebeat_filename}"
         if not ssh.upload_file(filebeat_rpm, remote_rpm_path):
             logger.error("Failed to upload filebeat RPM")
             return False
-        logger.info("✓ RPM uploaded")
+        logger.info("âś“ RPM uploaded")
         
-        logger.info("\n➜ Installing filebeat RPM...")
+        logger.info("\nâžś Installing filebeat RPM...")
         install_cmd = f"dnf -y install {remote_rpm_path}"
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"Failed to install filebeat: {result['stderr']}")
             return False
-        logger.info("✓ Filebeat installed")
+        logger.info("âś“ Filebeat installed")
         
-        logger.info("\n➜ Configuring filebeat for Cassandra audit logs...")
+        logger.info("\nâžś Configuring filebeat for Cassandra audit logs...")
         
         config_commands = [
             r"sed -i '/^- type: filestream/,/^[^[:space:]]/c\- type: filestream\n  id: \"cassandra\"\n  enabled: true\n  paths:\n    - /var/log/cassandra/audit/audit.log\n  exclude_lines: [\"AuditLogManager\"]\n  tags: [\"cassandra\"]\n  multiline.type: pattern\n  multiline.pattern: \"^INFO\"\n  multiline.negate: true\n  multiline.match: after' /etc/filebeat/filebeat.yml",
@@ -651,9 +180,9 @@ def install_filebeat_on_sauropod(
                 if debug:
                     logger.debug(f"stderr: {result['stderr']}")
         
-        logger.info("✓ Filebeat configured")
+        logger.info("âś“ Filebeat configured")
         
-        logger.info("\n➜ Starting and enabling filebeat service...")
+        logger.info("\nâžś Starting and enabling filebeat service...")
         result = ssh.execute_command("systemctl start filebeat", print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"Failed to start filebeat: {result['stderr']}")
@@ -663,15 +192,15 @@ def install_filebeat_on_sauropod(
         if result['rc'] != 0:
             logger.warning(f"Failed to enable filebeat: {result['stderr']}")
         
-        logger.info("✓ Filebeat started and enabled")
+        logger.info("âś“ Filebeat started and enabled")
         
         logger.info("\n" + "=" * 80)
-        logger.info("✓ Filebeat installation completed successfully")
+        logger.info("âś“ Filebeat installation completed successfully")
         logger.info("=" * 80)
         return True
         
     except Exception as e:
-        logger.error(f"✗ Failed to install filebeat: {e}")
+        logger.error(f"âś— Failed to install filebeat: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -750,7 +279,7 @@ def deploy_etap_mysql(
         logger.info("Port 22 not found - adding temporary SSH port 22 to sshd_config")
         add_result = execute_local_command(add_command, logger=logger, verbose=verbose)
         if add_result['rc'] != 0:
-            logger.error(f"✗ Failed to add port 22 to sshd_config: {add_result['stderr']}")
+            logger.error(f"âś— Failed to add port 22 to sshd_config: {add_result['stderr']}")
             return False
     else:
         logger.info("Port 22 already present in sshd_config")
@@ -758,13 +287,13 @@ def deploy_etap_mysql(
     logger.info("Restarting SSHD service")
     restart_result = execute_local_command(restart_command, logger=logger, verbose=verbose)
     if restart_result['rc'] != 0:
-        logger.error(f"✗ Failed to restart SSHD: {restart_result['stderr']}")
+        logger.error(f"âś— Failed to restart SSHD: {restart_result['stderr']}")
         return False
 
     logger.info("Cloning Guardium External S-TAP repository")
     clone_result = execute_local_command(clone_command, logger=logger, verbose=verbose)
     if clone_result['rc'] != 0:
-        logger.error(f"✗ Failed to clone Guardium External S-TAP repository: {clone_result['stderr']}")
+        logger.error(f"âś— Failed to clone Guardium External S-TAP repository: {clone_result['stderr']}")
         return False
 
     container_file_content = f"""[Unit]
@@ -772,18 +301,18 @@ Description=mysql-etap
 Documentation=man:podman-generate-systemd(1)
 
 [Container]
-# Obraz i nazwa kontenera wyciągnięte dokładnie z ExecStart
+# Obraz i nazwa kontenera wyciÄ…gniÄ™te dokĹ‚adnie z ExecStart
 Image=icr.io/guardium/guardium_external_s-tap:v{etap_version}
 ContainerName=mysql-etap
 HostName=localhost-mysql-etap
 
-# Przekazanie limitu pamięci oraz shm-size, które było w oryginalnej komendzie
+# Przekazanie limitu pamiÄ™ci oraz shm-size, ktĂłre byĹ‚o w oryginalnej komendzie
 PodmanArgs=--memory=4g --shm-size=800M
 
 # Mapowanie portu
 PublishPort=63333:8888/tcp
 
-# Zmienne środowiskowe przeniesione 1:1
+# Zmienne Ĺ›rodowiskowe przeniesione 1:1
 Environment=STAP_CONFIG_TAP_TAP_IP=NULL
 Environment=STAP_CONFIG_TAP_PRIVATE_TAP_IP=NULL
 Environment=STAP_CONFIG_TAP_FORCE_SERVER_IP=0
@@ -815,7 +344,7 @@ Restart=always
 TimeoutStopSec=70
 
 [Install]
-# Zmieniono na multi-user.target (standard dla usług systemowych root)
+# Zmieniono na multi-user.target (standard dla usĹ‚ug systemowych root)
 WantedBy=multi-user.target
 """
 
@@ -826,30 +355,30 @@ WantedBy=multi-user.target
     logger.info("Creating systemd container directory")
     create_dir_result = execute_local_command(create_dir_command, logger=logger, verbose=verbose)
     if create_dir_result['rc'] != 0:
-        logger.error(f"✗ Failed to create systemd container directory: {create_dir_result['stderr']}")
+        logger.error(f"âś— Failed to create systemd container directory: {create_dir_result['stderr']}")
         return False
 
     logger.info(f"Creating systemd container file: {container_file_path}")
     write_file_result = execute_local_command(write_file_command, logger=logger, verbose=verbose)
     if write_file_result['rc'] != 0:
-        logger.error(f"✗ Failed to create systemd container file: {write_file_result['stderr']}")
+        logger.error(f"âś— Failed to create systemd container file: {write_file_result['stderr']}")
         return False
 
     daemon_reload_command = "systemctl daemon-reload"
     logger.info("Reloading systemd daemon")
     daemon_reload_result = execute_local_command(daemon_reload_command, logger=logger, verbose=verbose)
     if daemon_reload_result['rc'] != 0:
-        logger.error(f"✗ Failed to reload systemd daemon: {daemon_reload_result['stderr']}")
+        logger.error(f"âś— Failed to reload systemd daemon: {daemon_reload_result['stderr']}")
         return False
 
     start_service_command = "systemctl start mysql-etap"
     logger.info("Starting mysql-etap service")
     start_service_result = execute_local_command(start_service_command, logger=logger, verbose=verbose)
     if start_service_result['rc'] != 0:
-        logger.error(f"✗ Failed to start mysql-etap service: {start_service_result['stderr']}")
+        logger.error(f"âś— Failed to start mysql-etap service: {start_service_result['stderr']}")
         return False
 
-    logger.info("✓ ETAP MySQL deployed and started on raptor")
+    logger.info("âś“ ETAP MySQL deployed and started on raptor")
     return True
 
 
@@ -904,29 +433,29 @@ def setup_minio_on_raptor(
     for command in commands_before_podman:
         result = execute_local_command(command, logger=logger, verbose=verbose)
         if result["rc"] != 0:
-            logger.error(f"✗ Failed command: {command}")
+            logger.error(f"âś— Failed command: {command}")
             logger.error(result["stderr"])
             return False
     
-    logger.info("➜ Starting MinIO container...")
+    logger.info("âžś Starting MinIO container...")
     result = execute_local_command(podman_run_command, logger=logger, verbose=verbose)
     if result["rc"] != 0:
-        logger.error(f"✗ Failed to start MinIO container")
+        logger.error(f"âś— Failed to start MinIO container")
         logger.error(result["stderr"])
         return False
     
     import time
-    logger.info("⌛ Waiting 10 seconds for MinIO to start...")
+    logger.info("âŚ› Waiting 10 seconds for MinIO to start...")
     time.sleep(10)
     
     for command in commands_after_podman:
         result = execute_local_command(command, logger=logger, verbose=verbose)
         if result["rc"] != 0:
-            logger.error(f"✗ Failed command: {command}")
+            logger.error(f"âś— Failed command: {command}")
             logger.error(result["stderr"])
             return False
 
-    logger.info("✓ MinIO certificates prepared and MinIO started on raptor")
+    logger.info("âś“ MinIO certificates prepared and MinIO started on raptor")
     return True
 
 
@@ -959,7 +488,7 @@ def setup_raptor_to_deploy_etap(
     logger.info("=" * 80)
     
     # Step 1: Install required packages
-    logger.info("\n➜ Installing package requirements (podman-docker, skopeo)...")
+    logger.info("\nâžś Installing package requirements (podman-docker, skopeo)...")
     
     try:
         dnf_command = "dnf -y install podman-docker skopeo"
@@ -972,18 +501,18 @@ def setup_raptor_to_deploy_etap(
             check=True
         )
         
-        logger.info("✓ Packages installed successfully")
+        logger.info("âś“ Packages installed successfully")
         
         if debug and result.stdout:
             logger.debug(f"dnf output: {result.stdout}")
             
     except Exception as e:
-        logger.error(f"✗ Failed to install packages: {e}")
+        logger.error(f"âś— Failed to install packages: {e}")
         logger.error("ETAP setup requires podman-docker and skopeo packages")
         return False
     
     # Step 3: Determine the latest ETAP version from ICR
-    logger.info("\n➜ Determining the latest ETAP version from ICR...")
+    logger.info("\nâžś Determining the latest ETAP version from ICR...")
 
     etap_version = None
 
@@ -1017,23 +546,23 @@ def setup_raptor_to_deploy_etap(
                 guardium_minor_version = config.get_custom_variable('guardium_minor_version') or max(latest.keys())
                 if guardium_minor_version in latest:
                     etap_version = str(latest[guardium_minor_version])
-                    logger.info(f"✓ Latest ETAP version for Guardium {guardium_minor_version}: {etap_version}")
+                    logger.info(f"âś“ Latest ETAP version for Guardium {guardium_minor_version}: {etap_version}")
 
     except Exception as e:
-        logger.warning(f"⚠ skopeo failed ({e}) — falling back to local image")
+        logger.warning(f"âš  skopeo failed ({e}) â€” falling back to local image")
 
-    # ── TEMPORARY WORKAROUND: ICR registry unavailable ───────────────────────
+    # â”€â”€ TEMPORARY WORKAROUND: ICR registry unavailable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     # When skopeo cannot reach icr.io, load the ETAP image from a local tar
     # and extract the version from the archive filename.
     # Remove this block once ICR access is restored.
     if etap_version is None:
         local_tar = "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar"
-        logger.warning("⚠ ICR registry unreachable — loading local ETAP image (TEMPORARY WORKAROUND)")
-        logger.info(f"➜ Loading image from {local_tar}...")
+        logger.warning("âš  ICR registry unreachable â€” loading local ETAP image (TEMPORARY WORKAROUND)")
+        logger.info(f"âžś Loading image from {local_tar}...")
 
         tar_match = re.search(r"guardium_external_s-tap_v(\d+\.\d+\.\d+)\.tar", local_tar)
         if not tar_match:
-            logger.error(f"✗ Cannot extract version from tar filename: {local_tar}")
+            logger.error(f"âś— Cannot extract version from tar filename: {local_tar}")
             return False
         etap_version = tar_match.group(1)
 
@@ -1044,22 +573,22 @@ def setup_raptor_to_deploy_etap(
                 timeout=300,
                 check=True
             )
-            logger.info(f"✓ Local image loaded (version: {etap_version})")
+            logger.info(f"âś“ Local image loaded (version: {etap_version})")
             if debug and load_result.stdout:
                 logger.debug(f"podman load output: {load_result.stdout}")
         except Exception as e:
-            logger.error(f"✗ Failed to load local ETAP image: {e}")
+            logger.error(f"âś— Failed to load local ETAP image: {e}")
             return False
-    # ── END TEMPORARY WORKAROUND ─────────────────────────────────────────────
+    # â”€â”€ END TEMPORARY WORKAROUND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     os.makedirs("/opt/ETAP/ca", exist_ok=True)
     with open("/opt/ETAP/ca/guardium_etap_version.txt", "w", encoding="utf-8") as f:
         f.write(etap_version)
     config.set_custom_variable('guardium_etap_version', etap_version)
 
-    logger.info(f"✓ ETAP version saved: {etap_version}")
+    logger.info(f"âś“ ETAP version saved: {etap_version}")
     logger.info("\n" + "=" * 80)
-    logger.info("✓ Raptor setup for ETAP deployment completed successfully")
+    logger.info("âś“ Raptor setup for ETAP deployment completed successfully")
     logger.info(f"ETAP Version: {etap_version}")
     logger.info("=" * 80)
     return True
@@ -1132,9 +661,9 @@ def setup_etap_certificates_mysql(
             timeout=30,
             check=True
         )
-        logger.info(f"✓ CA directory created")
+        logger.info(f"âś“ CA directory created")
     except Exception as e:
-        logger.error(f"✗ Failed to create CA directory: {e}")
+        logger.error(f"âś— Failed to create CA directory: {e}")
         return False
     
     # Step 2: Create CA private key
@@ -1151,12 +680,12 @@ def setup_etap_certificates_mysql(
             timeout=60,
             check=True
         )
-        logger.info(f"✓ CA private key generated")
+        logger.info(f"âś“ CA private key generated")
         
         if debug and result.stdout:
             logger.debug(f"openssl output: {result.stdout}")
     except Exception as e:
-        logger.error(f"✗ Failed to generate CA private key: {e}")
+        logger.error(f"âś— Failed to generate CA private key: {e}")
         return False
     
     # Step 3: Generate CA certificate
@@ -1187,12 +716,12 @@ def setup_etap_certificates_mysql(
             timeout=60,
             check=True
         )
-        logger.info(f"✓ CA certificate generated")
+        logger.info(f"âś“ CA certificate generated")
         
         if debug and result.stdout:
             logger.debug(f"openssl output: {result.stdout}")
     except Exception as e:
-        logger.error(f"✗ Failed to generate CA certificate: {e}")
+        logger.error(f"âś— Failed to generate CA certificate: {e}")
         return False
     
     token_file = os.path.join(ca_dir, "mysql_etap_token.txt")
@@ -1222,7 +751,7 @@ def setup_etap_certificates_mysql(
             logger.error("Failed to connect to collector")
             return False
         
-        logger.info("✓ Connected to collector")
+        logger.info("âś“ Connected to collector")
         
         logger.info(f"Generating CSR for alias '{etap_alias}'...")
         logger.info(f"CSR parameters: locality='{etap_locality}', state='{etap_state}', email='{etap_email}'")
@@ -1251,14 +780,14 @@ def setup_etap_certificates_mysql(
         with open(token_file, "w", encoding="utf-8") as f:
             f.write(etap_token)
 
-        logger.info(f"✓ CSR generated and saved to {csr_path}")
+        logger.info(f"âś“ CSR generated and saved to {csr_path}")
         logger.info(f"  CSR ID: {etap_csr_id}")
         logger.info(f"  Deployment token: {etap_token}")
         
         appliance.disconnect()
         
     except Exception as e:
-        logger.error(f"✗ Failed to generate CSR: {e}")
+        logger.error(f"âś— Failed to generate CSR: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -1278,12 +807,12 @@ def setup_etap_certificates_mysql(
             timeout=60,
             check=True
         )
-        logger.info(f"✓ CSR signed, certificate saved to {etap_cert_path}")
+        logger.info(f"âś“ CSR signed, certificate saved to {etap_cert_path}")
         
         if debug and result.stdout:
             logger.debug(f"openssl output: {result.stdout}")
     except Exception as e:
-        logger.error(f"✗ Failed to sign CSR: {e}")
+        logger.error(f"âś— Failed to sign CSR: {e}")
         return False
     
     # Step 6: Import CA certificate to collector
@@ -1307,7 +836,7 @@ def setup_etap_certificates_mysql(
             logger.error("Failed to connect to collector")
             return False
         
-        logger.info("✓ Connected to collector")
+        logger.info("âś“ Connected to collector")
         
         # Read CA certificate
         with open(ca_cert_path, "r", encoding="utf-8") as f:
@@ -1319,12 +848,12 @@ def setup_etap_certificates_mysql(
             ca_cert=ca_cert_pem
         )
         
-        logger.info(f"✓ CA certificate imported successfully")
+        logger.info(f"âś“ CA certificate imported successfully")
         
         appliance.disconnect()
         
     except Exception as e:
-        logger.error(f"✗ Failed to import CA certificate: {e}")
+        logger.error(f"âś— Failed to import CA certificate: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -1351,7 +880,7 @@ def setup_etap_certificates_mysql(
             logger.error("Failed to connect to collector")
             return False
         
-        logger.info("✓ Connected to collector")
+        logger.info("âś“ Connected to collector")
         
         # Read ETAP certificate
         with open(etap_cert_path, "r", encoding="utf-8") as f:
@@ -1363,12 +892,12 @@ def setup_etap_certificates_mysql(
             stap_cert=etap_cert_pem
         )
         
-        logger.info(f"✓ ETAP certificate imported successfully")
+        logger.info(f"âś“ ETAP certificate imported successfully")
         
         appliance.disconnect()
         
     except Exception as e:
-        logger.error(f"✗ Failed to import ETAP certificate: {e}")
+        logger.error(f"âś— Failed to import ETAP certificate: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -1376,7 +905,7 @@ def setup_etap_certificates_mysql(
     
     # Summary
     logger.info("\n" + "=" * 80)
-    logger.info("✓ ETAP CERTIFICATES SETUP COMPLETED SUCCESSFULLY")
+    logger.info("âś“ ETAP CERTIFICATES SETUP COMPLETED SUCCESSFULLY")
     logger.info("=" * 80)
     logger.info(f"CA Directory: {ca_dir}")
     logger.info(f"CA Certificate: {ca_cert_path}")
@@ -1465,8 +994,8 @@ def deploy_etap_for_oracle_container_on_sauropod(
             logger.error("Failed to connect to collector")
             return False
 
-        logger.info("✓ Connected to collector")
-        logger.info(f"Generating CSR for alias '{etap_alias}' (alias already exists → will select option 2)...")
+        logger.info("âś“ Connected to collector")
+        logger.info(f"Generating CSR for alias '{etap_alias}' (alias already exists â†’ will select option 2)...")
 
         csr, token, line_above = appliance.generate_external_stap_csr(
             alias=etap_alias,
@@ -1492,14 +1021,14 @@ def deploy_etap_for_oracle_container_on_sauropod(
         with open(token_file, "w", encoding="utf-8") as f:
             f.write(etap_token)
 
-        logger.info(f"✓ CSR generated and saved to {csr_path}")
+        logger.info(f"âś“ CSR generated and saved to {csr_path}")
         logger.info(f"  CSR ID: {etap_csr_id}")
         logger.info(f"  Deployment token: {etap_token}")
 
         appliance.disconnect()
 
     except Exception as e:
-        logger.error(f"✗ Failed to generate CSR: {e}")
+        logger.error(f"âś— Failed to generate CSR: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -1517,9 +1046,9 @@ def deploy_etap_for_oracle_container_on_sauropod(
             timeout=60,
             check=True
         )
-        logger.info(f"✓ CSR signed, certificate saved to {etap_cert_path}")
+        logger.info(f"âś“ CSR signed, certificate saved to {etap_cert_path}")
     except Exception as e:
-        logger.error(f"✗ Failed to sign CSR: {e}")
+        logger.error(f"âś— Failed to sign CSR: {e}")
         return False
 
     # Step 3: Import ETAP certificate to collector
@@ -1540,7 +1069,7 @@ def deploy_etap_for_oracle_container_on_sauropod(
             logger.error("Failed to connect to collector")
             return False
 
-        logger.info("✓ Connected to collector")
+        logger.info("âś“ Connected to collector")
 
         with open(etap_cert_path, "r", encoding="utf-8") as f:
             etap_cert_pem = f.read()
@@ -1550,11 +1079,11 @@ def deploy_etap_for_oracle_container_on_sauropod(
             stap_cert=etap_cert_pem
         )
 
-        logger.info("✓ ETAP certificate imported successfully")
+        logger.info("âś“ ETAP certificate imported successfully")
         appliance.disconnect()
 
     except Exception as e:
-        logger.error(f"✗ Failed to import ETAP certificate: {e}")
+        logger.error(f"âś— Failed to import ETAP certificate: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -1636,27 +1165,27 @@ WantedBy=multi-user.target
 
     result = execute_local_command("mkdir -p /etc/containers/systemd", logger=logger, verbose=verbose)
     if result['rc'] != 0:
-        logger.error(f"✗ Failed to create systemd container directory: {result['stderr']}")
+        logger.error(f"âś— Failed to create systemd container directory: {result['stderr']}")
         return False
 
     result = execute_local_command(f"cat > {container_file_path} << 'EOF'\n{container_file_content}\nEOF", logger=logger, verbose=verbose)
     if result['rc'] != 0:
-        logger.error(f"✗ Failed to create systemd container file: {result['stderr']}")
+        logger.error(f"âś— Failed to create systemd container file: {result['stderr']}")
         return False
-    logger.info(f"✓ Quadlet file created: {container_file_path}")
+    logger.info(f"âś“ Quadlet file created: {container_file_path}")
 
     result = execute_local_command("systemctl daemon-reload", logger=logger, verbose=verbose)
     if result['rc'] != 0:
-        logger.error(f"✗ Failed to reload systemd daemon: {result['stderr']}")
+        logger.error(f"âś— Failed to reload systemd daemon: {result['stderr']}")
         return False
 
     result = execute_local_command("systemctl start oracle-etap", logger=logger, verbose=verbose)
     if result['rc'] != 0:
-        logger.error(f"✗ Failed to start oracle-etap service: {result['stderr']}")
+        logger.error(f"âś— Failed to start oracle-etap service: {result['stderr']}")
         return False
 
     logger.info("\n" + "=" * 80)
-    logger.info("✓ ORACLE CONTAINER ETAP CERTIFICATE COMPLETED")
+    logger.info("âś“ ORACLE CONTAINER ETAP CERTIFICATE COMPLETED")
     logger.info("=" * 80)
     logger.info(f"CSR: {csr_path}")
     logger.info(f"Certificate: {etap_cert_path}")
@@ -1826,7 +1355,7 @@ def import_ltr_dashboard(
     
     if success:
         logger.info("\n" + "=" * 80)
-        logger.info("✓ LTR dashboard imported successfully")
+        logger.info("âś“ LTR dashboard imported successfully")
         logger.info("=" * 80)
     
     return success
@@ -1861,18 +1390,18 @@ def enable_atap_for_oracle(
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
     try:
-        logger.info(f"\n➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        logger.info(f"\nâžś Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
-        logger.info("\n➜ Stopping Oracle listener...")
+        logger.info("\nâžś Stopping Oracle listener...")
         result = ssh.execute_command("su - oracle -c 'lsnrctl stop'", timeout=60, print_output=verbose)
         if result['rc'] != 0:
             logger.warning(f"lsnrctl stop returned non-zero: {result['stderr']}")
 
-        logger.info("\n➜ Shutting down Oracle database...")
+        logger.info("\nâžś Shutting down Oracle database...")
         result = ssh.execute_command(
             'su - oracle -c "echo -e \'shutdown immediate;\\nexit\' | sqlplus / as sysdba"',
             timeout=120,
@@ -1882,17 +1411,17 @@ def enable_atap_for_oracle(
             logger.error(f"Oracle shutdown failed: {result['stderr']}")
             return False
 
-        logger.info("✓ Oracle stopped")
+        logger.info("âś“ Oracle stopped")
 
         guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
 
-        logger.info("\n➜ Authorizing oracle user...")
+        logger.info("\nâžś Authorizing oracle user...")
         result = ssh.execute_command(f"{guardctl} authorize-user oracle", timeout=60, print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"authorize-user failed: {result['stderr']}")
             return False
 
-        logger.info("\n➜ Storing ATAP configuration for Oracle...")
+        logger.info("\nâžś Storing ATAP configuration for Oracle...")
         result = ssh.execute_command(
             f"{guardctl} --db-type=oracle --db-instance=ORCLCDB --db_user=oracle"
             f" --db_home=/u01/app/oracle/product/21c/dbhome_1/ --db_base=/home/oracle --db_version=21 store-conf",
@@ -1902,7 +1431,7 @@ def enable_atap_for_oracle(
             logger.error(f"store-conf failed: {result['stderr']}")
             return False
 
-        logger.info("\n➜ Activating ATAP for Oracle...")
+        logger.info("\nâžś Activating ATAP for Oracle...")
         result = ssh.execute_command(
             f"{guardctl} --db-type=oracle --db-instance=ORCLCDB activate",
             timeout=60, print_output=verbose
@@ -1911,7 +1440,7 @@ def enable_atap_for_oracle(
             logger.error(f"activate failed: {result['stderr']}")
             return False
 
-        logger.info("\n➜ Starting Oracle database...")
+        logger.info("\nâžś Starting Oracle database...")
         result = ssh.execute_command(
             'su - oracle -c "echo -e \'startup\\nexit\' | sqlplus / as sysdba"',
             timeout=120, print_output=verbose
@@ -1920,15 +1449,15 @@ def enable_atap_for_oracle(
             logger.error(f"Oracle startup failed: {result['stderr']}")
             return False
 
-        logger.info("\n➜ Starting Oracle listener...")
+        logger.info("\nâžś Starting Oracle listener...")
         result = ssh.execute_command("su - oracle -c 'lsnrctl start'", timeout=60, print_output=verbose)
         if result['rc'] != 0:
             logger.warning(f"lsnrctl start returned non-zero: {result['stderr']}")
 
-        logger.info("✓ Oracle started")
+        logger.info("âś“ Oracle started")
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -1937,7 +1466,7 @@ def enable_atap_for_oracle(
         ssh.disconnect()
 
     logger.info("=" * 80)
-    logger.info("✓ Oracle stopped successfully")
+    logger.info("âś“ Oracle stopped successfully")
     logger.info("=" * 80)
     return True
 
@@ -2013,26 +1542,26 @@ def install_stap_on_sauropod(
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
     try:
-        logger.info("\n➜ Connecting to sauropod...")
+        logger.info("\nâžś Connecting to sauropod...")
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
-        logger.info(f"\n➜ Creating directory {remote_lab_dir}...")
+        logger.info(f"\nâžś Creating directory {remote_lab_dir}...")
         result = ssh.execute_command(f"mkdir -p {remote_lab_dir}", print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"Failed to create directory: {result['stderr']}")
             return False
-        logger.info(f"✓ {remote_lab_dir} created")
+        logger.info(f"âś“ {remote_lab_dir} created")
 
-        logger.info(f"\n➜ Copying {gim_installer_filename} to sauropod...")
+        logger.info(f"\nâžś Copying {gim_installer_filename} to sauropod...")
         if not ssh.upload_file(gim_local_path, remote_installer_path):
             logger.error(f"Failed to upload {gim_installer_filename}")
             return False
-        logger.info("✓ GIM installer uploaded")
+        logger.info("âś“ GIM installer uploaded")
 
-        logger.info("\n➜ Setting execute permissions on *.sh files...")
+        logger.info("\nâžś Setting execute permissions on *.sh files...")
         result = ssh.execute_command(f"chmod +x {remote_lab_dir}/*.sh", print_output=verbose)
         if result['rc'] != 0:
             logger.warning(f"chmod returned non-zero: {result['stderr']}")
@@ -2041,16 +1570,16 @@ def install_stap_on_sauropod(
             f"cd {remote_lab_dir} && "
             f"./{gim_installer_filename} -- --dir /opt/guardium --tapip {sauropod_ip} --sqlguardip cm -q"
         )
-        logger.info(f"\n➜ Installing GIM on sauropod...")
+        logger.info(f"\nâžś Installing GIM on sauropod...")
         logger.info(f"Command: {install_cmd}")
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"GIM installation failed: {result['stderr']}")
             return False
-        logger.info("✓ GIM installed on sauropod")
+        logger.info("âś“ GIM installed on sauropod")
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -2058,7 +1587,7 @@ def install_stap_on_sauropod(
     finally:
         ssh.disconnect()
 
-    logger.info("\n⌛ Waiting for GIM client to register on CM...")
+    logger.info("\nâŚ› Waiting for GIM client to register on CM...")
     from core.guardium_rest_api import create_guardium_api
     api = create_guardium_api(config, logger, appliance_name)
     demo_password = config.get_custom_variable('pwd')
@@ -2070,14 +1599,14 @@ def install_stap_on_sauropod(
     while elapsed < max_wait:
         try:
             api.gim_list_client_modules(client_ip=client_ip)
-            logger.info(f"✓ GIM client {client_ip} registered on CM (after {elapsed}s)")
+            logger.info(f"âś“ GIM client {client_ip} registered on CM (after {elapsed}s)")
             break
         except Exception:
             logger.info(f"  Client not yet registered, waiting {interval}s... ({elapsed}/{max_wait}s)")
             time.sleep(interval)
             elapsed += interval
     else:
-        logger.error(f"✗ GIM client {client_ip} did not register within {max_wait}s")
+        logger.error(f"âś— GIM client {client_ip} did not register within {max_wait}s")
         return False
 
     stap_params = {
@@ -2181,12 +1710,12 @@ ORCLPDB1 =
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
     # Step 1: Install Oracle Instant Client and configure tnsnames.ora
-    logger.info("\n➜ Step 1: Install Oracle Instant Client on sauropod")
+    logger.info("\nâžś Step 1: Install Oracle Instant Client on sauropod")
     try:
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
         result = ssh.execute_command(f"mkdir -p {remote_lab_dir}", print_output=verbose)
         if result['rc'] != 0:
@@ -2197,13 +1726,13 @@ ORCLPDB1 =
         if not ssh.upload_file(local_rpm, remote_rpm):
             logger.error(f"Failed to upload {instantclient_rpm}")
             return False
-        logger.info("✓ RPM uploaded")
+        logger.info("âś“ RPM uploaded")
 
         result = ssh.execute_command(f"dnf -y install {remote_rpm}", timeout=120, print_output=verbose)
         if result['rc'] != 0:
             logger.error(f"Failed to install Oracle Instant Client: {result['stderr']}")
             return False
-        logger.info("✓ Oracle Instant Client installed")
+        logger.info("âś“ Oracle Instant Client installed")
 
         tnsnames_dir = "/usr/lib/oracle/21/client64/lib/network/admin"
         result = ssh.execute_command(f"mkdir -p {tnsnames_dir}", print_output=verbose)
@@ -2218,10 +1747,10 @@ ORCLPDB1 =
         if result['rc'] != 0:
             logger.error(f"Failed to write tnsnames.ora: {result['stderr']}")
             return False
-        logger.info(f"✓ tnsnames.ora configured at {tnsnames_dir}/tnsnames.ora")
+        logger.info(f"âś“ tnsnames.ora configured at {tnsnames_dir}/tnsnames.ora")
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -2230,7 +1759,7 @@ ORCLPDB1 =
         ssh.disconnect()
 
     # Step 2: Create game schema in Oracle container via guardium-notes-dbtraffic
-    logger.info("\n➜ Step 2: Create game schema in Oracle container (rebuild)")
+    logger.info("\nâžś Step 2: Create game schema in Oracle container (rebuild)")
     dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
     rebuild_cmd = (
         f"cd {dbtraffic_dir} && "
@@ -2239,14 +1768,14 @@ ORCLPDB1 =
     )
     result = execute_local_command(rebuild_cmd, logger=logger, verbose=verbose)
     if result['rc'] != 0:
-        logger.error(f"✗ Failed to create game schema: {result['stderr']}")
+        logger.error(f"âś— Failed to create game schema: {result['stderr']}")
         return False
-    logger.info("✓ Game schema created in Oracle container")
+    logger.info("âś“ Game schema created in Oracle container")
 
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
 
     # Step 3: Create secadmin and guardium users, grant privileges
-    logger.info("\n➜ Step 3: Create secadmin and guardium users")
+    logger.info("\nâžś Step 3: Create secadmin and guardium users")
     try:
         import oracledb
         dsn = f"{sauropod_ip}:1522/ORCLPDB1"
@@ -2264,23 +1793,23 @@ ORCLPDB1 =
                 cur.execute(sql)
             conn.commit()
         conn.close()
-        logger.info("✓ secadmin and guardium users created")
+        logger.info("âś“ secadmin and guardium users created")
 
     except Exception as e:
-        logger.error(f"✗ Oracle connection failed: {e}")
+        logger.error(f"âś— Oracle connection failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
         return False
 
     # Step 5: Configure guard_tap.ini for OUA monitoring
-    logger.info("\n➜ Step 5: Configure guard_tap.ini for OUA")
+    logger.info("\nâžś Step 5: Configure guard_tap.ini for OUA")
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=root_password, port=ssh_port, timeout=60)
     try:
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
         ini_cmds = [
             "sed -i 's|^sqlc_properties_dir=.*|sqlc_properties_dir=/usr/lib/oracle/21/client64/lib/network/admin|' /opt/guardium/modules/STAP/current/guard_tap.ini",
@@ -2291,10 +1820,10 @@ ORCLPDB1 =
             result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
             if result['rc'] != 0:
                 logger.warning(f"Command returned non-zero: {cmd}\n{result['stderr']}")
-        logger.info("✓ guard_tap.ini configured and STAP restarted")
+        logger.info("âś“ guard_tap.ini configured and STAP restarted")
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -2303,7 +1832,7 @@ ORCLPDB1 =
         ssh.disconnect()
 
     # Step 5: Store SQL credentials and create SQL configuration via REST API
-    logger.info("\n➜ Step 5: Store Oracle credentials and create SQL configuration")
+    logger.info("\nâžś Step 5: Store Oracle credentials and create SQL configuration")
     try:
         api = create_guardium_api(config, logger, appliance_name)
         api.get_token(username='demo', password=root_password)
@@ -2315,7 +1844,7 @@ ORCLPDB1 =
             stap_host=sauropod_ip,
             api_target_host=collector_ip
         )
-        logger.info("✓ SQL credentials stored")
+        logger.info("âś“ SQL credentials stored")
 
         time.sleep(60)
 
@@ -2327,25 +1856,25 @@ ORCLPDB1 =
             username="guardium",
             api_target_host=collector_ip
         )
-        logger.info("✓ SQL configuration created")
+        logger.info("âś“ SQL configuration created")
 
         time.sleep(60)
 
         # Step 6: Disable STAP (STAP_ENABLED=0) and reinstall
-        logger.info("\n➜ Step 6: Set STAP_ENABLED=0 and apply")
+        logger.info("\nâžś Step 6: Set STAP_ENABLED=0 and apply")
         api.gim_client_params(client_ip=sauropod_ip, param_name="STAP_ENABLED", param_value="0")
         api.gim_schedule_install(client_ip=sauropod_ip, date="now")
-        logger.info("✓ STAP_ENABLED=0 scheduled")
+        logger.info("âś“ STAP_ENABLED=0 scheduled")
 
     except Exception as e:
-        logger.error(f"✗ REST API operation failed: {e}")
+        logger.error(f"âś— REST API operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
         return False
 
     logger.info("\n" + "=" * 80)
-    logger.info("✓ SETUP STAP WITH OUA ON SAUROPOD COMPLETED")
+    logger.info("âś“ SETUP STAP WITH OUA ON SAUROPOD COMPLETED")
     logger.info("=" * 80)
     return True
 
@@ -2375,11 +1904,11 @@ def setup_oua_audit_policy_on_sauropod(
         import oracledb
         dsn = f"{sauropod_ip}:1522/ORCLPDB1"
 
-        logger.info("➜ Creating audit policy GAME_APP and scheduler job as secadmin...")
+        logger.info("âžś Creating audit policy GAME_APP and scheduler job as secadmin...")
         conn = oracledb.connect(user="secadmin", password=root_password, dsn=dsn)
         cur = conn.cursor()
 
-        # cleanup — ignore errors if objects don't exist
+        # cleanup â€” ignore errors if objects don't exist
         for ddl in [
             "NOAUDIT POLICY GAME_APP",
             "DROP AUDIT POLICY GAME_APP",
@@ -2408,17 +1937,17 @@ def setup_oua_audit_policy_on_sauropod(
 
         cur.close()
         conn.close()
-        logger.info("✓ Audit policy GAME_APP created and enabled")
+        logger.info("âś“ Audit policy GAME_APP created and enabled")
 
     except Exception as e:
-        logger.error(f"✗ Oracle connection failed: {e}")
+        logger.error(f"âś— Oracle connection failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
         return False
 
     logger.info("=" * 80)
-    logger.info("✓ SETUP OUA AUDIT POLICY COMPLETED")
+    logger.info("âś“ SETUP OUA AUDIT POLICY COMPLETED")
     logger.info("=" * 80)
     return True
 
@@ -2469,14 +1998,14 @@ def run_uc_and_setup_kafka_node(
     result = client.execute_command("grdapi run_universal_connector", timeout=120)
     if verbose:
         logger.info(f"Output: {result}")
-    logger.info("✓ run_universal_connector executed")
+    logger.info("âś“ run_universal_connector executed")
 
     status = client.execute_command("grdapi get_universal_connector_status", timeout=60)
     if "Guardium Universal Connector is running" not in status:
-        logger.error(f"✗ Unexpected UC status: {status}")
+        logger.error(f"âś— Unexpected UC status: {status}")
         client.disconnect()
         return False
-    logger.info("✓ Guardium Universal Connector is running")
+    logger.info("âś“ Guardium Universal Connector is running")
     client.disconnect()
 
     # Step 2: Setup kafka-node
@@ -2488,11 +2017,11 @@ def run_uc_and_setup_kafka_node(
         return False
 
     logger.info("\n" + "=" * 80)
-    logger.info("✓ RUN UC AND SETUP KAFKA NODE - COMPLETED")
+    logger.info("âś“ RUN UC AND SETUP KAFKA NODE - COMPLETED")
     logger.info("=" * 80)
 
     import time
-    logger.info("⌛ Waiting 1 minute...")
+    logger.info("âŚ› Waiting 1 minute...")
     time.sleep(60)
     return True
 
@@ -2537,7 +2066,7 @@ def create_uc_credential_for_oracle_container(
     )
     if debug:
         logger.info(f"API response: {result}")
-    logger.info("✓ UC credential created")
+    logger.info("âś“ UC credential created")
     return True
 
 
@@ -2570,7 +2099,7 @@ def register_kafka_cluster(
 
     logger.info(f"Cluster: {cluster_name}, members: {member_list}, cruise_control: {apply_cruise_control}")
 
-    # Register cluster — retry up to 10 times with 30s interval if API returns an error
+    # Register cluster â€” retry up to 10 times with 30s interval if API returns an error
     registered = False
     for attempt in range(1, 11):
         result = api.create_kafka_cluster(
@@ -2582,18 +2111,18 @@ def register_kafka_cluster(
             logger.info(f"API response: {result}")
 
         if isinstance(result, dict) and result.get('ErrorCode'):
-            logger.warning(f"⚠ Registration attempt {attempt}/10 failed (ErrorCode {result['ErrorCode']}): {result.get('ErrorMessage', '')} — retrying in 30s...")
+            logger.warning(f"âš  Registration attempt {attempt}/10 failed (ErrorCode {result['ErrorCode']}): {result.get('ErrorMessage', '')} â€” retrying in 30s...")
             time.sleep(30)
         else:
-            logger.info(f"✓ Cluster registration accepted (attempt {attempt}/10)")
+            logger.info(f"âś“ Cluster registration accepted (attempt {attempt}/10)")
             registered = True
             break
 
     if not registered:
-        logger.error(f"✗ Kafka cluster registration failed after 10 attempts")
+        logger.error(f"âś— Kafka cluster registration failed after 10 attempts")
         return False
 
-    logger.info("➜ Verifying cluster exists via GET /restAPI/kafka_cluster (max 6 attempts, 60s interval)...")
+    logger.info("âžś Verifying cluster exists via GET /restAPI/kafka_cluster (max 6 attempts, 60s interval)...")
     for attempt in range(1, 7):
         clusters = api.get_kafka_clusters()
         logger.info(f"GET kafka_cluster response: {clusters}")
@@ -2611,19 +2140,19 @@ def register_kafka_cluster(
             if isinstance(c, dict)
         )
         if found:
-            logger.info(f"✓ Kafka cluster '{cluster_name}' confirmed (attempt {attempt}/6)")
+            logger.info(f"âś“ Kafka cluster '{cluster_name}' confirmed (attempt {attempt}/6)")
             break
 
         if attempt < 6:
-            logger.warning(f"⚠ Cluster not found yet (attempt {attempt}/6), waiting 60s...")
+            logger.warning(f"âš  Cluster not found yet (attempt {attempt}/6), waiting 60s...")
             time.sleep(60)
     else:
-        logger.error(f"✗ Kafka cluster '{cluster_name}' not found after 6 attempts")
+        logger.error(f"âś— Kafka cluster '{cluster_name}' not found after 6 attempts")
         return False
 
-    logger.info("⌛ Waiting 5 minutes for Kafka cluster to stabilize...")
+    logger.info("âŚ› Waiting 5 minutes for Kafka cluster to stabilize...")
     time.sleep(300)
-    logger.info("✓ Kafka cluster registration completed")
+    logger.info("âś“ Kafka cluster registration completed")
     return True
 
 
@@ -2660,7 +2189,7 @@ def start_kafka_nodes(
     cm_type = cm_config.get('type')
     cm_prompt = appliance_loader.get_default_prompt(cm_type, configured=True) if cm_type else r">"
 
-    logger.info("⌛ Waiting 10s before starting kafka nodes...")
+    logger.info("âŚ› Waiting 10s before starting kafka nodes...")
     time.sleep(10)
 
     client = ApplianceClient(host=cm_host, user="cli", password=cli_pwd, prompt_regex=cm_prompt,
@@ -2670,15 +2199,15 @@ def start_kafka_nodes(
         return False
 
     cmd = f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}"
-    logger.info(f"➜ {cmd}")
+    logger.info(f"âžś {cmd}")
     result = client.execute_command(cmd, timeout=30)
     logger.info(f"Output: {result}")
     client.disconnect()
-    logger.info("✓ start_kafka_nodes executed")
+    logger.info("âś“ start_kafka_nodes executed")
 
-    logger.info("⌛ Waiting 5 minutes for kafka node to start (async)...")
+    logger.info("âŚ› Waiting 5 minutes for kafka node to start (async)...")
     time.sleep(300)
-    logger.info("✓ Wait completed")
+    logger.info("âś“ Wait completed")
     return True
 
 
@@ -2719,12 +2248,12 @@ def import_uc_profile_oracle_container(
     )
     if debug:
         logger.info(f"API response: {result}")
-    logger.info("✓ UC profile imported")
+    logger.info("âś“ UC profile imported")
 
-    logger.info("⌛ Waiting 1 minute for UC profile to be processed...")
+    logger.info("âŚ› Waiting 1 minute for UC profile to be processed...")
     import time
     time.sleep(60)
-    logger.info("✓ Wait completed")
+    logger.info("âś“ Wait completed")
     return True
 
 
@@ -2768,11 +2297,11 @@ def bulk_install_uc_profile(
         return False
 
     cmd = f"grdapi universal_connector_bulk_install profileNames={profile_names} hosts={bulk_install_hosts}"
-    logger.info(f"➜ {cmd}")
+    logger.info(f"âžś {cmd}")
     result = client.execute_command(cmd, timeout=120)
     logger.info(f"Output: {result}")
     client.disconnect()
-    logger.info("✓ UC bulk install completed")
+    logger.info("âś“ UC bulk install completed")
     return True
 
 
@@ -2805,7 +2334,7 @@ def import_oracle_dashboard(
     )
 
     if success:
-        logger.info("✓ Oracle dashboard imported successfully")
+        logger.info("âś“ Oracle dashboard imported successfully")
 
     return success
 
@@ -2860,15 +2389,15 @@ def enable_vulnerability_management(
         return False
 
     try:
-        # ── 1. Enable feature flag ───────────────────────────────────────────
+        # â”€â”€ 1. Enable feature flag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         cmd = f"grdapi enable_disable_feature_flag flagName={flag_name} action=enable"
-        logger.info(f"➜ {cmd}")
+        logger.info(f"âžś {cmd}")
         result = client.execute_command(cmd, timeout=30)
         if verbose:
             logger.info(f"Response: {result}")
 
-        # ── 2. Verify flag is ENABLED ────────────────────────────────────────
-        logger.info("➜ Verifying flag state via grdapi list_feature_flags...")
+        # â”€â”€ 2. Verify flag is ENABLED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info("âžś Verifying flag state via grdapi list_feature_flags...")
         flags_output = client.execute_command("grdapi list_feature_flags", timeout=30)
         if verbose or debug:
             logger.info(f"Feature flags:\n{flags_output}")
@@ -2876,13 +2405,13 @@ def enable_vulnerability_management(
         for line in flags_output.splitlines():
             if flag_name in line:
                 if "State: ENABLED" in line:
-                    logger.info(f"✓ {flag_name} is ENABLED")
+                    logger.info(f"âś“ {flag_name} is ENABLED")
                     return True
                 else:
-                    logger.error(f"✗ {flag_name} found but state is not ENABLED: {line.strip()}")
+                    logger.error(f"âś— {flag_name} found but state is not ENABLED: {line.strip()}")
                     return False
 
-        logger.error(f"✗ {flag_name} not found in list_feature_flags output")
+        logger.error(f"âś— {flag_name} not found in list_feature_flags output")
         return False
 
     finally:
@@ -2918,7 +2447,7 @@ def create_va_postgres_account(
         if result['rc'] != 0:
             logger.error(f"Failed to {desc}: {result['stderr']}")
             return False
-        logger.info(f"✓ {desc}")
+        logger.info(f"âś“ {desc}")
         return True
 
     steps = [
@@ -2934,7 +2463,7 @@ def create_va_postgres_account(
         if not psql(sql, desc):
             return False
 
-    logger.info("✓ VA PostgreSQL account ready")
+    logger.info("âś“ VA PostgreSQL account ready")
     return True
 
 
@@ -2968,7 +2497,7 @@ def import_va_postgres_definitions(
     )
 
     if success:
-        logger.info("✓ VA PostgreSQL definitions imported successfully")
+        logger.info("âś“ VA PostgreSQL definitions imported successfully")
 
     return success
 
@@ -3013,25 +2542,25 @@ def fetch_cm_certificate_on_sauropod(
 
     ssh = SSHClient(host=sauropod_ip, username=ssh_user, password=password, port=ssh_port, timeout=60)
     try:
-        logger.info(f"➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        logger.info(f"âžś Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
         for cmd, desc in cmds:
-            logger.info(f"➜ {desc}...")
+            logger.info(f"âžś {desc}...")
             result = ssh.execute_command(cmd, timeout=30, print_output=verbose)
             if result['rc'] != 0:
-                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                logger.error(f"âś— Failed to {desc}: {result['stderr']}")
                 return False
-            logger.info(f"✓ {desc}")
+            logger.info(f"âś“ {desc}")
 
-        logger.info(f"✓ Certificate saved to sauropod:{cert_path}")
+        logger.info(f"âś“ Certificate saved to sauropod:{cert_path}")
         return True
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -3093,7 +2622,7 @@ def create_va_api_key(
 
     try:
         cmd = f"grdapi create_api_key name={key_name}"
-        logger.info(f"➜ {cmd}")
+        logger.info(f"âžś {cmd}")
         output = client.execute_command(cmd, timeout=30)
         if verbose:
             logger.info(f"Response:\n{output}")
@@ -3110,11 +2639,11 @@ def create_va_api_key(
             logger.error(f"Full output: {output}")
             return False
 
-        logger.info(f"✓ API key generated: {api_key[:10]}...")
+        logger.info(f"âś“ API key generated: {api_key[:10]}...")
 
         key_path = config.config_file.parent.parent / key_file
         key_path.write_text(api_key, encoding='utf-8')
-        logger.info(f"✓ API key saved to: {key_path}")
+        logger.info(f"âś“ API key saved to: {key_path}")
 
         return True
 
@@ -3144,7 +2673,7 @@ def deploy_vascanner_on_sauropod(
     logger.info("DEPLOY VA SCANNER ON SAUROPOD")
     logger.info("=" * 80)
 
-    # ── resolve sauropod connection ──────────────────────────────────────────
+    # â”€â”€ resolve sauropod connection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
         logger.error("Sauropod IP not found in machines config")
@@ -3158,16 +2687,16 @@ def deploy_vascanner_on_sauropod(
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── resolve IBM registry key ─────────────────────────────────────────────
+    # â”€â”€ resolve IBM registry key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     ibm_key = config.get_custom_variable('ibm_container_api_key')
     if not ibm_key:
         logger.error("ibm_container_api_key not found in custom_variables")
         return False
 
-    # ── resolve encoded API key from .va_api_key ─────────────────────────────
+    # â”€â”€ resolve encoded API key from .va_api_key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     key_path = config.config_file.parent.parent / key_file
     if not key_path.exists():
-        logger.error(f"{key_path} not found — run create_va_api_key stage first")
+        logger.error(f"{key_path} not found â€” run create_va_api_key stage first")
         return False
     api_key = key_path.read_text(encoding='utf-8').strip()
     if not api_key:
@@ -3183,60 +2712,60 @@ def deploy_vascanner_on_sauropod(
 
     ssh = SSHClient(host=sauropod_ip, username=ssh_user, password=password, port=ssh_port, timeout=120)
     try:
-        logger.info(f"➜ Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
+        logger.info(f"âžś Connecting to sauropod ({sauropod_ip}:{ssh_port})...")
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
-        # ── 1. podman login ──────────────────────────────────────────────────
-        logger.info("➜ Logging in to cp.icr.io...")
+        # â”€â”€ 1. podman login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info("âžś Logging in to cp.icr.io...")
         result = ssh.execute_command(
             f"podman login cp.icr.io -u cp -p '{ibm_key}'",
             timeout=60, print_output=verbose
         )
         if result['rc'] != 0:
-            logger.error(f"✗ podman login failed: {result['stderr']}")
+            logger.error(f"âś— podman login failed: {result['stderr']}")
             return False
-        logger.info("✓ Logged in to cp.icr.io")
+        logger.info("âś“ Logged in to cp.icr.io")
 
-        # ── 2. podman pull ───────────────────────────────────────────────────
-        logger.info(f"➜ Pulling image {image}...")
+        # â”€â”€ 2. podman pull â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info(f"âžś Pulling image {image}...")
         result = ssh.execute_command(
             f"podman pull {image}",
             timeout=600, print_output=verbose
         )
         if result['rc'] != 0:
-            logger.error(f"✗ podman pull failed: {result['stderr']}")
+            logger.error(f"âś— podman pull failed: {result['stderr']}")
             return False
-        logger.info("✓ Image pulled")
+        logger.info("âś“ Image pulled")
 
-        # ── 3. get image ID ──────────────────────────────────────────────────
-        logger.info("➜ Resolving image ID...")
+        # â”€â”€ 3. get image ID â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info("âžś Resolving image ID...")
         result = ssh.execute_command(
             f"podman images --format '{{{{.ID}}}}' {image}",
             timeout=30, print_output=verbose
         )
         if result['rc'] != 0 or not result['stdout'].strip():
-            logger.error(f"✗ Failed to get image ID: {result['stderr']}")
+            logger.error(f"âś— Failed to get image ID: {result['stderr']}")
             return False
         image_id = result['stdout'].strip().splitlines()[0].strip()
-        logger.info(f"✓ Image ID: {image_id}")
+        logger.info(f"âś“ Image ID: {image_id}")
 
-        # ── 4. write config file ─────────────────────────────────────────────
+        # â”€â”€ 4. write config file â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         config_dir = config_file.rsplit('/', 1)[0]
-        logger.info(f"➜ Writing config to {config_file}...")
+        logger.info(f"âžś Writing config to {config_file}...")
         result = ssh.execute_command(
             f"mkdir -p {config_dir} && cat > {config_file} << 'EOF'\n{config_content}EOF",
             timeout=30, print_output=verbose
         )
         if result['rc'] != 0:
-            logger.error(f"✗ Failed to write config file: {result['stderr']}")
+            logger.error(f"âś— Failed to write config file: {result['stderr']}")
             return False
-        logger.info("✓ Config file written")
+        logger.info("âś“ Config file written")
 
-        # ── 5. podman run ────────────────────────────────────────────────────
-        logger.info(f"➜ Starting container {container_name}...")
+        # â”€â”€ 5. podman run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info(f"âžś Starting container {container_name}...")
         run_cmd = (
             f"podman run --network host -d --replace "
             f"--env-file {config_file} "
@@ -3246,14 +2775,14 @@ def deploy_vascanner_on_sauropod(
         )
         result = ssh.execute_command(run_cmd, timeout=60, print_output=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ podman run failed: {result['stderr']}")
+            logger.error(f"âś— podman run failed: {result['stderr']}")
             return False
-        logger.info(f"✓ Container {container_name} started")
+        logger.info(f"âś“ Container {container_name} started")
 
         return True
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -3304,12 +2833,12 @@ def import_dps(
 
     login_url = f"https://{cm_ip}:8443"
 
-    logger.info("➜ Installing playwright browsers...")
+    logger.info("âžś Installing playwright browsers...")
     result = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], capture_output=True, text=True)
     if result.returncode != 0:
         logger.warning(f"playwright install returned {result.returncode}: {result.stderr.strip()}")
 
-    logger.info(f"➜ Starting DPS import from {dps_file}...")
+    logger.info(f"âžś Starting DPS import from {dps_file}...")
     logger.info(f"  login_url: {login_url}, user: {demo_user}")
 
     from time import sleep
@@ -3323,13 +2852,13 @@ def import_dps(
             file_to_upload=dps_file,
             headless=headless,
         )
-        logger.info("✓ DPS imported successfully")
+        logger.info("âś“ DPS imported successfully")
         return True
     except FileNotFoundError as e:
-        logger.error(f"✗ {e}")
+        logger.error(f"âś— {e}")
         return False
     except Exception as e:
-        logger.error(f"✗ DPS import failed: {e}")
+        logger.error(f"âś— DPS import failed: {e}")
         return False
 
 
@@ -3349,7 +2878,7 @@ def stop_raptor_databases(config, logger, verbose=True, **kwargs):
     if not execute_commands(commands, logger, verbose, stop_on_error=False):
         logger.warning("Some services could not be stopped (may not be running)")
 
-    logger.info("✓ Raptor databases stopped")
+    logger.info("âś“ Raptor databases stopped")
     return True
 
 
@@ -3385,7 +2914,7 @@ def import_policies_reports_dashboard(
     )
 
     if success:
-        logger.info("✓ Policies and Reports dashboard imported successfully")
+        logger.info("âś“ Policies and Reports dashboard imported successfully")
 
     return success
 
@@ -3419,7 +2948,7 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
 
     logger.info("Scheduling GIM install on raptor...")
     api.gim_schedule_install(client_ip=stap_host, date="now")
-    logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
+    logger.info(f"âś“ Scheduled. Waiting {installation_delay}s before monitoring...")
     time.sleep(installation_delay)
 
     logger.info("Monitoring installation progress...")
@@ -3431,7 +2960,7 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
         modules = api.gim_list_client_modules(client_ip=stap_host)
 
         if "ErrorCode" in modules or "ErrorMessage" in modules:
-            logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
+            logger.error(f"  âś— API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
             return False
 
         entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
@@ -3443,11 +2972,11 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
 
         pending = [m for m in result_mods if m["state"] != "INSTALLED"]
         if pending:
-            logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
+            logger.info(f"  âŚ› {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
             logger.info("  Waiting 30s before next check...")
             time.sleep(30)
         else:
-            logger.info("  ✓ All modules installed successfully!")
+            logger.info("  âś“ All modules installed successfully!")
 
     logger.info("Restarting STAP agent on raptor...")
     result = execute_local_command(
@@ -3455,10 +2984,10 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
         logger=logger, verbose=verbose
     )
     if result['rc'] != 0:
-        logger.error(f"✗ Failed to restart STAP: {result['stderr']}")
+        logger.error(f"âś— Failed to restart STAP: {result['stderr']}")
         return False
 
-    logger.info("✓ STAP firewall flags set, modules installed, agent restarted on raptor")
+    logger.info("âś“ STAP firewall flags set, modules installed, agent restarted on raptor")
     return True
 
 
@@ -3499,7 +3028,7 @@ def configure_engine_on_raptor(config, logger, verbose=True,
         api_target_host=collector_ip
     )
 
-    logger.info("✓ Inspection Engine configured on raptor")
+    logger.info("âś“ Inspection Engine configured on raptor")
     return True
 
 
@@ -3516,10 +3045,10 @@ def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
     for cmd in commands:
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ Command failed: {result['stderr']}")
+            logger.error(f"âś— Command failed: {result['stderr']}")
             return False
 
-    logger.info("✓ dbtraffic pgsql completed on raptor")
+    logger.info("âś“ dbtraffic pgsql completed on raptor")
     return True
 
 
@@ -3548,7 +3077,7 @@ def add_postgres_app_profile_member(config, logger, verbose=True,
 
     api.create_group_member(desc=group_desc, member=member)
 
-    logger.info(f"✓ Member added to group '{group_desc}'")
+    logger.info(f"âś“ Member added to group '{group_desc}'")
     return True
 
 
@@ -3601,7 +3130,7 @@ def import_va_api_definitions(
     )
 
     if success:
-        logger.info("✓ VA API definitions imported successfully")
+        logger.info("âś“ VA API definitions imported successfully")
 
     return success
 
@@ -3649,15 +3178,15 @@ def create_va_oauth_client(config, logger, verbose=True,
         if not client.connect():
             logger.error("Failed to connect to appliance")
             return False
-        logger.info("✓ Connected successfully")
+        logger.info("âś“ Connected successfully")
 
         result = client.execute_command("grdapi list_oauth_clients")
         if f"Client Id: {client_id}" in result:
-            logger.info(f"➜ Deleting existing OAuth client '{client_id}'...")
+            logger.info(f"âžś Deleting existing OAuth client '{client_id}'...")
             client.execute_command(f"grdapi delete_oauth_clients client_id={client_id}")
-            logger.info("✓ Existing client deleted")
+            logger.info("âś“ Existing client deleted")
 
-        logger.info(f"➜ Creating OAuth client '{client_id}'...")
+        logger.info(f"âžś Creating OAuth client '{client_id}'...")
         result = client.execute_command(f'grdapi register_oauth_client client_id={client_id} grant_types="password"')
 
         client_secret = None
@@ -3668,7 +3197,7 @@ def create_va_oauth_client(config, logger, verbose=True,
                     data = json.loads(line)
                     client_secret = data.get('client_secret')
                     if client_secret:
-                        logger.info(f"✓ OAuth client created: {client_id}")
+                        logger.info(f"âś“ OAuth client created: {client_id}")
                         logger.info(f"  Client Secret: {client_secret[:10]}...")
                         break
                 except json.JSONDecodeError:
@@ -3682,10 +3211,10 @@ def create_va_oauth_client(config, logger, verbose=True,
         secret_file = project_root / ".client_secret_va"
         with open(secret_file, 'w') as f:
             f.write(client_secret)
-        logger.info(f"✓ Client secret saved to: {secret_file}")
+        logger.info(f"âś“ Client secret saved to: {secret_file}")
 
         logger.info("=" * 80)
-        logger.info("✓ VA OAuth client setup completed successfully")
+        logger.info("âś“ VA OAuth client setup completed successfully")
         logger.info("=" * 80)
         return True
 
@@ -3738,7 +3267,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         logger.error("cli_pwd not found in custom_variables")
         return False
 
-    logger.info("➜ Registering patches on CM: show system patch available...")
+    logger.info("âžś Registering patches on CM: show system patch available...")
     cli = ApplianceClient(
         host=cm_ip,
         user='cli',
@@ -3750,14 +3279,14 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         debug=debug
     )
     if not cli.connect():
-        logger.error("✗ Failed to connect to CM CLI")
+        logger.error("âś— Failed to connect to CM CLI")
         return False
     try:
         patch_output = cli.execute_command("show system patch available", timeout=600)
         logger.info(f"Available patches:\n{patch_output}")
-        logger.info("✓ Patches registered on CM")
+        logger.info("âś“ Patches registered on CM")
     except Exception as e:
-        logger.error(f"✗ CLI command failed: {e}")
+        logger.error(f"âś— CLI command failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -3772,11 +3301,11 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         return False
     api.get_token(username='demo', password=pwd)
 
-    logger.info(f"➜ Calling patch_install API (patch_number={patch_number}, unit={cm_ip}, mode={mode})...")
+    logger.info(f"âžś Calling patch_install API (patch_number={patch_number}, unit={cm_ip}, mode={mode})...")
     try:
         result = api.patch_install(patch_number=patch_number, unit_ip_list=cm_ip, mode=mode)
     except Exception as e:
-        logger.error(f"✗ patch_install API call failed: {e}")
+        logger.error(f"âś— patch_install API call failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -3784,10 +3313,10 @@ def install_edge_patch_via_api(config, logger, verbose=True,
 
     logger.info(f"  API response: {result}")
     if result.get('ErrorCode') or result.get('errorCode'):
-        logger.error(f"✗ patch_install returned error: {result}")
+        logger.error(f"âś— patch_install returned error: {result}")
         return False
 
-    logger.info("✓ Edge patch installation initiated via REST API on CM")
+    logger.info("âś“ Edge patch installation initiated via REST API on CM")
     return True
 
 
@@ -3853,8 +3382,8 @@ def monitor_edge_patch_installation(config, logger, verbose=True,
                 return line
         return None
 
-    # ── Phase 1: wait for patch to appear in install list (every 15s) ──────────
-    logger.info(f"⏳ Phase 1: Waiting for patch {patch_number_str} to appear in 'show system patch install'")
+    # â”€â”€ Phase 1: wait for patch to appear in install list (every 15s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    logger.info(f"âŹł Phase 1: Waiting for patch {patch_number_str} to appear in 'show system patch install'")
     logger.info(f"   Checking every {appear_interval}s (max {appear_max} checks = {appear_interval * appear_max}s)...")
     appeared = False
     for check in range(1, appear_max + 1):
@@ -3865,17 +3394,17 @@ def monitor_edge_patch_installation(config, logger, verbose=True,
             continue
         status_line = _parse_patch_status(output, patch_number_str)
         if status_line:
-            logger.info(f"  ✓ #{check}/{appear_max}: Patch {patch_number_str} appeared → {status_line}")
+            logger.info(f"  âś“ #{check}/{appear_max}: Patch {patch_number_str} appeared â†’ {status_line}")
             appeared = True
             break
         logger.info(f"  #{check}/{appear_max}: Patch {patch_number_str} not yet visible, waiting {appear_interval}s...")
 
     if not appeared:
-        logger.error(f"✗ Patch {patch_number_str} did not appear in install list after {appear_interval * appear_max}s")
+        logger.error(f"âś— Patch {patch_number_str} did not appear in install list after {appear_interval * appear_max}s")
         return False
 
-    # ── Phase 2: wait for DONE status (every 60s) ───────────────────────────────
-    logger.info(f"⏳ Phase 2: Monitoring installation (every {install_interval}s, max {install_max} checks)...")
+    # â”€â”€ Phase 2: wait for DONE status (every 60s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    logger.info(f"âŹł Phase 2: Monitoring installation (every {install_interval}s, max {install_max} checks)...")
     for check in range(1, install_max + 1):
         time.sleep(install_interval)
         logger.info(f"  Check #{check}/{install_max}: querying 'show system patch install'...")
@@ -3890,14 +3419,14 @@ def monitor_edge_patch_installation(config, logger, verbose=True,
         logger.info(f"  #{check}/{install_max}: {status_line}")
         if "DONE: Patch installation Succeeded" in status_line:
             logger.info("=" * 80)
-            logger.info(f"✓ Edge patch {patch_number_str} installed successfully on CM")
+            logger.info(f"âś“ Edge patch {patch_number_str} installed successfully on CM")
             logger.info("=" * 80)
             return True
         if "FAIL" in status_line.upper() or "ERROR" in status_line.upper():
-            logger.error(f"✗ Patch installation failed: {status_line}")
+            logger.error(f"âś— Patch installation failed: {status_line}")
             return False
 
-    logger.error(f"✗ Timeout: patch {patch_number_str} not installed after {install_interval * install_max}s")
+    logger.error(f"âś— Timeout: patch {patch_number_str} not installed after {install_interval * install_max}s")
     return False
 
 
@@ -3936,7 +3465,7 @@ def register_edge_gateway(config, logger, verbose=True,
             deploy_proxy=deploy_proxy,
         )
     except Exception as e:
-        logger.error(f"✗ register_edge API call failed: {e}")
+        logger.error(f"âś— register_edge API call failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -3945,10 +3474,10 @@ def register_edge_gateway(config, logger, verbose=True,
     if verbose:
         logger.info(f"  API response: {result}")
     if result.get('ErrorCode') or result.get('errorCode'):
-        logger.error(f"✗ register_edge returned error: {result}")
+        logger.error(f"âś— register_edge returned error: {result}")
         return False
 
-    logger.info("✓ Edge gateway registered successfully on CM")
+    logger.info("âś“ Edge gateway registered successfully on CM")
     return True
 
 
@@ -3997,20 +3526,20 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
         if not ssh.connect():
             logger.error("Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
         install_cmd = (
             f"curl -sfL https://get.k3s.io | "
             f"INSTALL_K3S_VERSION={k3s_version} sh -s - --disable traefik"
         )
-        logger.info(f"➜ Installing k3s {k3s_version}...")
+        logger.info(f"âžś Installing k3s {k3s_version}...")
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ k3s installation failed: {result['stderr']}")
+            logger.error(f"âś— k3s installation failed: {result['stderr']}")
             return False
-        logger.info("✓ k3s installed")
+        logger.info("âś“ k3s installed")
 
-        logger.info(f"➜ Waiting for {expected_pods} pods Running (max {max_wait}s, check every {check_interval}s)...")
+        logger.info(f"âžś Waiting for {expected_pods} pods Running (max {max_wait}s, check every {check_interval}s)...")
         elapsed = 0
         while elapsed < max_wait:
             result = ssh.execute_command("kubectl get pods -A --no-headers 2>/dev/null", print_output=False)
@@ -4022,16 +3551,16 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
                     for l in lines:
                         logger.info(f"    {l}")
                 if len(running) >= expected_pods:
-                    logger.info(f"✓ {len(running)} pods Running — k3s ready")
+                    logger.info(f"âś“ {len(running)} pods Running â€” k3s ready")
                     break
             time.sleep(check_interval)
             elapsed += check_interval
         else:
-            logger.error(f"✗ Timeout: expected {expected_pods} pods Running after {max_wait}s")
+            logger.error(f"âś— Timeout: expected {expected_pods} pods Running after {max_wait}s")
             return False
 
         # Patch CoreDNS NodeHosts and Corefile with correct IPs, then restart
-        logger.info(f"➜ Patching CoreDNS (sauropod_ip={sauropod_ip}, cm_ip={cm_ip})...")
+        logger.info(f"âžś Patching CoreDNS (sauropod_ip={sauropod_ip}, cm_ip={cm_ip})...")
 
         node_hosts_value = (
             f"{sauropod_ip} sauropod.demo.guardium\\n"
@@ -4079,18 +3608,18 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
         ]
 
         for cmd, desc in coredns_cmds:
-            logger.info(f"  ➜ {desc}...")
+            logger.info(f"  âžś {desc}...")
             result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
             if result['rc'] != 0:
-                logger.error(f"  ✗ Failed to {desc}: {result['stderr']}")
+                logger.error(f"  âś— Failed to {desc}: {result['stderr']}")
                 return False
-            logger.info(f"  ✓ {desc}")
+            logger.info(f"  âś“ {desc}")
 
-        logger.info("✓ k3s installed and CoreDNS configured on sauropod")
+        logger.info("âś“ k3s installed and CoreDNS configured on sauropod")
         return True
 
     except Exception as e:
-        logger.error(f"✗ SSH operation failed: {e}")
+        logger.error(f"âś— SSH operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4118,25 +3647,25 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── call REST API from raptor ────────────────────────────────────────────────
+    # â”€â”€ call REST API from raptor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
-    logger.info(f"➜ Calling get_bundle(name={edge_name}) on CM...")
+    logger.info(f"âžś Calling get_bundle(name={edge_name}) on CM...")
     try:
         bundle_bytes = api.get_bundle(name=edge_name)
     except Exception as e:
-        logger.error(f"✗ get_bundle API call failed: {e}")
+        logger.error(f"âś— get_bundle API call failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
         return False
 
     if not bundle_bytes:
-        logger.error("✗ get_bundle returned empty response")
+        logger.error("âś— get_bundle returned empty response")
         return False
-    logger.info(f"✓ Bundle received ({len(bundle_bytes)} bytes)")
+    logger.info(f"âś“ Bundle received ({len(bundle_bytes)} bytes)")
 
-    # ── upload to sauropod via SFTP ──────────────────────────────────────────────
+    # â”€â”€ upload to sauropod via SFTP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
         logger.error("Sauropod IP not found in machines config")
@@ -4149,18 +3678,18 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
     tmp_path = os.path.join(tempfile.gettempdir(), 'edge.tar.gz')
     with open(tmp_path, 'wb') as f:
         f.write(bundle_bytes)
-    logger.info(f"➜ Uploading to sauropod ({sauropod_ip}:{ssh_port}) → {sauropod_dest}...")
+    logger.info(f"âžś Uploading to sauropod ({sauropod_ip}:{ssh_port}) â†’ {sauropod_dest}...")
 
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
                     port=ssh_port, timeout=120)
     try:
         if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
+            logger.error("âś— Failed to connect to sauropod")
             return False
         if not ssh.upload_file(tmp_path, sauropod_dest):
-            logger.error(f"✗ Failed to upload bundle to sauropod")
+            logger.error(f"âś— Failed to upload bundle to sauropod")
             return False
-        logger.info(f"✓ Edge bundle uploaded to sauropod: {sauropod_dest}")
+        logger.info(f"âś“ Edge bundle uploaded to sauropod: {sauropod_dest}")
         extract_dir = os.path.dirname(sauropod_dest.rstrip('/'))
         for cmd, desc in [
             (f"tar -xzf {sauropod_dest} -C {extract_dir}", f"extract {sauropod_dest}"),
@@ -4168,13 +3697,13 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
         ]:
             result = ssh.execute_command(cmd, print_output=False)
             if result['rc'] != 0:
-                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                logger.error(f"âś— Failed to {desc}: {result['stderr']}")
                 return False
-            logger.info(f"  ✓ {desc}")
-        logger.info(f"✓ Edge bundle extracted to {extract_dir}")
+            logger.info(f"  âś“ {desc}")
+        logger.info(f"âś“ Edge bundle extracted to {extract_dir}")
         return True
     except Exception as e:
-        logger.error(f"✗ Upload/extract failed: {e}")
+        logger.error(f"âś— Upload/extract failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4213,10 +3742,10 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
                     port=ssh_port, timeout=60)
     try:
         if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
+            logger.error("âś— Failed to connect to sauropod")
             return False
 
-        # ── configure firewall rules on sauropod ────────────────────────────────
+        # â”€â”€ configure firewall rules on sauropod â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         for cmd, desc in [
             ("firewall-cmd --permanent --add-port=6443/tcp",  "allow 6443/tcp"),
             ("firewall-cmd --permanent --add-port=8472/udp",  "allow 8472/udp"),
@@ -4224,23 +3753,23 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
             ("firewall-cmd --permanent --add-masquerade",     "enable masquerade"),
             ("firewall-cmd --reload",                         "reload firewall"),
         ]:
-            logger.info(f"➜ {desc}...")
+            logger.info(f"âžś {desc}...")
             result = ssh.execute_command(cmd, print_output=verbose)
             if result['rc'] != 0:
-                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                logger.error(f"âś— Failed to {desc}: {result['stderr']}")
                 return False
-            logger.info(f"  ✓ {desc}")
+            logger.info(f"  âś“ {desc}")
 
-        # ── install expect on sauropod ───────────────────────────────────────────
-        logger.info("➜ Installing expect on sauropod...")
+        # â”€â”€ install expect on sauropod â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info("âžś Installing expect on sauropod...")
         result = ssh.execute_command("dnf -y install expect", print_output=verbose)
         if result['rc'] != 0:
-            logger.error(f"✗ Failed to install expect: {result['stderr']}")
+            logger.error(f"âś— Failed to install expect: {result['stderr']}")
             return False
-        logger.info("✓ expect installed on sauropod")
+        logger.info("âś“ expect installed on sauropod")
         return True
     except Exception as e:
-        logger.error(f"✗ Operation failed: {e}")
+        logger.error(f"âś— Operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4275,8 +3804,8 @@ def deploy_edge_gateway(config, logger, verbose=True,
         logger.error("pwd not found in custom_variables")
         return False
 
-    # ── run edge-install.sh with PTY via exec_command ────────────────────────────
-    logger.info(f"➜ Running {edge_dir}/{install_script} with PTY (timeout={script_timeout}s)...")
+    # â”€â”€ run edge-install.sh with PTY via exec_command â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    logger.info(f"âžś Running {edge_dir}/{install_script} with PTY (timeout={script_timeout}s)...")
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
@@ -4312,7 +3841,7 @@ def deploy_edge_gateway(config, logger, verbose=True,
                         answers_sent += 1
             except socket.timeout:
                 if time.time() - last_activity > 60:
-                    logger.warning("  ⚠ No output for 60s, still waiting...")
+                    logger.warning("  âš  No output for 60s, still waiting...")
                     last_activity = time.time()
             if channel.exit_status_ready():
                 # drain remaining output
@@ -4331,19 +3860,19 @@ def deploy_edge_gateway(config, logger, verbose=True,
                 break
 
         if not channel.exit_status_ready():
-            logger.error(f"✗ edge-install.sh timed out after {script_timeout}s")
+            logger.error(f"âś— edge-install.sh timed out after {script_timeout}s")
             return False
 
         exit_code = channel.recv_exit_status()
         if exit_code != 0:
-            logger.error(f"✗ edge-install.sh failed (rc={exit_code})")
+            logger.error(f"âś— edge-install.sh failed (rc={exit_code})")
             return False
 
-        logger.info("✓ edge-install.sh completed successfully")
+        logger.info("âś“ edge-install.sh completed successfully")
         return True
 
     except Exception as e:
-        logger.error(f"✗ Operation failed: {e}")
+        logger.error(f"âś— Operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4383,12 +3912,12 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
                     port=ssh_port, timeout=60)
     try:
         if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
+            logger.error("âś— Failed to connect to sauropod")
             return False
-        logger.info("✓ Connected to sauropod")
+        logger.info("âś“ Connected to sauropod")
 
-        # ── Phase 1: wait for edge-manager pod to appear ─────────────────────────
-        logger.info(f"⏳ Phase 1: Waiting for pod '{pod_prefix}*' in namespace '{namespace}'")
+        # â”€â”€ Phase 1: wait for edge-manager pod to appear â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info(f"âŹł Phase 1: Waiting for pod '{pod_prefix}*' in namespace '{namespace}'")
         logger.info(f"   Checking every {appear_interval}s (max {appear_max} checks)...")
         pod_name = None
         for check in range(1, appear_max + 1):
@@ -4402,16 +3931,16 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
                     pod_name = line.split()[0]
                     break
             if pod_name:
-                logger.info(f"  ✓ #{check}/{appear_max}: Pod found → {pod_name}")
+                logger.info(f"  âś“ #{check}/{appear_max}: Pod found â†’ {pod_name}")
                 break
             logger.info(f"  #{check}/{appear_max}: Pod '{pod_prefix}*' not yet visible, waiting {appear_interval}s...")
 
         if not pod_name:
-            logger.error(f"✗ Pod '{pod_prefix}*' did not appear after {appear_interval * appear_max}s")
+            logger.error(f"âś— Pod '{pod_prefix}*' did not appear after {appear_interval * appear_max}s")
             return False
 
-        # ── Phase 2: wait for completion log line ────────────────────────────────
-        logger.info(f"⏳ Phase 2: Monitoring logs of {pod_name} (every {log_interval}s, max {log_max} checks)...")
+        # â”€â”€ Phase 2: wait for completion log line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        logger.info(f"âŹł Phase 2: Monitoring logs of {pod_name} (every {log_interval}s, max {log_max} checks)...")
         for check in range(1, log_max + 1):
             time.sleep(log_interval)
             logger.info(f"  Check #{check}/{log_max}: kubectl logs {pod_name} -n {namespace}...")
@@ -4421,18 +3950,18 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
             )
             line = result['stdout'].strip()
             if line:
-                logger.info(f"  ✓ Completed: {line}")
+                logger.info(f"  âś“ Completed: {line}")
                 logger.info("=" * 80)
-                logger.info("✓ Edge gateway deployment completed successfully")
+                logger.info("âś“ Edge gateway deployment completed successfully")
                 logger.info("=" * 80)
                 return True
             logger.info(f"  Not yet completed, waiting {log_interval}s...")
 
-        logger.error(f"✗ Timeout: completion marker not found after {log_interval * log_max}s")
+        logger.error(f"âś— Timeout: completion marker not found after {log_interval * log_max}s")
         return False
 
     except Exception as e:
-        logger.error(f"✗ Operation failed: {e}")
+        logger.error(f"âś— Operation failed: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4462,7 +3991,7 @@ def install_policy_on_sauropod(config, logger, verbose=True,
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
-    logger.info(f"➜ Installing policy '{policy_name}' on units={units}...")
+    logger.info(f"âžś Installing policy '{policy_name}' on units={units}...")
     result = api.install_policy(
         policy=policy_name,
         units=units,
@@ -4474,10 +4003,10 @@ def install_policy_on_sauropod(config, logger, verbose=True,
 
     error_code = result.get('ErrorCode') or result.get('ID', '0')
     if str(error_code) not in ('0', ''):
-        logger.error(f"✗ Policy installation failed: {result}")
+        logger.error(f"âś— Policy installation failed: {result}")
         return False
 
-    logger.info(f"✓ Policy '{policy_name}' installed on sauropod")
+    logger.info(f"âś“ Policy '{policy_name}' installed on sauropod")
     return True
 
 
@@ -4510,7 +4039,7 @@ def import_edge_dashboard(
     )
 
     if success:
-        logger.info("✓ Edge dashboard imported successfully")
+        logger.info("âś“ Edge dashboard imported successfully")
 
     return success
 
@@ -4544,11 +4073,11 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
                     port=ssh_port, timeout=30)
 
-    # ── Step 1: open NodePort range on sauropod firewall ────────────────────────
-    logger.info("➜ Opening NodePort range 30000-32767/tcp on sauropod firewall...")
+    # â”€â”€ Step 1: open NodePort range on sauropod firewall â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    logger.info("âžś Opening NodePort range 30000-32767/tcp on sauropod firewall...")
     try:
         if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
+            logger.error("âś— Failed to connect to sauropod")
             return False
         for cmd, desc in [
             ("firewall-cmd --permanent --add-port=30000-32767/tcp", "allow 30000-32767/tcp"),
@@ -4556,24 +4085,24 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
         ]:
             result = ssh.execute_command(cmd, print_output=verbose)
             if result['rc'] != 0:
-                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
+                logger.error(f"âś— Failed to {desc}: {result['stderr']}")
                 return False
-            logger.info(f"  ✓ {desc}")
+            logger.info(f"  âś“ {desc}")
     finally:
         ssh.disconnect()
 
-    # ── Step 2: get NodePorts from sauropod ──────────────────────────────────────
-    logger.info("➜ Getting haproxy NodePorts from sauropod...")
+    # â”€â”€ Step 2: get NodePorts from sauropod â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    logger.info("âžś Getting haproxy NodePorts from sauropod...")
     try:
         if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
+            logger.error("âś— Failed to connect to sauropod")
             return False
         result = ssh.execute_command(
             "kubectl -n edge describe svc haproxy-kubernetes-ingress",
             print_output=False
         )
         if result['rc'] != 0:
-            logger.error(f"✗ kubectl failed: {result['stderr']}")
+            logger.error(f"âś— kubectl failed: {result['stderr']}")
             return False
         svc_output = result['stdout']
     finally:
@@ -4583,17 +4112,17 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
     m16016 = re.search(r'NodePort:\s+port-16016\s+(\d+)/TCP', svc_output)
     m16018 = re.search(r'NodePort:\s+port-16018\s+(\d+)/TCP', svc_output)
     if not m16016:
-        logger.error("✗ NodePort for port-16016 not found in kubectl output")
+        logger.error("âś— NodePort for port-16016 not found in kubectl output")
         return False
     if not m16018:
-        logger.error("✗ NodePort for port-16018 not found in kubectl output")
+        logger.error("âś— NodePort for port-16018 not found in kubectl output")
         return False
     node_port_16016 = m16016.group(1)
     node_port_16018 = m16018.group(1)
-    logger.info(f"  NodePort 16016 → {node_port_16016}")
-    logger.info(f"  NodePort 16018 → {node_port_16018}")
+    logger.info(f"  NodePort 16016 â†’ {node_port_16016}")
+    logger.info(f"  NodePort 16018 â†’ {node_port_16018}")
 
-    # ── Step 3: set GIM params ───────────────────────────────────────────────────
+    # â”€â”€ Step 3: set GIM params â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
@@ -4608,13 +4137,13 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
         logger.info(f"  Setting {param}={value} on sauropod ({sauropod_ip})")
         api.gim_client_params(client_ip=sauropod_ip, param_name=param, param_value=value)
 
-    # ── Step 4: schedule install + monitor ──────────────────────────────────────
-    logger.info("➜ Scheduling GIM install on sauropod...")
+    # â”€â”€ Step 4: schedule install + monitor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    logger.info("âžś Scheduling GIM install on sauropod...")
     api.gim_schedule_install(client_ip=sauropod_ip, date="now")
-    logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
+    logger.info(f"âś“ Scheduled. Waiting {installation_delay}s before monitoring...")
     time.sleep(installation_delay)
 
-    logger.info("➜ Monitoring installation progress...")
+    logger.info("âžś Monitoring installation progress...")
     check_count = 0
     while True:
         check_count += 1
@@ -4622,7 +4151,7 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
         modules = api.gim_list_client_modules(client_ip=sauropod_ip)
 
         if "ErrorCode" in modules or "ErrorMessage" in modules:
-            logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
+            logger.error(f"  âś— API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
             return False
 
         entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
@@ -4633,14 +4162,14 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
             result_mods.append({"name": m_name.group(1) if m_name else "?", "state": m_state.group(1) if m_state else "?"})
         pending = [m for m in result_mods if m["state"] != "INSTALLED"]
         if pending:
-            logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
+            logger.info(f"  âŚ› {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
             logger.info("  Waiting 30s before next check...")
             time.sleep(30)
         else:
-            logger.info("  ✓ All modules installed successfully!")
+            logger.info("  âś“ All modules installed successfully!")
             break
 
-    logger.info("✓ STAP configured for Edge on sauropod")
+    logger.info("âś“ STAP configured for Edge on sauropod")
     return True
 
 
@@ -4663,7 +4192,7 @@ def extract_zip_on_ceratops(config, logger, verbose=True,
 
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
     if not ceratops_ip:
-        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        logger.error(f"âś— IP not found for machine: {ceratops_machine}")
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
@@ -4680,7 +4209,7 @@ def extract_zip_on_ceratops(config, logger, verbose=True,
         key_file = tmp_key_path
         logger.info("  Using SSH key from custom_variables")
     else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+        logger.info("  No SSH key in custom_variables â€” using agent/default keys")
 
     try:
         ssh = SSHClient(
@@ -4691,23 +4220,23 @@ def extract_zip_on_ceratops(config, logger, verbose=True,
             timeout=30
         )
         if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            logger.error(f"âś— Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
             return False
 
         try:
             cmd = f'powershell -Command "Expand-Archive -Path \'{zip_path}\' -DestinationPath \'{dest_dir}\' -Force"'
-            logger.info(f"  ➜ Extracting {zip_path} → {dest_dir}")
+            logger.info(f"  âžś Extracting {zip_path} â†’ {dest_dir}")
             result = ssh.execute_command(cmd, timeout=120, print_output=verbose)
             if result['rc'] != 0:
-                logger.error(f"✗ Extraction failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                logger.error(f"âś— Extraction failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
                 return False
-            logger.info(f"✓ Extracted {zip_path} to {dest_dir} on {ceratops_machine}")
+            logger.info(f"âś“ Extracted {zip_path} to {dest_dir} on {ceratops_machine}")
             return True
         finally:
             ssh.disconnect()
 
     except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
+        logger.error(f"âś— Unexpected error: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4734,7 +4263,7 @@ def install_gim_on_ceratops(config, logger, verbose=True,
 
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
     if not ceratops_ip:
-        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        logger.error(f"âś— IP not found for machine: {ceratops_machine}")
         return False
 
     if not local_ip:
@@ -4754,7 +4283,7 @@ def install_gim_on_ceratops(config, logger, verbose=True,
         key_file = tmp_key_path
         logger.info("  Using SSH key from custom_variables")
     else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+        logger.info("  No SSH key in custom_variables â€” using agent/default keys")
 
     try:
         ssh = SSHClient(
@@ -4765,23 +4294,23 @@ def install_gim_on_ceratops(config, logger, verbose=True,
             timeout=30
         )
         if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            logger.error(f"âś— Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
             return False
 
         try:
             cmd = f'"{setup_exe}" -UNATTENDED -APPLIANCE {appliance} -LOCALIP {local_ip}'
-            logger.info(f"  ➜ {cmd}")
+            logger.info(f"  âžś {cmd}")
             result = ssh.execute_command(cmd, timeout=300, print_output=verbose)
             if result['rc'] != 0:
-                logger.error(f"✗ GIM installation failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                logger.error(f"âś— GIM installation failed (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
                 return False
-            logger.info(f"✓ GIM installed on {ceratops_machine}")
+            logger.info(f"âś“ GIM installed on {ceratops_machine}")
             return True
         finally:
             ssh.disconnect()
 
     except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
+        logger.error(f"âś— Unexpected error: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())
@@ -4829,7 +4358,7 @@ def install_winstap_on_ceratops(config, logger, verbose=False,
     logger.info(f"  - SQL Guard IP (collector '{collector_name}'): {sqlguard_ip}")
     logger.info(f"  - Module version: {module_version}")
 
-    logger.info(f"⌛ Waiting {gim_registration_delay}s for GIM client registration...")
+    logger.info(f"âŚ› Waiting {gim_registration_delay}s for GIM client registration...")
     time.sleep(gim_registration_delay)
 
     return install_gim_module(
@@ -4883,7 +4412,7 @@ def configure_fam_on_raptor(config, logger, verbose=True,
 
     logger.info("Scheduling GIM install on raptor...")
     api.gim_schedule_install(client_ip=stap_host, date="now")
-    logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
+    logger.info(f"âś“ Scheduled. Waiting {installation_delay}s before monitoring...")
     time.sleep(installation_delay)
 
     logger.info("Monitoring installation progress...")
@@ -4895,7 +4424,7 @@ def configure_fam_on_raptor(config, logger, verbose=True,
         modules = api.gim_list_client_modules(client_ip=stap_host)
 
         if "ErrorCode" in modules or "ErrorMessage" in modules:
-            logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
+            logger.error(f"  âś— API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
             return False
 
         entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
@@ -4907,13 +4436,13 @@ def configure_fam_on_raptor(config, logger, verbose=True,
 
         pending = [m for m in result_mods if m["state"] != "INSTALLED"]
         if pending:
-            logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
+            logger.info(f"  âŚ› {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
             logger.info("  Waiting 30s before next check...")
             time.sleep(30)
         else:
-            logger.info("  ✓ All modules installed successfully!")
+            logger.info("  âś“ All modules installed successfully!")
 
-    logger.info("✓ FAM configured on raptor")
+    logger.info("âś“ FAM configured on raptor")
     return True
 
 
@@ -4947,7 +4476,7 @@ def import_fam_policy(
     )
 
     if success:
-        logger.info("✓ FAM policy imported successfully")
+        logger.info("âś“ FAM policy imported successfully")
 
     return success
 
@@ -5018,7 +4547,7 @@ def enable_fam_protect_privileged_on_raptor(config, logger, verbose=True, **kwar
         logger.error("Failed to enable fam_protect_privileged on raptor")
         return False
 
-    logger.info("✓ fam_protect_privileged=1 set and STAP restarted on raptor")
+    logger.info("âś“ fam_protect_privileged=1 set and STAP restarted on raptor")
     return True
 
 
@@ -5036,7 +4565,7 @@ def enable_fam_protect_privileged_on_ceratops(config, logger, verbose=True,
 
     ceratops_ip = config.get_machine_ip(ceratops_machine, use_private=True)
     if not ceratops_ip:
-        logger.error(f"✗ IP not found for machine: {ceratops_machine}")
+        logger.error(f"âś— IP not found for machine: {ceratops_machine}")
         return False
 
     ssh_private_key = config.get_custom_variable('ssh_private_key')
@@ -5053,7 +4582,7 @@ def enable_fam_protect_privileged_on_ceratops(config, logger, verbose=True,
         key_file = tmp_key_path
         logger.info("  Using SSH key from custom_variables")
     else:
-        logger.info("  No SSH key in custom_variables — using agent/default keys")
+        logger.info("  No SSH key in custom_variables â€” using agent/default keys")
 
     ini_file = r'C:\Program Files\IBM\Windows Fam Monitor\Bin\Guard_Tap.ini'
 
@@ -5066,7 +4595,7 @@ def enable_fam_protect_privileged_on_ceratops(config, logger, verbose=True,
             timeout=30
         )
         if not ssh.connect():
-            logger.error(f"✗ Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
+            logger.error(f"âś— Failed to connect to {ceratops_machine} ({ceratops_ip}) as {ssh_username}")
             return False
 
         try:
@@ -5082,21 +4611,21 @@ def enable_fam_protect_privileged_on_ceratops(config, logger, verbose=True,
             ]
 
             for cmd, desc in steps:
-                logger.info(f"  ➜ {desc}...")
+                logger.info(f"  âžś {desc}...")
                 result = ssh.execute_command(cmd, timeout=60, print_output=verbose)
                 if result['rc'] != 0:
-                    logger.error(f"✗ Failed to {desc} (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
+                    logger.error(f"âś— Failed to {desc} (rc={result['rc']}): {result['stderr'].strip() or result['stdout'].strip()}")
                     return False
-                logger.info(f"  ✓ {desc}")
+                logger.info(f"  âś“ {desc}")
 
-            logger.info(f"✓ FAM_PROTECT_PRIVILEGED=1 set and service restarted on {ceratops_machine}")
+            logger.info(f"âś“ FAM_PROTECT_PRIVILEGED=1 set and service restarted on {ceratops_machine}")
             return True
 
         finally:
             ssh.disconnect()
 
     except Exception as e:
-        logger.error(f"✗ Unexpected error: {e}")
+        logger.error(f"âś— Unexpected error: {e}")
         if debug:
             import traceback
             logger.error(traceback.format_exc())

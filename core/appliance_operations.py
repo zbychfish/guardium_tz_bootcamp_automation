@@ -13,7 +13,6 @@ from .appliance_config_loader import ApplianceConfigLoader
 import concurrent.futures
 from typing import Callable, Dict, Any, Tuple
 
-
 def _header(logger, title: str) -> None:
     logger.info("=" * 60)
     logger.info(title)
@@ -1773,8 +1772,7 @@ def install_gim_module(
     demo_password: Optional[str] = None,
     monitor_installation: bool = True,
     installation_delay: int = 10,
-    debug: bool = False
-) -> bool:
+    debug: bool = False) -> bool:
     
     from core.guardium_rest_api import create_guardium_api
 

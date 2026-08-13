@@ -367,9 +367,6 @@ groups:
         description: "Install GIM (Guardium Installation Manager) on raptor machine"
         args:
           gim_installer_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/shell/guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-9-linux-x86_64.gim.sh"
-          install_dir: "/opt/guardium"
-          # tapip: ""     # Optional - auto-detected from raptor config if not provided
-          # sqlguardip: "" # Optional - auto-detected from cm config if not provided
           debug: false
     
       - name: install_stap_on_raptor
@@ -388,7 +385,7 @@ groups:
 
       - name: enable_atap_for_postgres_on_raptor
         function: enable_atap_for_postgres_on_raptor
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Enable ATAP (Application Transparent Access Protection) for PostgreSQL on raptor"
         args:
           db_user: "postgres"
@@ -400,7 +397,7 @@ groups:
 
       - name: correct_mysql_ie
         function: correct_mysql_ie
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Correct MySQL Inspection Engine definitions"
         args:
           cm_appliance: "cm"
@@ -408,7 +405,7 @@ groups:
 
       - name: enable_atap_for_mongo
         function: enable_atap_for_mongo
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Enable ATAP for MongoDB on raptor"
 
       - name: import_atap_definitions
@@ -420,13 +417,6 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
-      # - name: current_test
-      #   function: current_test
-      #   module: tasks.current_test
-      #   description: "TEST: Disable default accounts only (diagnostic)"
-      #   args:
-      #     appliance_name: "cm01"
-
   exit_lab:
     name: "Exit Lab"
     description: "Configure DB2 exit for Guardium monitoring"
@@ -435,12 +425,12 @@ groups:
     stages:
       - name: configure_db2_exit
         function: db2_exit_configuration
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Configure DB2 exit for Guardium monitoring on raptor"
       
       - name: configure_db2_exit_ie
         function: configure_db2_exit_ie
-        module: tasks.labs
+        module: tasks.agent_labs
         description: "Configure DB2 Exit Inspection Engine on collector"
         args:
           cm_appliance: "cm"
