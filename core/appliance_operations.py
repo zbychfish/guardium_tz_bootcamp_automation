@@ -233,9 +233,11 @@ def setup_appnode(
     prompt_regex: Optional[str] = None,
     debug: bool = True,
     retry_interval: int = 60,
-    max_retries: int = 10) -> bool:
-
+    max_retries: int = 10,) -> bool:
+    
     import traceback
+
+    _header(logger, f"SETUP APPNODE: {appliance_name}")
 
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
     if not params:
@@ -247,25 +249,24 @@ def setup_appnode(
         client = ApplianceClient(
             host=host, user=params['user'], password=params['password'],
             prompt_regex=params['prompt_regex'], initial_pattern=None,
-            timeout=60, strip_ansi=True, debug=debug
+            timeout=60, strip_ansi=True, debug=debug,
         )
-
         if not client.connect():
-            logger.error(f"[{appliance_name}] failed to connect")
+            logger.error(f"[{appliance_name}] ✗ failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] âžś store unit type app-node")
+        logger.info(f"[{appliance_name}] ➜ store unit type app-node")
         try:
             client.execute_command_with_confirmation(
                 command="store unit type app-node",
                 confirmation_pattern=r"Are you sure you want to proceed\s*\(y/n\)\?",
                 response="y",
-                confirm_idle=0.2
+                confirm_idle=0.2,
             )
-            logger.info(f"[{appliance_name}] âś“ command sent, system restarting")
+            logger.info(f"[{appliance_name}] ✓ command sent, system restarting")
         except RuntimeError as e:
             if "Channel closed" in str(e):
-                logger.info(f"[{appliance_name}] âś“ system restarting (connection closed)")
+                logger.info(f"[{appliance_name}] ✓ system restarting (connection closed)")
             else:
                 raise
 
@@ -274,7 +275,7 @@ def setup_appnode(
         except Exception:
             pass
 
-        logger.info(f"[{appliance_name}] âŚ› waiting online (max {max_retries * retry_interval}s)")
+        logger.info(f"[{appliance_name}] ⌛ waiting online (max {max_retries * retry_interval}s)")
         start_time = time.time()
 
         for retry_count in range(1, max_retries + 1):
@@ -283,30 +284,30 @@ def setup_appnode(
                 test_client = ApplianceClient(
                     host=host, user=params['user'], password=params['password'],
                     prompt_regex=params['prompt_regex'], initial_pattern=None,
-                    timeout=30, strip_ansi=True, debug=False
+                    timeout=30, strip_ansi=True, debug=False,
                 )
                 if test_client.connect():
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"[{appliance_name}] âś“ back online ({elapsed}s, {retry_count} attempts)")
-                    logger.info(f"[{appliance_name}] âžś show unit type")
+                    logger.info(f"[{appliance_name}] ✓ back online ({elapsed}s, {retry_count} attempts)")
+                    logger.info(f"[{appliance_name}] ➜ show unit type")
                     verify_result = test_client.execute_command("show unit type")
                     test_client.disconnect()
                     if "App-Node" in verify_result or "App_Node" in verify_result:
-                        logger.info(f"[{appliance_name}] âś“ unit type=App-Node")
+                        logger.info(f"[{appliance_name}] ✓ unit type=App-Node")
                         return True
-                    else:
-                        logger.error(f"[{appliance_name}] âś— unexpected unit type: {verify_result.strip()}")
-                        return False
+                    logger.error(f"[{appliance_name}] ✗ unexpected unit type: {verify_result.strip()}")
+                    return False
             except Exception:
                 pass
 
         elapsed = int(time.time() - start_time)
-        logger.error(f"[{appliance_name}] âś— timeout ({elapsed}s, {max_retries} attempts)")
+        logger.error(f"[{appliance_name}] ✗ timeout ({elapsed}s, {max_retries} attempts)")
         return False
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] âś— {e}")
-        logger.error(traceback.format_exc())
+        logger.error(f"[{appliance_name}] ✗ {e}")
+        if debug:
+            logger.error(traceback.format_exc())
         return False
 
 def setup_kafka_node(

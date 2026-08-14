@@ -832,7 +832,7 @@ groups:
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"
-    deployed_with: []
+    deployed_with: [new_architecture]
     dependencies: [va_api]
     stages:
       - name: setup_minio_on_raptor
@@ -846,8 +846,6 @@ groups:
         description: "Setup app-node on appliance by executing 'store unit type app-node', wait for reboot and reconnection"
         args:
           appliance_name: "appnode1"
-          retry_interval: 60
-          max_retries: 10
 
       - name: prepare_appnode_for_patching
         function: copy_single_file_to_appliance_task
@@ -906,7 +904,7 @@ groups:
   edge_lab:
     name: "Edge Lab"
     description: "Install Edge patch on CM and configure Edge features"
-    deployed_with: []
+    deployed_with: [new_architecture]
     dependencies: [ltr_lab]
     stages:
       - name: prepare_cm_for_edge_patching  

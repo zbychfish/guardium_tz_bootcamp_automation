@@ -112,15 +112,13 @@ def setup_appnode(
     retry_interval: int = 60,
     max_retries: int = 10,
     debug: bool = False,
-    **kwargs) -> bool:
-    
+    **kwargs
+) -> bool:
     if not _require(logger, appliance_name=appliance_name):
         return False
     return _setup_appnode(
         config=config, logger=logger,
         appliance_name=appliance_name,
-        user=kwargs.get('user'), password=kwargs.get('password'),
-        prompt_regex=kwargs.get('prompt_regex'),
         retry_interval=retry_interval, max_retries=max_retries,
         debug=debug,
     )
