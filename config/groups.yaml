@@ -827,7 +827,7 @@ groups:
   policies_reports_part1:
     name: "Policies and Reports"
     description: "Basics - Policies and Reports"
-    deployed_with: [standard_demo]
+    deployed_with: []
     dependencies: [oracle_lab]
     stages:
       - name: stop_raptor_databases
