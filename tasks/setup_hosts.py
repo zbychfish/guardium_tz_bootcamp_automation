@@ -980,6 +980,7 @@ def configure_mssql_on_ceratops(config, logger, verbose=True,
                 (f'sqlcmd -S localhost -E -Q "ALTER LOGIN sa WITH PASSWORD = \'{pwd}\'"',       'set SA password'),
                 ('net stop mssqlserver',                                                       'stop MSSQLSERVER'),
                 ('net start mssqlserver',                                                      'start MSSQLSERVER'),
+                ('netsh advfirewall firewall add rule name="SQL Server 1433" dir=in action=allow protocol=TCP localport=1433 profile=any', 'open port 1433/TCP'),
             ]
 
             for cmd, desc in steps:
