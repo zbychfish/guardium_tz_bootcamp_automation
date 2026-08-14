@@ -1009,7 +1009,7 @@ groups:
 
       - name: install_edge_patch_on_cm
         function: install_edge_patch_via_api
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Initiate Edge patch installation on cm via REST API patch_install"
         args:
           cm_appliance: "cm"
@@ -1019,7 +1019,7 @@ groups:
 
       - name: monitor_edge_patch_on_cm
         function: monitor_edge_patch_installation
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Monitor Edge patch installation on cm: wait for appear (15s), then DONE (60s)"
         args:
           cm_appliance: "cm"
@@ -1032,7 +1032,7 @@ groups:
 
       - name: install_k3s_on_sauropod
         function: install_k3s_on_sauropod
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Install k3s v1.32.13+k3s1 on sauropod (--disable traefik), wait for 3 pods Running, patch CoreDNS"
         args:
           k3s_version: "v1.32.13+k3s1"
@@ -1044,7 +1044,7 @@ groups:
 
       - name: register_edge_gateway
         function: register_edge_gateway
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge"
         args:
           cm_appliance: "cm"
@@ -1058,7 +1058,7 @@ groups:
 
       - name: download_edge_bundle_via_api
         function: download_edge_bundle_via_api
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Download edge bundle from CM REST API get_bundle, save as /tmp/edge.tar.gz on sauropod"
         args:
           cm_appliance: "cm"
@@ -1068,14 +1068,14 @@ groups:
 
       - name: prepare_sauropod_for_edge
         function: prepare_sauropod_for_edge
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Add firewall-cmd rules (6443/tcp, 8472/udp, 10250/tcp, masquerade) on raptor, install expect on sauropod"
         args:
           debug: false
 
       - name: deploy_edge_gateway
         function: deploy_edge_gateway
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Run edge-install.sh from /tmp/sauropod.demo.guardium with TTY"
         args:
           edge_dir: "/tmp/sauropod.demo.guardium"
@@ -1085,7 +1085,7 @@ groups:
 
       - name: monitor_edge_gateway_deployment
         function: monitor_edge_gateway_deployment
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Wait for edge-manager pod, then monitor logs until EDGE_SERVICES_INSTALLATION_STATUS is Completed"
         args:
           namespace: "edge"
@@ -1098,7 +1098,7 @@ groups:
 
       - name: install_policy_on_sauropod
         function: install_policy_on_sauropod
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Install 'Default bootcamp policy' on sauropod via REST API (units param)"
         args:
           cm_appliance: "cm"
@@ -1109,7 +1109,7 @@ groups:
 
       - name: import_edge_dashboard
         function: import_edge_dashboard
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Import Edge dashboard from exports/exp_dashboard_edge.sql"
         args:
           cm_appliance: "cm"
@@ -1118,7 +1118,7 @@ groups:
 
       - name: configure_stap_for_edge_on_sauropod
         function: configure_stap_for_edge_on_sauropod
-        module: tasks.labs
+        module: tasks.edge_labs
         description: "Get haproxy NodePorts from k3s, set STAP params via GIM API, schedule install"
         args:
           cm_appliance: "cm"
