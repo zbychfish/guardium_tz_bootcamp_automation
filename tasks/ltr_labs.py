@@ -4,6 +4,7 @@ import time
 import traceback
 
 from core.appliance_client import ApplianceClient
+from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_operations import (
     _get_appliance_connection_params,
     setup_appnode as _setup_appnode,
@@ -112,8 +113,8 @@ def setup_appnode(
     retry_interval: int = 60,
     max_retries: int = 10,
     debug: bool = False,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
+
     if not _require(logger, appliance_name=appliance_name):
         return False
     return _setup_appnode(
@@ -194,14 +195,84 @@ def import_minio_CA_certificate(
 
     if not _require(logger, appliance_name=appliance_name):
         return False
-    return import_datalake_s3_certificate(
-        config=config, logger=logger,
-        appliance_name=appliance_name,
-        certificate_file_path=certificate_file_path,
-        user=kwargs.get('user'), password=kwargs.get('password'),
-        prompt_regex=kwargs.get('prompt_regex'),
-        debug=debug,
-    )
+
+    _header(logger, f"IMPORT DATALAKE S3 CERTIFICATE: {appliance_name}")
+
+    try:
+        with open(certificate_file_path, 'r') as f:
+            cert_content = f.read()
+        if not cert_content or 'BEGIN CERTIFICATE' not in cert_content:
+            logger.error("Invalid certificate content")
+            return False
+        logger.info(f"✓ Certificate read from {certificate_file_path}")
+    except FileNotFoundError:
+        logger.error(f"Certificate file not found: {certificate_file_path}")
+        return False
+    except Exception as e:
+        logger.error(f"Error reading certificate file: {e}")
+        return False
+
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
+        return False
+
+    try:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'],
+            initial_pattern=None, timeout=120, strip_ansi=True, debug=debug,
+        )
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+
+        try:
+            logger.info("➜ store certificate application datalake s3 console")
+            client.channel.send(b"store certificate application datalake s3 console\r")
+
+            buf = ""
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                if client.channel.recv_ready():
+                    buf += client.channel.recv(65535).decode(errors="replace")
+                    if "Please paste your Trusted certificate below in PEM encoded format" in buf:
+                        logger.info("✓ Certificate prompt detected")
+                        break
+                time.sleep(0.1)
+
+            for line in cert_content.splitlines():
+                client.channel.send((line + "\n").encode())
+                time.sleep(0.01)
+            time.sleep(0.5)
+            client.channel.send(b"\x04")
+
+            time.sleep(2)
+            buf = ""
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                if client.channel.recv_ready():
+                    buf += client.channel.recv(65535).decode(errors="replace")
+                if "SUCCESS: Certificate imported successfully" in buf:
+                    logger.info("✓ Certificate imported successfully")
+                    return True
+                if client.prompt_re.search(buf):
+                    break
+                time.sleep(0.1)
+
+            if "SUCCESS: Certificate imported successfully" in buf:
+                logger.info("✓ Certificate imported successfully")
+                return True
+            logger.error(f"✗ Certificate import failed: {buf}")
+            return False
+
+        finally:
+            client.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Error importing certificate: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
 
 def distribute_minio_certificate(
     config,
@@ -213,14 +284,65 @@ def distribute_minio_certificate(
     debug: bool = False,
     **kwargs) -> bool:
 
-    return distribute_datalake_certificate(
-        config=config, logger=logger,
-        appliance_name=appliance_name,
-        user=kwargs.get('user'), password=kwargs.get('password'),
-        prompt_regex=kwargs.get('prompt_regex'),
-        timeout=timeout, check_interval=check_interval,
-        debug=debug,
-    )
+    import re
+
+    _header(logger, f"DISTRIBUTE DATALAKE CERTIFICATE FROM {appliance_name}")
+
+    from core.appliance_config_loader import ApplianceConfigLoader
+    loader = ApplianceConfigLoader(config_loader=config)
+    all_appliances = loader.get_all_appliances()
+    appnodes   = [n for n, c in all_appliances.items() if c.get('type') == 'appnode']
+    collectors = [n for n, c in all_appliances.items() if c.get('type') == 'collector']
+    managed = len(appnodes) + len(collectors)
+    expected_success = managed + 1
+    expected_info    = 2
+
+    logger.info(f"  appnodes={appnodes}  collectors={collectors}")
+    logger.info(f"  expected Success={expected_success}  INFO={expected_info}")
+
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
+        return False
+
+    try:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'],
+            initial_pattern=None, timeout=120, strip_ansi=True, debug=debug,
+        )
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+
+        try:
+            logger.info("➜ distribute application certificate datalake all_managed true")
+            client.execute_command("distribute application certificate datalake all_managed true", timeout=300)
+            logger.info("✓ Distribution command executed")
+
+            start = time.time()
+            success_count = info_count = 0
+            while time.time() - start < timeout:
+                time.sleep(check_interval)
+                output = client.execute_command("distribute certificate showlog all", timeout=300)
+                success_count = len(re.findall(r'\bSuccess\b', output, re.IGNORECASE))
+                info_count    = len(re.findall(r'\bINFO\b', output))
+                elapsed = int(time.time() - start)
+                logger.info(f"  [{elapsed}s] Success={success_count}/{expected_success}  INFO={info_count}/{expected_info}")
+                if success_count >= expected_success and info_count >= expected_info:
+                    logger.info(f"✓ Certificate distribution completed ({elapsed}s)")
+                    return True
+
+            logger.error(f"✗ Distribution timeout after {timeout}s (Success={success_count}/{expected_success}, INFO={info_count}/{expected_info})")
+            return False
+
+        finally:
+            client.disconnect()
+
+    except Exception as e:
+        logger.error(f"✗ Error during certificate distribution: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
 
 def activate_ltr(
     config,
@@ -229,14 +351,68 @@ def activate_ltr(
     appliance_name: str = "cm",
     debug: bool = False,
     **kwargs) -> bool:
+    
+    _header(logger, f"ACTIVATE LTR ON {appliance_name}")
 
-    return _activate_ltr(
-        config=config, logger=logger,
-        appliance_name=appliance_name,
-        user=kwargs.get('user'), password=kwargs.get('password'),
-        prompt_regex=kwargs.get('prompt_regex'),
-        debug=debug,
+    admin_pwd = config.get_custom_variable('pwd')
+    if not _require(logger, pwd=admin_pwd):
+        return False
+
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
+        return False
+
+    cmd = (
+        f'grdapi configure_complete_cold_storage '
+        f'protocol="CUSTOM" '
+        f'objectStorageEndpoint="https://raptor.demo.guardium:9000" '
+        f'accessKey=minioadmin '
+        f'secretKey="{admin_pwd}" '
+        f'dataBucket=guardium-ltr '
+        f'resultSchema="datalake_reports" '
+        f'region="US_EAST_1" '
+        f'coldCatalogEndpoint="thrift://appnode1.demo.guardium:9083" '
+        f'coldCatalogSchema="datalake" '
+        f'coldStorageName="datalake" '
+        f'queryEngineHost="appnode1.demo.guardium" '
+        f'debug=3'
     )
+    logger.info(f"➜ {cmd.replace(admin_pwd, '***')}")
+
+    try:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'],
+            initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
+        )
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+
+        try:
+            output = client.execute_command(cmd, timeout=300)
+        finally:
+            client.disconnect()
+
+        indicators = [
+            "Cold Storage Maintenance Setup Completed",
+            "Cold Storage ID:",
+            "Cold Storage Name: datalake",
+            '"status":"success"',
+            "Complete cold storage configuration successful",
+        ]
+        found = [ind for ind in indicators if ind.lower() in output.lower()]
+        if len(found) >= 3:
+            logger.info(f"✓ LTR activated ({len(found)}/{len(indicators)} indicators)")
+            return True
+        logger.error(f"✗ LTR activation failed ({len(found)}/{len(indicators)} indicators)\n{output}")
+        return False
+
+    except Exception as e:
+        logger.error(f"✗ Error activating LTR: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
 
 def import_ltr_dashboard(
     config,
