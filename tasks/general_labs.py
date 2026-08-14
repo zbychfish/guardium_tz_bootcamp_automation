@@ -159,6 +159,7 @@ def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
 
 def add_postgres_app_profile_member(config, logger, verbose=True,
                                     cm_appliance="cm", **kwargs):
+                                    
     _header(logger, "ADD POSTGRES APP PROFILE MEMBER")
 
     raptor_ip = config.get_machine_ip('raptor', use_private=True)
