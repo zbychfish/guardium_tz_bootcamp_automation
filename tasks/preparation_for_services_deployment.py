@@ -16,7 +16,7 @@ from core import execute_commands, download_and_extract, ConfigLoader
 from core.ssh_client import SSHClient
 
 
-def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def update_system_packages(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     logger.info("Updating system packages on raptor (excluding kernel)")
     if not execute_commands(["dnf update --exclude=kernel* -y"], logger):
         logger.error("✗ System update failed")
@@ -34,7 +34,7 @@ def update_system_packages(config: ConfigLoader, logger, verbose: bool = True) -
     return True
 
 
-def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     logger.info("Creating upload directory")
     if not execute_commands(["mkdir -p /opt/guardium_tz_bootcamp_automation/upload"], logger):
         logger.error("✗ Failed to create upload directory")
@@ -92,7 +92,7 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True) -
     return True
 
 
-def configure_dbtraffic(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def configure_dbtraffic(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     logger.info("Configuring guardium_notes_dbtraffic (venv, yaml configs, deps)")
 
     root_password = config.get_custom_variable("pwd")
@@ -103,7 +103,7 @@ def configure_dbtraffic(config: ConfigLoader, logger, verbose: bool = True) -> b
     dbtraffic_dir = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
     venv_python = f"{dbtraffic_dir}/venv/bin/python3.12"
 
-    common_scenario = """\
+    common_scenario = f"""\
 workload:
   duration_seconds: 3600  # 60 minutes (used if --duration not specified)
   think_time_ms: 250      # normal speed (used if --speed not specified)
@@ -118,7 +118,7 @@ scenario:
       - appuser2
     admin_users:
       - adminuser1
-    default_password: password"""
+    default_password: {root_password}"""
 
     commands = [
         f"""cat > {dbtraffic_dir}/config/pgsql.yaml <<'EOF'
@@ -147,6 +147,19 @@ database:
 
 {common_scenario}
 EOF""",
+        f"""cat > {dbtraffic_dir}/config/mssql_ceratops.yaml <<'EOF'
+# Admin config - for deploy-schema, seed-data, cleanup-schema, rebuild
+# Use super user (postgres, tom, etc.) with full privileges
+database:
+  type: mssql
+  host: ceratops.demo.guardium
+  port: 1433
+  database: master
+  user: sa
+  password: {root_password}
+
+{common_scenario}
+EOF""",
         f"cd {dbtraffic_dir} && python3.12 -m venv venv",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install --upgrade pip",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install -e .",
@@ -160,7 +173,7 @@ EOF""",
     return True
 
 
-def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def configure_swap(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     logger.info("Configuring 8G swap file on raptor")
     commands = [
         "fallocate -l 8G /home/swapfile",
@@ -176,7 +189,7 @@ def configure_swap(config: ConfigLoader, logger, verbose: bool = True) -> bool:
     return True
 
 
-def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     logger.info("Installing kernel-devel, Java 11 and podman on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
