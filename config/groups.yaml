@@ -554,36 +554,26 @@ groups:
     stages:
       - name: extract_zip_on_ceratops
         function: extract_zip_on_ceratops
-        module: tasks.labs
+        module: tasks.windows_labs
         description: "Extract GIM-Installer zip on ceratops to C:\\bootcamp"
         args:
-          ceratops_machine: "ceratops"
-          ssh_username: "itzuser"
           zip_path: 'C:\bootcamp\zip\GIM-Installer-12.2_r120202259_1.zip'
           dest_dir: 'C:\bootcamp\gim_unpacked'
-          debug: false
 
       - name: install_gim_on_ceratops
         function: install_gim_on_ceratops
-        module: tasks.labs
+        module: tasks.windows_labs
         description: "Run Setup.exe unattended to install GIM client on ceratops"
         args:
-          ceratops_machine: "ceratops"
-          ssh_username: "itzuser"
           setup_exe: 'C:\bootcamp\gim_unpacked\Setup.exe'
           appliance: "cm.demo.guardium"
-          debug: false
 
       - name: install_winstap_on_ceratops
         function: install_winstap_on_ceratops
-        module: tasks.labs
+        module: tasks.windows_labs
         description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
         args:
-          appliance_name: "cm"
-          collector_name: "coll1"
-          module: "WINSTAP"
           module_version: "12.2_r120202259_1"
-          debug: false
 
   fam_lab:
     name: "FAM Lab"
