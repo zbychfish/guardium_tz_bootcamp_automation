@@ -500,7 +500,7 @@ groups:
     stages:
       - name: install_filebeat_on_sauropod
         function: install_filebeat_on_sauropod
-        module: tasks.labs
+        module: tasks.uc_labs
         description: "Install and configure Filebeat on sauropod for Cassandra audit logs"
         args:
           rpms_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/rpms"
@@ -643,7 +643,7 @@ groups:
     stages:
       - name: configure_fam_on_raptor
         function: configure_fam_on_raptor
-        module: tasks.labs
+        module: tasks.fam_labs
         description: "Set STAP_FAM_ENABLED, STAP_FAM_INSTALLED, STAP_UID_CHAIN_SSHD_IP, STAP_UID_CHAIN_TRACE on raptor, schedule and monitor"
         args:
           cm_appliance: "cm"
@@ -652,7 +652,7 @@ groups:
 
       - name: import_fam_policy
         function: import_fam_policy
-        module: tasks.labs
+        module: tasks.fam_labs
         description: "Import FAM policy definitions from exp_fam_policy.sql to CM"
         args:
           cm_appliance: "cm"
@@ -661,7 +661,7 @@ groups:
 
       - name: install_fammonitor_on_ceratops
         function: install_fammonitor_on_ceratops
-        module: tasks.labs
+        module: tasks.fam_labs
         description: "Install FAMMONITOR module on ceratops via GIM API with FAMMONITOR_SQLGUARD_IP=coll1"
         args:
           appliance_name: "cm"
@@ -672,14 +672,14 @@ groups:
 
       - name: enable_fam_protect_privileged_on_raptor
         function: enable_fam_protect_privileged_on_raptor
-        module: tasks.labs
+        module: tasks.fam_labs
         description: "Set fam_protect_privileged=1 in guard_tap.ini and restart STAP on raptor"
         args:
           debug: false
 
       - name: enable_fam_protect_privileged_on_ceratops
         function: enable_fam_protect_privileged_on_ceratops
-        module: tasks.labs
+        module: tasks.fam_labs
         description: "Set FAM_PROTECT_PRIVILEGED=1 in Guard_Tap.ini and restart IBM Guardium FAM for Windows on ceratops"
         args:
           ceratops_machine: "ceratops"
@@ -763,7 +763,7 @@ groups:
     stages:
       - name: run_uc_and_setup_kafka_node
         function: run_uc_and_setup_kafka_node
-        module: tasks.labs
+        module: tasks.uc_labs
         description: "Run Universal Connector on coll1 and setup kafka-node on kafka1"
         args:
           collector_appliance: "coll1"
@@ -772,7 +772,7 @@ groups:
 
       - name: register_kafka_cluster
         function: register_kafka_cluster
-        module: tasks.labs
+        module: tasks.uc_labs
         description: "Register Kafka cluster via REST API"
         args:
           cm_appliance: "cm"
@@ -783,7 +783,7 @@ groups:
 
       # - name: start_kafka_nodes
       #   function: start_kafka_nodes
-      #   module: tasks.labs
+      #   module: tasks.uc_labs
       #   description: "Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
       #   args:
       #     cm_appliance: "cm"
@@ -793,7 +793,7 @@ groups:
 
       - name: create_uc_credential
         function: create_uc_credential_for_oracle_container
-        module: tasks.labs
+        module: tasks.uc_labs
         description: "Create UC credential oracle_container_sauropod"
         args:
           cm_appliance: "cm"
@@ -804,7 +804,7 @@ groups:
 
       - name: import_uc_profile
         function: import_uc_profile_oracle_container
-        module: tasks.labs
+        module: tasks.uc_labs
         description: "Import UC profile from oracle_21_container_sauropod.csv"
         args:
           cm_appliance: "cm"
@@ -816,7 +816,7 @@ groups:
 
       - name: bulk_install_uc_profile
         function: bulk_install_uc_profile
-        module: tasks.labs
+        module: tasks.uc_labs
         description: "Install UC profile on coll1 via universal_connector_bulk_install"
         args:
           cm_appliance: "cm"
@@ -832,14 +832,14 @@ groups:
     stages:
       - name: stop_raptor_databases
         function: stop_raptor_databases
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Stop all database services on raptor: Informix, MongoDB, MySQL, mysql-etap, oracle-etap"
         args:
           debug: false
 
       - name: import_policies_reports_dashboard
         function: import_policies_reports_dashboard
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Import Policies and Reports dashboard to CM via REST API"
         args:
           cm_appliance: "cm"
@@ -848,7 +848,7 @@ groups:
 
       - name: add_postgres_app_profile_member
         function: add_postgres_app_profile_member
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Add raptor postgres application profile tuple member to group 'Postgres application profiles'"
         args:
           cm_appliance: "cm"
@@ -856,7 +856,7 @@ groups:
 
       - name: configure_engine_on_raptor
         function: configure_engine_on_raptor
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Configure Inspection Engine on raptor STAP (compute_average, inspect_data, log_records, record_empty)"
         args:
           cm_appliance: "cm"
@@ -865,7 +865,7 @@ groups:
 
       - name: set_stap_firewall_flags_on_raptor
         function: set_stap_firewall_flags_on_raptor
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Set STAP_FIREWALL_INSTALLED=1 and STAP_FIREWALL_DEFAULT_STATE=1 on raptor STAP, then restart agent via gim_schedule_install"
         args:
           cm_appliance: "cm"
@@ -873,14 +873,14 @@ groups:
 
       - name: run_dbtraffic_pgsql_on_raptor
         function: run_dbtraffic_pgsql_on_raptor
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Run guardium-notes-dbtraffic pgsql on raptor: rebuild schema, then run 1 minute of fast traffic"
         args:
           debug: false
 
       - name: install_app_data_access_policy
         function: install_app_data_access_policy
-        module: tasks.labs
+        module: tasks.general_labs
         description: "Install policy 'Application data access control' on coll1"
         args:
           cm_appliance: "cm"
