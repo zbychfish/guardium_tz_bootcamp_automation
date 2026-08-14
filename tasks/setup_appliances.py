@@ -28,7 +28,6 @@ from core.appliance_operations import (
 
 logger = get_logger(__name__)
 
-
 def _get_all_appliances(config, logger):
     all_appliances = ApplianceConfigLoader(config_loader=config).get_all_appliances()
     if not all_appliances:
@@ -833,8 +832,7 @@ def install_patch_on_appliance_single(
     patch_filename: Optional[str] = None,
     reinstall_answer: str = "y",
     debug: bool = False,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
 
     if not appliance_name:
         logger.error("appliance_name is required")
@@ -888,7 +886,6 @@ def install_patch_on_appliance_single(
         debug=debug,
     )
 
-
 def copy_single_file_to_appliance_task(
     config,
     logger,
@@ -898,8 +895,8 @@ def copy_single_file_to_appliance_task(
     target_dir: str = "/var/IBM/Guardium/log/patches/",
     owner: str = "tomcat:tomcat",
     debug: bool = True,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
+
     if not appliance_name:
         logger.error("appliance_name is required")
         return False
@@ -914,7 +911,6 @@ def copy_single_file_to_appliance_task(
         owner=owner,
         debug=debug,
     )
-
 
 def prepare_log_guard_dir_all(
     config,

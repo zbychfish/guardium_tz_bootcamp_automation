@@ -503,8 +503,6 @@ groups:
         module: tasks.uc_labs
         description: "Install and configure Filebeat on sauropod for Cassandra audit logs"
         args:
-          rpms_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/rpms"
-          filebeat_pattern: "filebeat-*.rpm"
           debug: false
 
   etap_lab:
@@ -766,8 +764,6 @@ groups:
         module: tasks.uc_labs
         description: "Run Universal Connector on coll1 and setup kafka-node on kafka1"
         args:
-          collector_appliance: "coll1"
-          kafka_appliance: "kafka1"
           debug: true
 
       - name: register_kafka_cluster
@@ -775,10 +771,6 @@ groups:
         module: tasks.uc_labs
         description: "Register Kafka cluster via REST API"
         args:
-          cm_appliance: "cm"
-          cluster_name: "kafka_cluster_1"
-          member_list: "kafka1.demo.guardium"
-          apply_cruise_control: false
           debug: true
 
       # - name: start_kafka_nodes
@@ -786,9 +778,6 @@ groups:
       #   module: tasks.uc_labs
       #   description: "Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
       #   args:
-      #     cm_appliance: "cm"
-      #     cluster_name: "kafka_cluster_1"
-      #     member_list: "kafka1.demo.guardium"
       #     debug: true
 
       - name: create_uc_credential
@@ -796,10 +785,6 @@ groups:
         module: tasks.uc_labs
         description: "Create UC credential oracle_container_sauropod"
         args:
-          cm_appliance: "cm"
-          credential_name: "oracle_container_sauropod"
-          credential_type: "JDBC Credentials"
-          cred_username: "guardium"
           debug: true
 
       - name: import_uc_profile
@@ -807,11 +792,6 @@ groups:
         module: tasks.uc_labs
         description: "Import UC profile from oracle_21_container_sauropod.csv"
         args:
-          cm_appliance: "cm"
-          csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
-          jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
-          update_mode: false
-          test_connections: true
           debug: true
 
       - name: bulk_install_uc_profile
@@ -819,9 +799,6 @@ groups:
         module: tasks.uc_labs
         description: "Install UC profile on coll1 via universal_connector_bulk_install"
         args:
-          cm_appliance: "cm"
-          profile_names: "oracle_21_container_sauropod"
-          bulk_install_hosts: "coll1.demo.guardium"
           debug: true
 
   policies_reports_part1:
