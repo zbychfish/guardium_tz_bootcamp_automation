@@ -1422,8 +1422,8 @@ def install_patch_on_appliance(
     reinstall_answer: str = "y",
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = True) -> bool:
-    
+    debug: bool = False,
+) -> bool:
     import socket
 
     if not patch_selection:
@@ -1478,7 +1478,7 @@ def install_patch_on_appliance(
                     buf += chunk
                     last_activity = time.time()
                     if debug:
-                        print(ansi_escape.sub('', chunk), end='', flush=True)
+                        logger.debug(f"[{appliance_name}] recv: {ansi_escape.sub('', chunk)}")
                     buf_clean = ansi_escape.sub('', buf)
 
                     if not patch_selected and ("Please choose patches" in buf_clean or "or q to quit" in buf_clean):
@@ -1490,7 +1490,7 @@ def install_patch_on_appliance(
                                 if extra:
                                     buf += extra
                                     if debug:
-                                        print(ansi_escape.sub('', extra), end='', flush=True)
+                                        logger.debug(f"[{appliance_name}] recv: {ansi_escape.sub('', extra)}")
                             except:
                                 pass
                             logger.info(f"[{appliance_name}] ➜ patch selection: {patch_selection}")
@@ -1507,7 +1507,7 @@ def install_patch_on_appliance(
                                 if extra:
                                     buf += extra
                                     if debug:
-                                        print(ansi_escape.sub('', extra), end='', flush=True)
+                                        logger.debug(f"[{appliance_name}] recv: {ansi_escape.sub('', extra)}")
                             except:
                                 pass
                             logger.info(f"[{appliance_name}] ➜ reinstall answer: {reinstall_answer}")
@@ -1523,7 +1523,7 @@ def install_patch_on_appliance(
                                 chunk = channel.recv(4096).decode('utf-8', errors='replace')
                                 if chunk:
                                     if debug:
-                                        print(ansi_escape.sub('', chunk), end='', flush=True)
+                                        logger.debug(f"[{appliance_name}] recv: {ansi_escape.sub('', chunk)}")
                                 else:
                                     break
                         except:

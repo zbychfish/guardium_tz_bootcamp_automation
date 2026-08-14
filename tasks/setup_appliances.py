@@ -832,11 +832,9 @@ def install_patch_on_appliance_single(
     patch_selection: Optional[str] = None,
     patch_filename: Optional[str] = None,
     reinstall_answer: str = "y",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    debug: bool = True
+    debug: bool = False,
+    **kwargs
 ) -> bool:
-    import os
 
     if not appliance_name:
         logger.error("appliance_name is required")
@@ -887,9 +885,7 @@ def install_patch_on_appliance_single(
         appliance_name=appliance_name,
         patch_selection=patch_selection,
         reinstall_answer=reinstall_answer,
-        user=user,
-        password=password,
-        debug=debug
+        debug=debug,
     )
 
 
