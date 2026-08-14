@@ -296,7 +296,7 @@ def deploy_vascanner_on_sauropod(
     key_file: str = ".va_api_key",
     debug: bool = False,
     **kwargs) -> bool:
-    
+
     _header(logger, "DEPLOY VA SCANNER ON SAUROPOD")
 
     ibm_key = config.get_custom_variable('ibm_container_api_key')
@@ -438,3 +438,115 @@ def import_dps(
     except Exception as e:
         logger.error(f"✗ DPS import failed: {e}")
         return False
+
+def import_va_api_definitions(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "IMPORT VA API DEFINITIONS ON CM")
+
+    success = import_definitions_files(
+        config=config,
+        logger=logger,
+        appliance_name=cm_appliance,
+        definition_files=[
+            "exp_dashboard_va.sql",
+            "exp_security_assessment_oracle_on_sauropod.sql",
+        ],
+        definitions_dir=definitions_dir,
+        debug=debug,
+    )
+    if success:
+        logger.info("✓ VA API definitions imported successfully")
+    return success
+
+def create_va_oauth_client(
+    config,
+    logger,
+    verbose: bool = True,
+    appliance_name: str = "cm",
+    client_id: str = "va-api",
+    debug: bool = False,
+    **kwargs) -> bool:
+    
+    import json
+
+    _header(logger, f"CREATE OAUTH CLIENT: {client_id}")
+
+    loader = ApplianceConfigLoader(config_loader=config)
+    appliance_config = loader.get_appliance(appliance_name)
+    if not appliance_config:
+        logger.error(f"Appliance '{appliance_name}' not found")
+        return False
+
+    appliance_ip = appliance_config.get('ip')
+    if not appliance_ip:
+        logger.error(f"No IP for appliance '{appliance_name}'")
+        return False
+
+    cli_pwd = config.get_custom_variable('cli_pwd')
+    if not _require(logger, cli_pwd=cli_pwd):
+        return False
+
+    user = loader.get_default_user(appliance_config.get('type', 'cm'))
+    prompt = loader.get_default_prompt(appliance_config.get('type', 'cm'), configured=True)
+
+    client = ApplianceClient(
+        host=appliance_ip,
+        user=user,
+        password=cli_pwd,
+        prompt_regex=prompt,
+        timeout=120,
+        debug=debug,
+    )
+
+    try:
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
+            return False
+        logger.info("✓ Connected successfully")
+
+        result = client.execute_command("grdapi list_oauth_clients")
+        if f"Client Id: {client_id}" in result:
+            logger.info(f"➜ Deleting existing OAuth client '{client_id}'...")
+            client.execute_command(f"grdapi delete_oauth_clients client_id={client_id}")
+            logger.info("✓ Existing client deleted")
+
+        logger.info(f"➜ Creating OAuth client '{client_id}'...")
+        result = client.execute_command(f'grdapi register_oauth_client client_id={client_id} grant_types="password"')
+
+        client_secret = None
+        for line in result.splitlines():
+            line = line.strip()
+            if line.startswith('{') and line.endswith('}'):
+                try:
+                    data = json.loads(line)
+                    client_secret = data.get('client_secret')
+                    if client_secret:
+                        logger.info(f"✓ OAuth client created: {client_id}")
+                        logger.info(f"  Client Secret: {client_secret[:10]}...")
+                        break
+                except json.JSONDecodeError:
+                    pass
+
+        if not client_secret:
+            logger.error(f"Failed to extract client_secret from response: {result}")
+            return False
+
+        secret_file = config.config_file.parent.parent / ".client_secret_va"
+        secret_file.write_text(client_secret, encoding='utf-8')
+        logger.info(f"✓ Client secret saved to: {secret_file}")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ Error creating OAuth client: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        client.disconnect()

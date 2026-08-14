@@ -828,21 +828,16 @@ groups:
     stages:
       - name: import_va_api_definitions
         function: import_va_api_definitions
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Import VA dashboard and Oracle on sauropod security assessment to CM via REST API"
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
-          debug: false
 
       - name: create_va_oauth_client
         function: create_va_oauth_client
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Register OAuth client 'va-api' on CM and save client_secret to .client_secret_va"
-        args:
-          appliance_name: "cm"
-          client_id: "va-api"
-          debug: false
 
   ltr_lab:
     name: "LTR Lab"
