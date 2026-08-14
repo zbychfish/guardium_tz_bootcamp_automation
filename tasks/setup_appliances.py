@@ -433,7 +433,8 @@ def create_demo_user(
     verbose: bool = True,
     appliance_name: str = "cm01",
     accessmgr_password: Optional[str] = None,
-    demo_password: Optional[str] = None) -> bool:
+    demo_password: Optional[str] = None,
+    **kwargs) -> bool:
     import traceback
     from core.guardium_rest_api import create_guardium_api
 
