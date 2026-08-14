@@ -120,7 +120,7 @@ def setup_kafka_node(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True,
+    debug: bool = False,
     retry_interval: int = 60,
     max_retries: int = 10) -> bool:
 

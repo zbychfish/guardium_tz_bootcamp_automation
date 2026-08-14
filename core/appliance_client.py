@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Appliance Client - Class for executing commands on Guardium appliances via SSH
-Adapted from guardium_bootcamp_automation/appliance_command.py
-"""
-
+import logging
 import re
 import sys
 import time
@@ -20,7 +16,6 @@ def strip_ansi(s: str) -> str:
     """Remove ANSI escape sequences from text"""
     return ANSI_RE.sub("", s)
 
-
 def _find_last_prompt_span(text: str, prompt_re: re.Pattern) -> Optional[Tuple[int, int]]:
     """Return (start, end) of the last prompt match"""
     last = None
@@ -28,10 +23,7 @@ def _find_last_prompt_span(text: str, prompt_re: re.Pattern) -> Optional[Tuple[i
         last = (m.start(), m.end())
     return last
 
-
 class ApplianceClient:
-    """Class for executing commands on Guardium appliances via SSH"""
-    
     def __init__(
         self,
         host: str,
@@ -43,7 +35,8 @@ class ApplianceClient:
         initial_pattern: Optional[str] = None,
         logout_command: str = "quit",
         strip_ansi: bool = True,
-        debug: bool = False
+        debug: bool = False,
+        logger=None
     ):
         """
         Initialize ApplianceClient
@@ -68,6 +61,7 @@ class ApplianceClient:
         self.logout_command = logout_command
         self.strip_ansi_flag = strip_ansi
         self.debug = debug
+        self._log = logger if logger is not None else logging.getLogger(__name__)
         
         self.prompt_re = re.compile(prompt_regex)
         self.initial_re = re.compile(initial_pattern) if initial_pattern else None
@@ -118,13 +112,12 @@ class ApplianceClient:
             self._read_until_regex(self.prompt_re, echo=False)
             
             if self.debug:
-                print(f"[DEBUG] Connected to {self.host}", file=sys.stderr)
-            
+                self._log.debug(f"Connected to {self.host}")
             return True
-            
+
         except Exception as e:
             if self.debug:
-                print(f"[ERROR] Connection failed: {e}", file=sys.stderr)
+                self._log.debug(f"Connection failed: {e}")
             return False
     
     def _read_until_regex(
@@ -156,36 +149,36 @@ class ApplianceClient:
         deadline = time.time() + cmd_timeout
         
         if self.debug:
-            print(f"[DEBUG] Waiting for regex: {regex.pattern} (timeout: {cmd_timeout}s)", file=sys.stderr)
-        
+            self._log.debug(f"Waiting for regex: {regex.pattern} (timeout: {cmd_timeout}s)")
+
         while time.time() < deadline:
             if self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode(errors="replace")
                 buf += chunk
-                
+
                 if self.debug:
-                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk[:100])}", file=sys.stderr)
-                
+                    self._log.debug(f"Received chunk ({len(chunk)} bytes): {repr(chunk[:100])}")
+
                 if echo:
                     out = strip_ansi(chunk) if self.strip_ansi_flag else chunk
                     sys.stdout.write(out)
                     sys.stdout.flush()
-            
+
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
             if regex.search(buf_for_match):
                 if self.debug:
-                    print(f"[DEBUG] Regex matched! Buffer length: {len(buf)}", file=sys.stderr)
+                    self._log.debug(f"Regex matched! Buffer length: {len(buf)}")
                 return buf
-            
+
             if self.channel.closed:
                 if self.debug:
-                    print(f"[DEBUG] Channel closed", file=sys.stderr)
+                    self._log.debug("Channel closed")
                 break
-            
+
             time.sleep(0.05)
-        
+
         if self.debug:
-            print(f"[DEBUG] Timeout! Buffer content: {repr(buf[:500])}", file=sys.stderr)
+            self._log.debug(f"Timeout! Buffer content: {repr(buf[:500])}")
         
         raise TimeoutError(f"Timeout waiting for: {regex.pattern} (timeout: {cmd_timeout}s)")
     
@@ -290,38 +283,36 @@ class ApplianceClient:
         fail_detected = False
         
         if self.debug:
-            print(f"[DEBUG] Executing with fail detection: {command} (timeout: {cmd_timeout}s)", file=sys.stderr)
-        
+            self._log.debug(f"Executing with fail detection: {command} (timeout: {cmd_timeout}s)")
+
         while time.time() < deadline:
             if self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode(errors="replace")
                 buf += chunk
-                
+
                 if self.debug:
-                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk[:100])}", file=sys.stderr)
-            
-            # Check for fail pattern first
+                    self._log.debug(f"Received chunk ({len(chunk)} bytes): {repr(chunk[:100])}")
+
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
             if fail_pattern in buf_for_match:
                 if self.debug:
-                    print(f"[DEBUG] Fail pattern '{fail_pattern}' detected!", file=sys.stderr)
+                    self._log.debug(f"Fail pattern '{fail_pattern}' detected!")
                 fail_detected = True
                 break
-            
-            # Check for prompt
+
             if self.prompt_re.search(buf_for_match):
                 if self.debug:
-                    print(f"[DEBUG] Prompt matched! Buffer length: {len(buf)}", file=sys.stderr)
+                    self._log.debug(f"Prompt matched! Buffer length: {len(buf)}")
                 break
-            
+
             if self.channel.closed:
                 raise RuntimeError("Channel closed unexpectedly")
-            
+
             time.sleep(0.05)
-        
+
         if time.time() >= deadline and not fail_detected:
             if self.debug:
-                print(f"[DEBUG] Timeout! Buffer content: {repr(buf[:200])}", file=sys.stderr)
+                self._log.debug(f"Timeout! Buffer content: {repr(buf[:200])}")
             raise TimeoutError(f"Timeout waiting for prompt or fail pattern after {cmd_timeout}s")
         
         # Clean output
@@ -387,40 +378,37 @@ class ApplianceClient:
         
         # Send command with CR only (no LF)
         if self.debug:
-            print(f"[DEBUG] Sending command: {command}", file=sys.stderr)
-            print(f"[DEBUG] Confirmation pattern: {confirmation_pattern}", file=sys.stderr)
+            self._log.debug(f"Sending command: {command}")
+            self._log.debug(f"Confirmation pattern: {confirmation_pattern}")
         self.channel.send((command + "\r").encode())
-        
+
         confirmation_re = re.compile(confirmation_pattern)
         buf = ""
         deadline = time.time() + self.timeout
         confirmed = False
-        
+
         iteration = 0
         while time.time() < deadline:
             iteration += 1
             if self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode(errors="replace")
                 if self.debug:
-                    print(f"[DEBUG] Iteration {iteration}: Received chunk ({len(chunk)} bytes): {repr(chunk)}", file=sys.stderr)
+                    self._log.debug(f"Iteration {iteration}: Received chunk ({len(chunk)} bytes): {repr(chunk)}")
                 buf += chunk
-            
+
             buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
-            
-            # Debug: show what we're matching against (only every 1000 iterations to avoid spam)
+
             if self.debug and (not confirmed) and len(buf_for_match) > 0 and (iteration % 1000 == 1):
-                print(f"[DEBUG] Iteration {iteration}: Checking buffer for confirmation pattern...", file=sys.stderr)
-                print(f"[DEBUG] Buffer (last 200 chars): {repr(buf_for_match[-200:])}", file=sys.stderr)
-                print(f"[DEBUG] Pattern: {confirmation_re.pattern}", file=sys.stderr)
-                print(f"[DEBUG] 'I agree' in buffer: {'I agree' in buf_for_match}", file=sys.stderr)
-            
-            # Handle confirmation once when detected
+                self._log.debug(f"Iteration {iteration}: Checking buffer for confirmation pattern...")
+                self._log.debug(f"Buffer (last 200 chars): {repr(buf_for_match[-200:])}")
+                self._log.debug(f"Pattern: {confirmation_re.pattern}")
+                self._log.debug(f"'I agree' in buffer: {'I agree' in buf_for_match}")
+
             if (not confirmed) and confirmation_re.search(buf_for_match):
                 if self.debug:
-                    print(f"[DEBUG] Confirmation pattern matched in buffer", file=sys.stderr)
-                if self.debug:
-                    print(f"[DEBUG] Buffer content: {repr(buf_for_match[-200:])}", file=sys.stderr)
-                    print(f"[DEBUG] Waiting idle {confirm_idle}s then sending '{response}'", file=sys.stderr)
+                    self._log.debug("Confirmation pattern matched in buffer")
+                    self._log.debug(f"Buffer content: {repr(buf_for_match[-200:])}")
+                    self._log.debug(f"Waiting idle {confirm_idle}s then sending '{response}'")
                 
                 # Wait until channel is idle
                 idle_deadline = time.time() + confirm_idle
@@ -438,10 +426,9 @@ class ApplianceClient:
                 confirmed = True
                 time.sleep(0.02)
             
-            # Check if prompt returned
             if self.prompt_re.search(buf_for_match):
                 if self.debug:
-                    print(f"[DEBUG] Prompt detected after command")
+                    self._log.debug("Prompt detected after command")
                 break
             
             if self.channel.closed:
@@ -505,22 +492,20 @@ class ApplianceClient:
                 buf += chunk
                 
                 if self.debug:
-                    print(f"[DEBUG] Received chunk ({len(chunk)} bytes): {repr(chunk)}", file=sys.stderr)
-            
-            # Check if confirmation text appeared
+                    self._log.debug(f"Received chunk ({len(chunk)} bytes): {repr(chunk)}")
+
             if confirmation_text in buf and not confirmation_found:
                 if self.debug:
-                    print(f"[DEBUG] Found '{confirmation_text}' in output, sending response '{response}'", file=sys.stderr)
+                    self._log.debug(f"Found '{confirmation_text}' in output, sending response '{response}'")
                 
                 # Step 3: Wait a bit to ensure prompt is complete, then send response
                 time.sleep(0.2)
                 self.channel.send((response + "\r").encode())
                 confirmation_found = True
             
-            # Step 4: Check if prompt returned
             if confirmation_found and self.prompt_re.search(buf):
                 if self.debug:
-                    print(f"[DEBUG] Prompt detected, command completed", file=sys.stderr)
+                    self._log.debug("Prompt detected, command completed")
                 break
             
             if self.channel.closed:
@@ -552,11 +537,11 @@ class ApplianceClient:
                 self.client = None
             
             if self.debug:
-                print(f"[DEBUG] Disconnected from {self.host}", file=sys.stderr)
-        
+                self._log.debug(f"Disconnected from {self.host}")
+
         except Exception as e:
             if self.debug:
-                print(f"[ERROR] Disconnect error: {e}", file=sys.stderr)
+                self._log.debug(f"Disconnect error: {e}")
 
     def generate_external_stap_csr(
         self,
@@ -641,10 +626,9 @@ class ApplianceClient:
         ])
         
         if self.debug:
-            print(f"[DEBUG] Starting External S-TAP CSR generation", file=sys.stderr)
-            print(f"[DEBUG] Alias={alias}, CN={common_name}, SAN1={san1}", file=sys.stderr)
-        
-        # Helper functions
+            self._log.debug(f"Starting External S-TAP CSR generation")
+            self._log.debug(f"Alias={alias}, CN={common_name}, SAN1={san1}")
+
         def read_output() -> str:
             if not self.channel:
                 raise RuntimeError("Channel not available")
@@ -652,21 +636,20 @@ class ApplianceClient:
             while self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode("utf-8", errors="ignore")
                 if self.debug:
-                    print(f"[DEBUG] RECV <<< {chunk}", file=sys.stderr)
+                    self._log.debug(f"RECV <<< {chunk}")
                 buf += chunk
             return buf
-        
+
         def send(text: str) -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print(f"[DEBUG] SEND >>> {text!r}", file=sys.stderr)
+                self._log.debug(f"SEND >>> {text!r}")
             self.channel.send((text + "\n").encode("utf-8"))
-        
-        # Send command
+
         send("create csr external_stap")
         if self.debug:
-            print("[DEBUG] Command sent: create csr external_stap", file=sys.stderr)
+            self._log.debug("Command sent: create csr external_stap")
         
         full_output = ""
         step_idx = 0
@@ -689,7 +672,7 @@ class ApplianceClient:
                 or "How would you like to proceed?" in full_output
             ):
                 if self.debug:
-                    print("[DEBUG] Existing CSR detected – selecting option [2]", file=sys.stderr)
+                        self._log.debug("Existing CSR detected – selecting option [2]")
                 send("2")
                 full_output = ""
                 continue
@@ -697,7 +680,7 @@ class ApplianceClient:
             # End – token
             if "To deploy the external_stap, use the following token:" in full_output:
                 if self.debug:
-                    print("[DEBUG] Wizard completed – token detected", file=sys.stderr)
+                        self._log.debug("Wizard completed – token detected")
                 break
             
             # Standard flow
@@ -706,11 +689,10 @@ class ApplianceClient:
                 
                 if expected_prompt in full_output:
                     if self.debug:
-                        print(
-                            f"[DEBUG] Step [{step_idx + 1}/{len(steps)}] "
+                        self._log.debug(
+                            f"Step [{step_idx + 1}/{len(steps)}] "
                             f"{step_name} → sending "
-                            f"{'ENTER' if answer == '' else answer}",
-                            file=sys.stderr
+                            f"{'ENTER' if answer == '' else answer}"
                         )
                     send(answer)
                     step_idx += 1
@@ -726,7 +708,7 @@ class ApplianceClient:
             time.sleep(0.3)
         
         if self.debug:
-            print("[DEBUG] CSR generation completed", file=sys.stderr)
+            self._log.debug("CSR generation completed")
         
         # Extract CSR
         csr_match = re.search(
@@ -761,7 +743,7 @@ class ApplianceClient:
             raise RuntimeError("Line above token not found")
         
         if self.debug:
-            print(f"[DEBUG] Deployment token extracted: {token}", file=sys.stderr)
+            self._log.debug(f"Deployment token extracted: {token}")
         
         return csr, token, line_above
     
@@ -791,31 +773,30 @@ class ApplianceClient:
             raise RuntimeError("Not connected")
         
         if self.debug:
-            print(f"[DEBUG] Starting External S-TAP CA certificate import", file=sys.stderr)
-            print(f"[DEBUG] Alias: {alias}", file=sys.stderr)
-        
-        # Helper functions
+            self._log.debug(f"Starting External S-TAP CA certificate import")
+            self._log.debug(f"Alias: {alias}")
+
         def send(text: str) -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print(f"[DEBUG] SEND >>> {text!r}", file=sys.stderr)
+                self._log.debug(f"SEND >>> {text!r}")
             self.channel.send((text + "\n").encode("utf-8"))
-        
+
         def send_raw(data: str) -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print("[DEBUG] SEND >>> (raw certificate data)", file=sys.stderr)
+                self._log.debug("SEND >>> (raw certificate data)")
             self.channel.send(data.encode("utf-8"))
-        
+
         def send_ctrl_d() -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print("[DEBUG] SEND >>> CTRL+D", file=sys.stderr)
+                self._log.debug("SEND >>> CTRL+D")
             self.channel.send(b"\x04")
-        
+
         def read_output() -> str:
             if not self.channel:
                 raise RuntimeError("Channel not available")
@@ -823,14 +804,13 @@ class ApplianceClient:
             while self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode("utf-8", errors="ignore")
                 if self.debug:
-                    print(f"[DEBUG] RECV <<< {chunk}", file=sys.stderr)
+                    self._log.debug(f"RECV <<< {chunk}")
                 buf += chunk
             return buf
-        
-        # Send command
+
         send("store certificate keystore_external_stap")
         if self.debug:
-            print("[DEBUG] Command sent: store certificate keystore_external_stap", file=sys.stderr)
+            self._log.debug("Command sent: store certificate keystore_external_stap")
         
         full_output = ""
         start_time = time.time()
@@ -849,7 +829,7 @@ class ApplianceClient:
             # Alias prompt
             if "Please enter the alias associated with the certificate" in full_output:
                 if self.debug:
-                    print(f"[DEBUG] Sending alias: {alias}", file=sys.stderr)
+                    self._log.debug(f"Sending alias: {alias}")
                 send(alias)
                 full_output = ""
                 continue
@@ -857,7 +837,7 @@ class ApplianceClient:
             # Certificate paste prompt
             if "Please paste your Trusted certificate below" in full_output:
                 if self.debug:
-                    print("[DEBUG] Pasting CA certificate", file=sys.stderr)
+                    self._log.debug("Pasting CA certificate")
                 send_raw(ca_cert.strip() + "\n")
                 send("")       # ENTER
                 time.sleep(0.5)
@@ -868,7 +848,7 @@ class ApplianceClient:
             # Success
             if "SUCCESS: Certificate imported successfully" in full_output:
                 if self.debug:
-                    print("[DEBUG] Certificate imported successfully", file=sys.stderr)
+                    self._log.debug("Certificate imported successfully")
                 break
             
             # Optional known error → normal termination
@@ -877,9 +857,9 @@ class ApplianceClient:
                 and "Error parsing time" in full_output
             ):
                 if self.debug:
-                    print("[DEBUG] Known 'Error parsing time' detected – treating as success", file=sys.stderr)
+                    self._log.debug("Known 'Error parsing time' detected – treating as success")
                 break
-            
+
             if time.time() - last_activity > prompt_timeout_sec:
                 raise TimeoutError("PROMPT TIMEOUT during CA certificate import")
             
@@ -911,31 +891,30 @@ class ApplianceClient:
             raise RuntimeError("Not connected")
         
         if self.debug:
-            print(f"[DEBUG] Starting External S-TAP certificate import", file=sys.stderr)
-            print(f"[DEBUG] Alias line: {alias_line}", file=sys.stderr)
-        
-        # Helper functions
+            self._log.debug(f"Starting External S-TAP certificate import")
+            self._log.debug(f"Alias line: {alias_line}")
+
         def send(text: str) -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print(f"[DEBUG] SEND >>> {text!r}", file=sys.stderr)
+                self._log.debug(f"SEND >>> {text!r}")
             self.channel.send((text + "\n").encode("utf-8"))
-        
+
         def send_raw(data: str) -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print("[DEBUG] SEND >>> (raw certificate data)", file=sys.stderr)
+                self._log.debug("SEND >>> (raw certificate data)")
             self.channel.send(data.encode("utf-8"))
-        
+
         def send_ctrl_d() -> None:
             if not self.channel:
                 raise RuntimeError("Channel not available")
             if self.debug:
-                print("[DEBUG] SEND >>> CTRL+D", file=sys.stderr)
+                self._log.debug("SEND >>> CTRL+D")
             self.channel.send(b"\x04")
-        
+
         def read_output() -> str:
             if not self.channel:
                 raise RuntimeError("Channel not available")
@@ -943,14 +922,13 @@ class ApplianceClient:
             while self.channel.recv_ready():
                 chunk = self.channel.recv(65535).decode("utf-8", errors="ignore")
                 if self.debug:
-                    print(f"[DEBUG] RECV <<< {chunk}", file=sys.stderr)
+                    self._log.debug(f"RECV <<< {chunk}")
                 buf += chunk
             return buf
-        
-        # Send command
+
         send("store certificate external_stap")
         if self.debug:
-            print("[DEBUG] Command sent: store certificate external_stap", file=sys.stderr)
+            self._log.debug("Command sent: store certificate external_stap")
         
         full_output = ""
         start_time = time.time()
@@ -971,7 +949,7 @@ class ApplianceClient:
             # Alias prompt
             if "Please enter the alias associated with the certificate" in full_output:
                 if self.debug:
-                    print("[DEBUG] Sending External S-TAP alias line", file=sys.stderr)
+                    self._log.debug("Sending External S-TAP alias line")
                 send(alias_line)
                 full_output = ""
                 continue
@@ -982,7 +960,7 @@ class ApplianceClient:
                 and "Are you importing an External S-TAP certificate" in full_output
             ):
                 if self.debug:
-                    print("[DEBUG] Confirming certificate corresponds to CSR (y)", file=sys.stderr)
+                    self._log.debug("Confirming certificate corresponds to CSR (y)")
                 send("y")
                 csr_confirmed = True
                 full_output = ""
@@ -994,7 +972,7 @@ class ApplianceClient:
                 and not cert_sent
             ):
                 if self.debug:
-                    print("[DEBUG] Pasting External S-TAP certificate", file=sys.stderr)
+                    self._log.debug("Pasting External S-TAP certificate")
                 send_raw(stap_cert.strip() + "\n")
                 send("")        # ENTER
                 time.sleep(0.5)
@@ -1006,7 +984,7 @@ class ApplianceClient:
             # Success
             if "SUCCESS: Certificate imported successfully" in full_output:
                 if self.debug:
-                    print("[DEBUG] External S-TAP certificate imported successfully", file=sys.stderr)
+                    self._log.debug("External S-TAP certificate imported successfully")
                 break
             
             # Optional known error
@@ -1015,7 +993,7 @@ class ApplianceClient:
                 and "Error parsing time" in full_output
             ):
                 if self.debug:
-                    print("[DEBUG] Known 'Error parsing time' detected – treating as success", file=sys.stderr)
+                    self._log.debug("Known 'Error parsing time' detected – treating as success")
                 break
             
             if time.time() - last_activity > prompt_timeout_sec:
@@ -1082,7 +1060,7 @@ class ApplianceClient:
                 
                 if busy_re.search(buf_for_match):
                     if self.debug:
-                        print("[DEBUG] MySQL busy detected, sending 'n'", file=sys.stderr)
+                        self._log.debug("MySQL busy detected, sending 'n'")
                     self.channel.send(b"n\r")
                     confirmed = True
                     time.sleep(0.02)
@@ -1095,7 +1073,7 @@ class ApplianceClient:
                     return "Restart rejected - MySQL is busy updating the database"
                 else:
                     if self.debug:
-                        print("[DEBUG] No busy detected, sending 'y' - system will restart", file=sys.stderr)
+                        self._log.debug("No busy detected, sending 'y' - system will restart")
                     self.channel.send(b"y\r")
                     confirmed = True
                     time.sleep(0.5)
