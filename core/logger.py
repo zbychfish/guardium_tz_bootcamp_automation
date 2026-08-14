@@ -43,9 +43,9 @@ def setup_logger(
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # Console handler — only WARNING and above (errors visible on screen)
+    # Console handler — only ERROR and above (warnings go to log file only)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.WARNING)
+    console_handler.setLevel(logging.ERROR)
     console_handler.setFormatter(logging.Formatter(fmt='%(levelname)s - %(message)s'))
     logger.addHandler(console_handler)
     
