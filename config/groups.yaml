@@ -549,7 +549,7 @@ groups:
   winstap_lab:
     name: "WinSTAP Lab"
     description: "Windows STAP lab - prepare ceratops for GIM/STAP installation"
-    deployed_with: []
+    deployed_with: [standard_demo]
     dependencies: [va_basics]
     stages:
       - name: extract_zip_on_ceratops
