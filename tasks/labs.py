@@ -17,8 +17,6 @@ from core.utils import execute_local_command
 logger = get_logger(__name__)
 
 
-
-
 def install_filebeat_on_sauropod(
     config,
     logger,

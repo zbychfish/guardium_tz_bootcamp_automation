@@ -1567,64 +1567,86 @@ def monitor_patch_installation(
     patch_numbers: Optional[List[str]] = None,
     check_interval: int = 60,
     max_checks: int = 60,
+    appear_interval: int = 0,
+    appear_max: int = 0,
     user: Optional[str] = None,
     password: Optional[str] = None,
     debug: bool = False) -> bool:
-    
+
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password)
     if not params:
         return False
 
     host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
-    appliance_type = params['appliance_type']
 
     _header(logger, f"MONITOR PATCH INSTALLATION: {appliance_name}")
     logger.info(f"[{appliance_name}] interval={check_interval}s max={max_checks} (timeout={check_interval * max_checks}s)")
 
-    check_count = 0
+    def _query_patch_install():
+        client = ApplianceClient(
+            host=host, user=user, password=password,
+            prompt_regex=prompt_regex, initial_pattern=None,
+            timeout=60, strip_ansi=True, debug=debug
+        )
+        try:
+            if not client.connect():
+                return None
+            return client.execute_command("show system patch install")
+        except Exception:
+            return None
+        finally:
+            client.disconnect()
 
+    def _parse_status(output):
+        patch_status = {}
+        for line in output.split('\n'):
+            ls = line.strip()
+            if not ls or ls.startswith('P#') or 'Request Time' in ls:
+                continue
+            m = re.match(r'^(\d+)\s+', ls)
+            if m:
+                patch_status[m.group(1)] = ls
+        return patch_status
+
+    if appear_max > 0:
+        logger.info(f"[{appliance_name}] ⬳ Phase 1: waiting for patch to appear (every {appear_interval}s, max {appear_max} checks)...")
+        appeared = False
+        for check in range(1, appear_max + 1):
+            time.sleep(appear_interval)
+            output = _query_patch_install()
+            if output is None:
+                logger.warning(f"[{appliance_name}]   #{check}/{appear_max}: CLI unavailable, retrying...")
+                continue
+            if debug:
+                logger.info(f"[{appliance_name}] patch status:\n{output}")
+            status = _parse_status(output)
+            targets = patch_numbers or list(status.keys())
+            if targets and any(p in status for p in targets):
+                logger.info(f"[{appliance_name}]   ✓ #{check}/{appear_max}: patch(es) appeared on list")
+                appeared = True
+                break
+            logger.info(f"[{appliance_name}]   #{check}/{appear_max}: patch not yet visible, waiting {appear_interval}s...")
+        if not appeared:
+            logger.error(f"[{appliance_name}] ✗ patch did not appear after {appear_interval * appear_max}s")
+            return False
+        logger.info(f"[{appliance_name}] ⬳ Phase 2: monitoring installation (every {check_interval}s, max {max_checks} checks)...")
+
+    check_count = 0
     while check_count < max_checks:
         check_count += 1
         logger.info(f"[{appliance_name}] check {check_count}/{max_checks}")
 
         try:
-            client = ApplianceClient(
-                host=host,
-                user=user,
-                password=password,
-                prompt_regex=prompt_regex,
-                initial_pattern=None,
-                timeout=60,
-                strip_ansi=True,
-                debug=debug
-            )
-            
-            if not client.connect():
-                logger.warning(f"[{appliance_name}] ⚠ connect failed, retrying in {check_interval}s")
-                time.sleep(check_interval)
-                continue
-
-            logger.info(f"[{appliance_name}] ➜ show system patch install")
-            output = client.execute_command("show system patch install")
-            client.disconnect()
-
+            output = _query_patch_install()
             if not output:
-                logger.warning(f"[{appliance_name}] ⚠ no output, retrying in {check_interval}s")
+                logger.warning(f"[{appliance_name}] ⚠ CLI unavailable or no output, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
 
             if debug:
                 logger.info(f"[{appliance_name}] patch status:\n{output}")
 
-            patch_status = {}
-            for line in output.split('\n'):
-                ls = line.strip()
-                if not ls or ls.startswith('P#') or 'Request Time' in ls:
-                    continue
-                m = re.match(r'^(\d+)\s+', ls)
-                if m:
-                    patch_status[m.group(1)] = ls
-
+            patch_status = _parse_status(output)
             patch_numbers_to_check = patch_numbers or list(patch_status.keys())
 
             if not patch_numbers_to_check:
@@ -1638,7 +1660,7 @@ def monitor_patch_installation(
 
             for patch_num in patch_numbers_to_check:
                 if patch_num not in patch_status:
-                    fail_patches.append(patch_num)
+                    in_progress += 1
                     continue
                 sl = patch_status[patch_num]
                 if "DONE: Patch installation Succeeded" in sl:
@@ -1650,20 +1672,20 @@ def monitor_patch_installation(
                 else:
                     in_progress += 1
 
-            done_str = ", ".join(done_patches) if done_patches else "→"
-            logger.info(f"[{appliance_name}]: installed={done_str} | ✓ {in_progress} | ✗ {len(fail_patches)}")
+            done_str = ", ".join(done_patches) if done_patches else "—"
+            logger.info(f"[{appliance_name}]: done={done_str} | in_progress={in_progress} | failed={len(fail_patches)}")
+
+            if fail_patches:
+                logger.error(f"[{appliance_name}] ✗ failed patches: {', '.join(fail_patches)}")
+                return False
 
             if in_progress == 0:
-                if fail_patches:
-                    logger.error(f"[{appliance_name}] ✗ failed patches: {', '.join(fail_patches)}")
-                    return False
                 logger.info(f"[{appliance_name}] ✓ all patches installed successfully")
                 return True
 
             time.sleep(check_interval)
 
         except Exception as e:
-            import traceback
             logger.warning(f"[{appliance_name}] ⚠ check error: {e}")
             if debug:
                 logger.error(traceback.format_exc())

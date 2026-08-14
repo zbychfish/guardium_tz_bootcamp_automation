@@ -1018,16 +1018,16 @@ groups:
           debug: false
 
       - name: monitor_edge_patch_on_cm
-        function: monitor_edge_patch_installation
-        module: tasks.edge_labs
+        function: monitor_patch_installation
+        module: core.appliance_operations
         description: "Monitor Edge patch installation on cm: wait for appear (15s), then DONE (60s)"
         args:
-          cm_appliance: "cm"
-          patch_filename: "SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
+          appliance_name: "cm"
+          patch_numbers: ["15002"]
           appear_interval: 15
           appear_max: 40
-          install_interval: 60
-          install_max: 60
+          check_interval: 60
+          max_checks: 60
           debug: false
 
       - name: install_k3s_on_sauropod
