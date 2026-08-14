@@ -105,7 +105,7 @@ def create_mysql_config_file(password: str, logger, verbose: bool = True) -> boo
         return False
 
 
-def deploy_mysql_on_raptor(config, logger, verbose: bool = True) -> bool:
+def deploy_mysql_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bool:
     _header(logger, "MySQL deployment on raptor")
 
     password = config.get_custom_variable('pwd')

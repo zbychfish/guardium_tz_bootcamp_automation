@@ -101,11 +101,11 @@ def set_stap_firewall_flags_on_raptor(config, logger, verbose=True,
     logger.info("✓ STAP firewall flags set, modules installed, agent restarted on raptor")
     return True
 
-
 def configure_engine_on_raptor(config, logger, verbose=True,
                                cm_appliance="cm", collector_appliance="coll1",
                                compute_average=True, inspect_data=True,
                                log_records=True, record_empty=True, **kwargs):
+
     _header(logger, "CONFIGURE INSPECTION ENGINE ON RAPTOR")
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
@@ -137,7 +137,6 @@ def configure_engine_on_raptor(config, logger, verbose=True,
     logger.info("✓ Inspection Engine configured on raptor")
     return True
 
-
 def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
     _header(logger, "RUN DBTRAFFIC PGSQL ON RAPTOR")
 
@@ -159,7 +158,7 @@ def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
 
 def add_postgres_app_profile_member(config, logger, verbose=True,
                                     cm_appliance="cm", **kwargs):
-                                    
+
     _header(logger, "ADD POSTGRES APP PROFILE MEMBER")
 
     raptor_ip = config.get_machine_ip('raptor', use_private=True)
