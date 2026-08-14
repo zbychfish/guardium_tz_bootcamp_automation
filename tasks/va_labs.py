@@ -286,7 +286,7 @@ def deploy_vascanner_on_sauropod(
     config,
     logger,
     verbose: bool = True,
-    image: str = "cp.icr.io/cp/ibm-guardium-data-security-center/guardium/vascanner-12.2.0/va-scanner:vascanner-v12.2.0",
+    image: str = None,
     container_name: str = "va-scanner-sauropod",
     config_file: str = "/opt/vascanner/config",
     certs_dir: str = "/root/gn-trainings/vascanner/certs",
@@ -296,10 +296,11 @@ def deploy_vascanner_on_sauropod(
     key_file: str = ".va_api_key",
     debug: bool = False,
     **kwargs) -> bool:
+    
     _header(logger, "DEPLOY VA SCANNER ON SAUROPOD")
 
     ibm_key = config.get_custom_variable('ibm_container_api_key')
-    if not _require(logger, ibm_container_api_key=ibm_key):
+    if not _require(logger, image=image, ibm_container_api_key=ibm_key):
         return False
 
     key_path = config.config_file.parent.parent / key_file
