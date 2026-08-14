@@ -638,11 +638,16 @@ def import_edge_dashboard(config, logger, verbose=True,
         logger.info("✓ Edge dashboard imported successfully")
     return success
 
-def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
+def configure_stap_for_edge_on_ceratops(config, logger, verbose=True,
                                         cm_appliance="cm",
                                         installation_delay=10,
                                         debug=False, **kwargs):
-    _header(logger, "CONFIGURE STAP FOR EDGE ON SAUROPOD")
+    _header(logger, "CONFIGURE WINSTAP FOR EDGE ON CERATOPS")
+
+    ceratops_ip = config.get_machine_ip('ceratops', use_private=True)
+    if not ceratops_ip:
+        logger.error("Ceratops IP not found in machines config")
+        return False
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
@@ -660,23 +665,6 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
     ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
                     port=ssh_port, timeout=30)
 
-    logger.info("➜ Opening NodePort range 30000-32767/tcp on sauropod firewall...")
-    try:
-        if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
-            return False
-        for cmd, desc in [
-            ("firewall-cmd --permanent --add-port=30000-32767/tcp", "allow 30000-32767/tcp"),
-            ("firewall-cmd --reload",                               "reload firewall"),
-        ]:
-            result = ssh.execute_command(cmd, print_output=verbose)
-            if result['rc'] != 0:
-                logger.error(f"✗ Failed to {desc}: {result['stderr']}")
-                return False
-            logger.info(f"  ✓ {desc}")
-    finally:
-        ssh.disconnect()
-
     logger.info("➜ Getting haproxy NodePorts from sauropod...")
     try:
         if not ssh.connect():
@@ -693,34 +681,33 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
     finally:
         ssh.disconnect()
 
-    m16016 = re.search(r'NodePort:\s+port-16016\s+(\d+)/TCP', svc_output)
-    m16018 = re.search(r'NodePort:\s+port-16018\s+(\d+)/TCP', svc_output)
-    if not m16016:
-        logger.error("✗ NodePort for port-16016 not found in kubectl output")
+    m9800 = re.search(r'NodePort:\s+port-9800\s+(\d+)/TCP', svc_output)
+    m9801 = re.search(r'NodePort:\s+port-9801\s+(\d+)/TCP', svc_output)
+    if not m9800:
+        logger.error("✗ NodePort for port-9800 not found in kubectl output")
         return False
-    if not m16018:
-        logger.error("✗ NodePort for port-16018 not found in kubectl output")
+    if not m9801:
+        logger.error("✗ NodePort for port-9801 not found in kubectl output")
         return False
-    node_port_16016 = m16016.group(1)
-    node_port_16018 = m16018.group(1)
-    logger.info(f"  NodePort 16016 → {node_port_16016}")
-    logger.info(f"  NodePort 16018 → {node_port_16018}")
+    node_port_9800 = m9800.group(1)
+    node_port_9801 = m9801.group(1)
+    logger.info(f"  NodePort 9800 → {node_port_9800}")
+    logger.info(f"  NodePort 9801 → {node_port_9801}")
 
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
     for param, value in [
-        ("STAP_USING_EDGE",        "1"),
-        ("STAP_ENABLED",           "1"),
-        ("STAP_SQLGUARD_IP",       sauropod_ip),
-        ("STAP_SQLGUARD_PORT",     node_port_16016),
-        ("STAP_SQLGUARD_TLS_PORT", node_port_16018),
+        ("WINSTAP_USING_EDGE",        "1"),
+        ("WINSTAP_SQLGUARD_IP",       sauropod_ip),
+        ("WINSTAP_SQLGUARD_PORT",     node_port_9800),
+        ("WINSTAP_SQLGUARD_TLS_PORT", node_port_9801),
     ]:
-        logger.info(f"  Setting {param}={value} on sauropod ({sauropod_ip})")
-        api.gim_client_params(client_ip=sauropod_ip, param_name=param, param_value=value)
+        logger.info(f"  Setting {param}={value} on ceratops ({ceratops_ip})")
+        api.gim_client_params(client_ip=ceratops_ip, param_name=param, param_value=value)
 
-    logger.info("➜ Scheduling GIM install on sauropod...")
-    api.gim_schedule_install(client_ip=sauropod_ip, date="now")
+    logger.info("➜ Scheduling GIM install on ceratops...")
+    api.gim_schedule_install(client_ip=ceratops_ip, date="now")
     logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
     time.sleep(installation_delay)
 
@@ -729,7 +716,7 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
     while True:
         check_count += 1
         logger.info(f"  Check #{check_count}: Querying module status...")
-        modules = api.gim_list_client_modules(client_ip=sauropod_ip)
+        modules = api.gim_list_client_modules(client_ip=ceratops_ip)
 
         if "ErrorCode" in modules or "ErrorMessage" in modules:
             logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
@@ -750,5 +737,5 @@ def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
             logger.info("  ✓ All modules installed successfully!")
             break
 
-    logger.info("✓ STAP configured for Edge on sauropod")
+    logger.info("✓ WinSTAP configured for Edge on ceratops")
     return True

@@ -1116,10 +1116,10 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
-      - name: configure_stap_for_edge_on_sauropod
-        function: configure_stap_for_edge_on_sauropod
+      - name: configure_stap_for_edge_on_ceratops
+        function: configure_stap_for_edge_on_ceratops
         module: tasks.edge_labs
-        description: "Get haproxy NodePorts from k3s, set STAP params via GIM API, schedule install"
+        description: "Get haproxy NodePorts 9800/9801 from sauropod k3s, set WINSTAP params via GIM API on ceratops, schedule install"
         args:
           cm_appliance: "cm"
           installation_delay: 10
