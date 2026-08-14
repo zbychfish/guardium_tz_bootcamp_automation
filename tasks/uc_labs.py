@@ -259,8 +259,8 @@ def register_kafka_cluster(
     member_list: str = "kafka1.demo.guardium",
     apply_cruise_control: bool = False,
     debug: bool = True,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
+
     _header(logger, "REGISTER KAFKA CLUSTER")
 
     pwd = config.get_custom_variable('pwd')
@@ -325,7 +325,6 @@ def register_kafka_cluster(
     logger.info("✓ Kafka cluster registration completed")
     return True
 
-
 def create_uc_credential_for_oracle_container(
     config,
     logger,
@@ -336,8 +335,8 @@ def create_uc_credential_for_oracle_container(
     cred_username: str = "guardium",
     cred_password: Optional[str] = None,
     debug: bool = False,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
+
     _header(logger, "CREATE UC CREDENTIAL FOR ORACLE CONTAINER")
 
     if not cred_password:
@@ -365,7 +364,6 @@ def create_uc_credential_for_oracle_container(
     logger.info("✓ UC credential created")
     return True
 
-
 def import_uc_profile_oracle_container(
     config,
     logger,
@@ -376,9 +374,10 @@ def import_uc_profile_oracle_container(
     update_mode: bool = False,
     test_connections: bool = True,
     debug: bool = True,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
+
     _header(logger, "IMPORT UC PROFILE")
+
     logger.info(f"  csv={csv_path}")
     logger.info(f"  jar={jar_file}")
     logger.info(f"  update_mode={update_mode} test_connections={test_connections}")
@@ -407,7 +406,6 @@ def import_uc_profile_oracle_container(
     logger.info("✓ Wait completed")
     return True
 
-
 def bulk_install_uc_profile(
     config,
     logger,
@@ -416,9 +414,10 @@ def bulk_install_uc_profile(
     profile_names: str = "oracle_21_container_sauropod",
     bulk_install_hosts: str = "coll1.demo.guardium",
     debug: bool = True,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
+
     _header(logger, "BULK INSTALL UC PROFILE")
+    
     logger.info(f"  profileNames={profile_names} hosts={bulk_install_hosts}")
 
     cli_pwd = config.get_custom_variable('cli_pwd')
