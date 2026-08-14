@@ -56,7 +56,8 @@ def reset_cli_password_all(
     verbose: bool = True,
     cloudsupport_password: Optional[str] = None,
     cli_password: Optional[str] = None,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     _header(logger, "RESET CLI PASSWORD ON ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -93,7 +94,8 @@ def set_shared_secret_all(
     logger,
     verbose: bool = True,
     shared_secret: Optional[str] = None,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     _header(logger, "SET SHARED SECRET ON ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -127,7 +129,8 @@ def configure_aggr_settings_all(
     config,
     logger,
     verbose: bool = True,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     _header(logger, "CONFIGURE AGGREGATION SETTINGS ON ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -163,7 +166,8 @@ def import_definitions_on_cm(
     verbose: bool = True,
     cm_appliance: str = "cm",
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     from core.guardium_rest_api import import_definitions_files
 
     _header(logger, "IMPORT DEFINITIONS ON CM")
@@ -197,7 +201,8 @@ def install_policy_on_collector(
     policy_name: str = "Log Everything",
     max_outer_retries: int = 5,
     outer_retry_delay: int = 120,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     _header(logger, "INSTALL POLICY ON COLLECTOR")
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
@@ -268,7 +273,8 @@ def initial_collector_settings(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
     import traceback
 
     if not collector_name:
@@ -356,7 +362,8 @@ def create_oauth_client(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     client_id: str = "BOOTCAMP",
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
     import json
     import traceback
 
@@ -513,7 +520,8 @@ def set_unit_type_manager(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     import traceback
 
     if not appliance_name:
@@ -568,7 +576,8 @@ def restart_appliance_all(
     debug: bool = True,
     wait_for_availability: bool = True,
     retry_interval: int = 10,
-    max_retries: int = 60) -> bool:
+    max_retries: int = 60,
+    **kwargs) -> bool:
     _header(logger, "RESTART ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -618,7 +627,8 @@ def configure_system_settings_all(
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     _header(logger, "CONFIGURE ALL SYSTEM SETTINGS (CONSOLIDATED)")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -671,7 +681,8 @@ def register_appliances_all(
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
     debug: bool = True,
-    timeout: int = 240) -> bool:
+    timeout: int = 240,
+    **kwargs) -> bool:
     _header(logger, "REGISTER APPLIANCES ON CENTRAL MANAGER")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -723,7 +734,8 @@ def prepare_appliances_for_patching_all(
     verbose: bool = True,
     patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
     _header(logger, "PREPARE ALL APPLIANCES FOR PATCHING")
 
     all_appliances = _get_all_appliances(config, logger)
@@ -762,7 +774,8 @@ def install_and_monitor_patches_all(
     reinstall_answer: str = "y",
     check_interval: int = 60,
     max_checks: int = 60,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
 
     _header(logger, "INSTALL AND MONITOR PATCHES ON ALL APPLIANCES")
 
@@ -809,7 +822,8 @@ def prepare_appliance_for_patching_single(
     appliance_name: Optional[str] = None,
     patches_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/",
     cloudsupport_password: Optional[str] = None,
-    debug: bool = True) -> bool:
+    debug: bool = True,
+    **kwargs) -> bool:
 
     if not appliance_name:
         logger.error("appliance_name is required")
@@ -918,7 +932,8 @@ def prepare_log_guard_dir_all(
     logger,
     verbose: bool = True,
     cloudsupport_password: Optional[str] = None,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
     all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
         return False
