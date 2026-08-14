@@ -13,36 +13,50 @@ groups:
         function: setup_hosts_locally
         module: tasks.setup_hosts
         description: "Configure /etc/hosts, SSHD, and root password on raptor (local)"
+        args:
+          debug: false
 
       - name: setup_hosts_remote
         function: setup_hosts_on_remote_machine
         module: tasks.setup_hosts
         description: "Configure /etc/hosts, SSHD, and root password on all remote machines"
+        args:
+          debug: false
         
       - name: update_system_packages
         function: update_system_packages
         module: tasks.preparation_for_services_deployment
         description: "Update system packages on raptor (excluding kernel)"
+        args:
+          debug: false
 
       - name: prepare_upload_content
         function: prepare_upload_content
         module: tasks.preparation_for_services_deployment
         description: "Create upload directory, download source_files from IBM COS, clone guardium_notes_dbtraffic"
+        args:
+          debug: false
 
       - name: configure_dbtraffic
         function: configure_dbtraffic
         module: tasks.preparation_for_services_deployment
         description: "Configure guardium_notes_dbtraffic (yaml configs, venv, deps) on raptor"
+        args:
+          debug: false
 
       - name: configure_swap
         function: configure_swap
         module: tasks.preparation_for_services_deployment
         description: "Configure 8G swap file on raptor"
+        args:
+          debug: false
 
       - name: install_packages_on_sauropod
         function: install_packages_on_sauropod
         module: tasks.preparation_for_services_deployment
         description: "Install kernel-devel, Java 11 and podman on sauropod via SSH"
+        args:
+          debug: false
 
       - name: create_demo_user_on_ceratops
         function: create_demo_user_on_ceratops
@@ -128,6 +142,8 @@ groups:
         function: setup_fam_files_on_raptor
         module: tasks.setup_hosts
         description: "Create /FAM/{Protected,Controlled} on raptor, copy FAM files, chmod -R 2777 /FAM"
+        args:
+          debug: false
 
       - name: setup_fam_files_on_ceratops
         function: setup_fam_files_on_ceratops
@@ -142,6 +158,8 @@ groups:
         function: RDP_relay_setup
         module: tasks.setup_hosts
         description: "Create /etc/systemd/system/socat-RDP.service forwarding 8443 -> ceratops:51124, daemon-reload"
+        args:
+          debug: false
 
   database_preparations:
     name: "Standard databases installation"
@@ -153,16 +171,22 @@ groups:
         function: deploy_mysql_on_raptor
         module: tasks.deploy_mysql
         description: "Deploy MySQL 9.7 on raptor"
+        args:
+          debug: false
       
       - name: deploy_mongo_on_raptor
         function: deploy_mongo_on_raptor
         module: tasks.deploy_mongo
         description: "Deploy MongoDB 8.3 on raptor with SSL/TLS"
+        args:
+          debug: false
 
       - name: deploy_postgres_on_raptor
         function: deploy_postgres_on_raptor
         module: tasks.deploy_postgres
         description: "Install postgres 16 on raptor"
+        args:
+          debug: false
       
       - name: setup_oracle_container_on_sauropod
         function: setup_oracle_container_on_sauropod
@@ -176,16 +200,22 @@ groups:
         function: deploy_oracle_on_sauropod
         module: tasks.deploy_oracle
         description: "Deploy Oracle 21c on sauropod"
+        args:
+          debug: false
       
       - name: deploy_db2_on_raptor
         function: deploy_db2_on_raptor
         module: tasks.deploy_db2
         description: "Install Db2 11.5 on raptor"
+        args:
+          debug: false
       
       - name: deploy_cassandra_on_sauropod
         function: deploy_cassandra_on_sauropod
         module: tasks.deploy_cassandra
         description: "Deploy Apache Cassandra 4.1 on sauropod"
+        args:
+          debug: false
 
       - name: deploy_informix_on_raptor
         function: deploy_informix
@@ -202,6 +232,7 @@ groups:
           informix_admin_port: 9089
           rootdbs_size_kb: 200000
           jdbc_jars: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/jdbc-15.0.1.3.jar:/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/bson-4.11.1.jar"
+          debug: false
 
   setup_appliances:
     name: "Setup Appliances"
@@ -225,6 +256,7 @@ groups:
         args:
           appliance_name: "cm"
           client_id: "BOOTCAMP"
+          debug: false
            
       - name: create_demo_user
         function: create_demo_user
@@ -232,6 +264,7 @@ groups:
         description: "Create demo user in Guardium via REST API"
         args:
           appliance_name: "cm"  # Name from config/appliances.yaml
+          debug: false
           
       - name: configure_system_settings_all
         function: configure_system_settings_all
@@ -394,6 +427,7 @@ groups:
           db_type: "postgres"
           db_instance: "postgres"
           db_version: "16"
+          debug: false
 
       - name: correct_mysql_ie
         function: correct_mysql_ie
@@ -402,11 +436,14 @@ groups:
         args:
           cm_appliance: "cm"
           collector_appliance: "coll1"
+          debug: false
 
       - name: enable_atap_for_mongo
         function: enable_atap_for_mongo
         module: tasks.agent_labs
         description: "Enable ATAP for MongoDB on raptor"
+        args:
+          debug: false
 
       - name: import_verification_definitions
         function: import_verification_definitions
@@ -424,11 +461,14 @@ groups:
         args:
           collector_appliance: "coll1"
           latency: 10
+          debug: false
 
       - name: stop_databases_atap
         function: stop_databases_atap
         module: tasks.agent_labs
         description: "Stop and disable mongod and informix-ifxserver services on raptor"
+        args:
+          debug: false
 
   exit_lab:
     name: "Exit Lab"
@@ -440,6 +480,8 @@ groups:
         function: db2_exit_configuration
         module: tasks.agent_labs
         description: "Configure DB2 exit for Guardium monitoring on raptor"
+        args:
+          debug: false
       
       - name: configure_db2_exit_ie
         function: configure_db2_exit_ie
@@ -448,6 +490,7 @@ groups:
         args:
           cm_appliance: "cm"
           collector_appliance: "coll1"
+          debug: false
 
   uc1_lab:
     name: "UC 1.0 lab"
@@ -476,6 +519,7 @@ groups:
         description: "Install required packages and determine latest ETAP version for deployment"
         args:
           local_tar: "/opt/guardium_tz_bootcamp_automation/upload/source_files/images/guardium_external_s-tap_v12.2.4.tar" # used only if repo is not working
+          debug: false
 
       - name: setup_etap_certificates_mysql
         function: setup_etap_certificates_mysql
@@ -485,11 +529,14 @@ groups:
           etap_locality: "Nowa Sol"
           etap_state: "Lubuskie"
           etap_email: "guardadmin@gmail.com"
+          debug: false
 
       - name: deploy_etap_mysql
         function: deploy_etap_mysql
         module: tasks.etap_labs
         description: "Add SSH port 22, restart sshd, clone Guardium External S-TAP, deploy mysql-etap container"
+        args:
+          debug: false
 
   va_basics:
     name: "VA Basics Lab"
@@ -502,11 +549,15 @@ groups:
         function: enable_vulnerability_management
         module: tasks.va_labs
         description: "Enable VULNERABILITY_MANAGEMENT feature flag on CM and verify State=ENABLED"
+        args:
+          debug: false
 
       - name: create_va_postgres_account
         function: create_va_postgres_account
         module: tasks.va_labs
         description: "Create sqlguard user, gdmmonitor group and grant VA monitoring privileges on PostgreSQL (raptor)"
+        args:
+          debug: false
 
       - name: import_va_postgres_definitions
         function: import_va_postgres_definitions
@@ -515,6 +566,7 @@ groups:
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
 
       - name: import_dps
         function: import_dps
@@ -522,6 +574,7 @@ groups:
         description: "Upload and import DPS file via Guardium Web UI (Playwright): Harden → Vulnerability Assessment → Customer Uploads"
         args:
           dps_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc"
+          debug: false
 
       - name: fetch_cm_certificate_on_sauropod
         function: fetch_cm_certificate_on_sauropod
@@ -529,11 +582,14 @@ groups:
         description: "Fetch CM TLS certificate from cm.demo.guardium:8443 and save to /root/gn-trainings/vascanner/certs/vascanner.pem on sauropod"
         args:
           cert_path: "/root/gn-trainings/vascanner/certs/vascanner.pem"
+          debug: false
 
       - name: create_va_api_key
         function: create_va_api_key
         module: tasks.va_labs
         description: "Create VA API key 'vascanner' on CM via grdapi and save to .va_api_key"
+        args:
+          debug: false
 
       - name: deploy_vascanner_on_sauropod
         function: deploy_vascanner_on_sauropod
@@ -545,6 +601,7 @@ groups:
           config_file: "/opt/vascanner/config"
           certs_dir: "/root/gn-trainings/vascanner/certs"
           va_agent_name: "VA_SCANNER_ON_SAUROPOD"
+          debug: false
 
   winstap_lab:
     name: "WinSTAP Lab"
@@ -559,6 +616,7 @@ groups:
         args:
           zip_path: 'C:\bootcamp\zip\GIM-Installer-12.2_r120202259_1.zip'
           dest_dir: 'C:\bootcamp\gim_unpacked'
+          debug: false
 
       - name: install_gim_on_ceratops
         function: install_gim_on_ceratops
@@ -567,6 +625,7 @@ groups:
         args:
           setup_exe: 'C:\bootcamp\gim_unpacked\Setup.exe'
           appliance: "cm.demo.guardium"
+          debug: false
 
       - name: install_winstap_on_ceratops
         function: install_winstap_on_ceratops
@@ -574,6 +633,7 @@ groups:
         description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
         args:
           module_version: "12.2_r120202259_1"
+          debug: false
 
   fam_lab:
     name: "FAM Lab"
@@ -614,6 +674,8 @@ groups:
         function: enable_fam_protect_privileged_on_raptor
         module: tasks.labs
         description: "Set fam_protect_privileged=1 in guard_tap.ini and restart STAP on raptor"
+        args:
+          debug: false
 
       - name: enable_fam_protect_privileged_on_ceratops
         function: enable_fam_protect_privileged_on_ceratops
@@ -646,6 +708,8 @@ groups:
         function: enable_atap_for_oracle
         module: tasks.agent_labs
         description: "Enable ATAP for Oracle on sauropod"
+        args:
+          debug: false
 
       - name: deploy_etap_for_oracle
         function: deploy_etap_for_oracle_container_on_sauropod
@@ -655,11 +719,14 @@ groups:
           etap_locality: "Nowa Sol"
           etap_state: "Lubuskie"
           etap_email: "guardadmin@gmail.com"
+          debug: false
 
       - name: stop_etap_services
         function: stop_etap_services
         module: tasks.etap_labs
         description: "Stop and disable mysql-etap and oracle-etap systemd services"
+        args:
+          debug: false
 
       - name: setup_stap_with_oua_on_sauropod
         function: setup_stap_with_oua_on_sauropod
@@ -676,6 +743,8 @@ groups:
         function: setup_oua_audit_policy_on_sauropod
         module: tasks.agent_labs
         description: "Create GAME_APP audit policy and scheduler job as secadmin in Oracle on sauropod"
+        args:
+          debug: false
 
       - name: import_oracle_dashboard
         function: import_oracle_dashboard
@@ -684,6 +753,7 @@ groups:
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
 
   oracle_lab_uc2:
     name: "Oracle Lab UC2"
@@ -764,6 +834,8 @@ groups:
         function: stop_raptor_databases
         module: tasks.labs
         description: "Stop all database services on raptor: Informix, MongoDB, MySQL, mysql-etap, oracle-etap"
+        args:
+          debug: false
 
       - name: import_policies_reports_dashboard
         function: import_policies_reports_dashboard
@@ -780,6 +852,7 @@ groups:
         description: "Add raptor postgres application profile tuple member to group 'Postgres application profiles'"
         args:
           cm_appliance: "cm"
+          debug: false
 
       - name: configure_engine_on_raptor
         function: configure_engine_on_raptor
@@ -788,6 +861,7 @@ groups:
         args:
           cm_appliance: "cm"
           collector_appliance: "coll1"
+          debug: false
 
       - name: set_stap_firewall_flags_on_raptor
         function: set_stap_firewall_flags_on_raptor
@@ -795,11 +869,14 @@ groups:
         description: "Set STAP_FIREWALL_INSTALLED=1 and STAP_FIREWALL_DEFAULT_STATE=1 on raptor STAP, then restart agent via gim_schedule_install"
         args:
           cm_appliance: "cm"
+          debug: false
 
       - name: run_dbtraffic_pgsql_on_raptor
         function: run_dbtraffic_pgsql_on_raptor
         module: tasks.labs
         description: "Run guardium-notes-dbtraffic pgsql on raptor: rebuild schema, then run 1 minute of fast traffic"
+        args:
+          debug: false
 
       - name: install_app_data_access_policy
         function: install_app_data_access_policy
@@ -823,11 +900,14 @@ groups:
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
 
       - name: create_va_oauth_client
         function: create_va_oauth_client
         module: tasks.va_labs
         description: "Register OAuth client 'va-api' on CM and save client_secret to .client_secret_va"
+        args:
+          debug: false
 
   ltr_lab:
     name: "LTR Lab"
@@ -839,6 +919,8 @@ groups:
         function: setup_minio_on_raptor
         module: tasks.ltr_labs
         description: "Prepare MinIO certificate authority, trust chain, private key, and CSR on raptor"
+        args:
+          debug: false
 
       - name: setup_appnode
         function: setup_appnode
@@ -846,6 +928,7 @@ groups:
         description: "Setup app-node on appliance by executing 'store unit type app-node', wait for reboot and reconnection"
         args:
           appliance_name: "appnode1"
+          debug: false
 
       - name: prepare_appnode_for_patching
         function: copy_single_file_to_appliance_task
@@ -856,6 +939,7 @@ groups:
           source_file_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/extensions/SqlGuard-12.0p80111_datalake_May_15_2026.tgz.enc.sig"
           target_dir: "/var/IBM/Guardium/log/patches/"
           owner: "tomcat:tomcat"
+          debug: false
 
       - name: install_patch_on_appnode
         function: install_patch_on_appliance_single
@@ -865,6 +949,7 @@ groups:
           appliance_name: "appnode1"
           patch_selection: "1"
           reinstall_answer: "y"
+          debug: false
 
       - name: enable_ltr_on_appnode
         function: enable_ltr_on_appnode
@@ -872,6 +957,7 @@ groups:
         description: "Enable LTR (Lake Threat Response) on appnode1 - install, configure, start datalake and verify status"
         args:
           appliance_name: "appnode1"
+          debug: false
 
       - name: import_minio_CA_certificate
         function: import_minio_CA_certificate
@@ -880,6 +966,7 @@ groups:
         args:
           appliance_name: "cm"
           certificate_file_path: "/home/minio/ca/certs/ca.crt"
+          debug: false
 
       - name: distribute_minio_certificate
         function: distribute_minio_certificate
@@ -888,11 +975,14 @@ groups:
         args:
           timeout: 600
           check_interval: 10
+          debug: false
 
       - name: activate_ltr
         function: activate_ltr
         module: tasks.ltr_labs
         description: "Activate LTR (Long Term Retention) by configuring complete cold storage on CM with MinIO S3 backend"
+        args:
+          debug: false
 
       - name: import_ltr_dashboard
         function: import_ltr_dashboard
@@ -900,6 +990,7 @@ groups:
         description: "Import LTR dashboard (exp_dashboard_ltr.sql) to CM via REST API"
         args:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
+          debug: false
 
   edge_lab:
     name: "Edge Lab"
@@ -914,6 +1005,7 @@ groups:
         args:
           appliance_name: "cm"
           source_file_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/extensions/SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
+          debug: false
 
       - name: install_edge_patch_on_cm
         function: install_edge_patch_via_api
