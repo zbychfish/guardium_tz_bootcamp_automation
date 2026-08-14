@@ -52,7 +52,7 @@ def _ssh_cmds(ssh, commands, logger, desc: str, timeout: int = 60, stop_on_error
     return True
 
 
-def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     _header(logger, "Oracle Database 21c deployment on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
@@ -438,7 +438,8 @@ def setup_oracle_container_on_sauropod(
     logger,
     verbose: bool = False,
     image_source_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_db_21c_image_with_oua.tar.gz",
-    debug: bool = False
+    debug: bool = False,
+    **kwargs
 ) -> bool:
     _header(logger, "Setup Oracle container on sauropod")
 

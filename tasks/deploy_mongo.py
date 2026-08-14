@@ -214,7 +214,7 @@ def configure_ssl_for_mongo(logger, verbose: bool = True) -> bool:
     return True
 
 
-def deploy_mongo_on_raptor(config, logger, verbose: bool = True) -> bool:
+def deploy_mongo_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bool:
     _header(logger, "MongoDB deployment on raptor")
 
     password = config.get_custom_variable('pwd')

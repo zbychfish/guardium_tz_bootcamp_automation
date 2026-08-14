@@ -23,7 +23,7 @@ def _cmds(commands, logger, verbose, desc: str) -> bool:
     return True
 
 
-def deploy_db2_on_raptor(config, logger, verbose: bool = True) -> bool:
+def deploy_db2_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bool:
     _header(logger, "Installing Db2 prerequisites on raptor")
 
     password = config.get_custom_variable('pwd')

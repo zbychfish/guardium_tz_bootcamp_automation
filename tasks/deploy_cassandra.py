@@ -37,7 +37,7 @@ def _ssh_cmds(ssh, commands, logger, desc: str, timeout: int = 30, stop_on_error
     return True
 
 
-def deploy_cassandra_on_sauropod(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def deploy_cassandra_on_sauropod(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     _header(logger, "Apache Cassandra 4.1 deployment on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)

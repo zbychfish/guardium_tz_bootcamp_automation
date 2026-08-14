@@ -34,7 +34,7 @@ def _run(cmd, logger, desc: str, timeout: int = 120, input_data: str = None) -> 
     return True
 
 
-def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True) -> bool:
+def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
     _header(logger, "PostgreSQL 16 deployment on raptor (local)")
 
     password = config.get_custom_variable('pwd')
