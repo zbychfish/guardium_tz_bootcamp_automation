@@ -79,7 +79,8 @@ def import_gim_modules(
     demo_user: str = "demo",
     gim_directory: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/agents/gim",
     gim_target_dir: str = "/var/dump",
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     if not _require(logger, appliance_name=appliance_name):
         return False
@@ -128,7 +129,8 @@ def install_gim_on_raptor(
     logger,
     verbose: bool = False,
     gim_installer_path: Optional[str] = None,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     _header(logger, "INSTALL GIM ON RAPTOR")
 
@@ -199,7 +201,8 @@ def install_stap_on_raptor(
     use_tls: Optional[str] = None,
     statistics: Optional[str] = None,
     connection_pool_size: Optional[str] = None,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     if not _require(logger, appliance_name=appliance_name, collector_name=collector_name):
         return False
@@ -343,7 +346,7 @@ def enable_atap_for_mongo(config, logger, verbose: bool = False, **kwargs) -> bo
     logger.info("✓ ATAP enabled for MongoDB")
     return True
 
-def db2_exit_configuration(config, logger, verbose: bool = False) -> bool:
+def db2_exit_configuration(config, logger, verbose: bool = False, **kwargs) -> bool:
     _header(logger, "DB2 EXIT CONFIGURATION")
     commands = [
         "/opt/guardium/modules/ATAP/current/files/bin/guardctl authorize-user db2inst1",
@@ -405,7 +408,8 @@ def import_verification_definitions(
     verbose: bool = False,
     cm_appliance: Optional[str] = None,
     definitions_dir: Optional[str] = None,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     if not _require(logger, cm_appliance=cm_appliance, definitions_dir=definitions_dir):
         return False
@@ -496,7 +500,8 @@ def install_stap_on_sauropod(
     module_version: str = "12.2.2.0_r123489_3",
     use_tls: str = "1",
     statistics: str = "-3",
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     if not _require(logger, appliance_name=appliance_name, collector_name=collector_name):
         return False
@@ -614,7 +619,8 @@ def enable_atap_for_oracle(
     config,
     logger,
     verbose: bool = False,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
     
     _header(logger, "ENABLE ATAP FOR ORACLE ON SAUROPOD")
 
@@ -679,7 +685,8 @@ def setup_stap_with_oua_on_sauropod(
     guardium_password: Optional[str] = None,
     instantclient_rpm: Optional[str] = None,
     instantclient_source_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle",
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     if not _require(logger, instantclient_rpm=instantclient_rpm):
         return False
@@ -926,7 +933,8 @@ def import_oracle_dashboard(
     verbose: bool = False,
     cm_appliance: str = "cm",
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
     from core.guardium_rest_api import import_definitions_files
 
     _header(logger, "IMPORT ORACLE DASHBOARD ON CM")
