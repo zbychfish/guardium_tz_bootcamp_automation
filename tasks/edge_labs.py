@@ -46,31 +46,37 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     cli_pwd = params['password']
     cli_prompt = params['prompt_regex']
 
-    logger.info("➜ Registering patches on CM: show system patch available...")
-    cli = ApplianceClient(
-        host=cm_ip,
-        user='cli',
-        password=cli_pwd,
-        prompt_regex=cli_prompt,
-        initial_pattern=None,
-        timeout=600,
-        strip_ansi=True,
-        debug=debug
-    )
-    if not cli.connect():
-        logger.error("✗ Failed to connect to CM CLI")
-        return False
+    def _show_patch_available(timeout_secs):
+        cli = ApplianceClient(
+            host=cm_ip, user='cli', password=cli_pwd,
+            prompt_regex=cli_prompt, initial_pattern=None,
+            timeout=timeout_secs, strip_ansi=True, debug=debug
+        )
+        if not cli.connect():
+            raise RuntimeError("Failed to connect to CM CLI")
+        try:
+            return cli.execute_command("show system patch available", timeout=timeout_secs)
+        finally:
+            cli.disconnect()
+
+    logger.info("➜ show system patch available (attempt 1/2, timeout=600s)...")
     try:
-        patch_output = cli.execute_command("show system patch available", timeout=600)
+        patch_output = _show_patch_available(600)
         logger.info(f"Available patches:\n{patch_output}")
         logger.info("✓ Patches registered on CM")
     except Exception as e:
-        logger.error(f"✗ CLI command failed: {e}")
-        if debug:
-            logger.error(traceback.format_exc())
-        return False
-    finally:
-        cli.disconnect()
+        logger.warning(f"⚠ Attempt 1 failed: {e} — retrying in 5 minutes...")
+        time.sleep(300)
+        logger.info("➜ show system patch available (attempt 2/2, timeout=300s)...")
+        try:
+            patch_output = _show_patch_available(300)
+            logger.info(f"Available patches:\n{patch_output}")
+            logger.info("✓ Patches registered on CM")
+        except Exception as e2:
+            logger.error(f"✗ CLI command failed on retry: {e2}")
+            if debug:
+                logger.error(traceback.format_exc())
+            return False
 
     api = create_guardium_api(config, logger, cm_appliance)
     pwd = config.get_custom_variable('pwd')
