@@ -384,13 +384,15 @@ def import_dps(
     logger,
     verbose: bool = True,
     cm_appliance: str = "cm",
-    dps_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc",
+    dps_file: str = None,
     demo_user: str = "demo",
     headless: bool = True,
-    **kwargs) -> bool:
-    
+    **kwargs
+) -> bool:
     _header(logger, "IMPORT DPS")
 
+    if not _require(logger, dps_file=dps_file):
+        return False
     if not os.path.exists(dps_file):
         logger.error(f"DPS file not found: {dps_file}")
         return False
