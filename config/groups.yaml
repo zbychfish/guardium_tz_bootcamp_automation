@@ -753,6 +753,13 @@ groups:
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
+      - name: stop_oracle_lab_services
+        function: stop_oracle_lab_services
+        module: tasks.etap_labs
+        description: "Stop and disable mysqld, mysql-etap, oracle-etap on raptor"
+        args:
+          debug: false
+
   oracle_lab_uc2:
     name: "Oracle Lab UC2"
     description: "Deploy Universal Connector 2.0 for Oracle container on sauropod"

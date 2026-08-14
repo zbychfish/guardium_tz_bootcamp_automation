@@ -590,4 +590,18 @@ def stop_etap_services(config, logger, verbose: bool = False, **kwargs) -> bool:
     return True
 
 
+def stop_oracle_lab_services(config, logger, verbose: bool = False, **kwargs) -> bool:
+    _header(logger, "STOP ORACLE LAB SERVICES")
+    for svc in ("mysqld", "mysql-etap", "oracle-etap"):
+        for action in ("stop", "disable"):
+            logger.info(f"➜ systemctl {action} {svc}")
+            result = execute_local_command(f"systemctl {action} {svc}", logger=logger, verbose=verbose)
+            if result['rc'] != 0:
+                logger.warning(f"⚠ systemctl {action} {svc}: {result['stderr']}")
+            else:
+                logger.info(f"✓ systemctl {action} {svc}")
+    logger.info("✓ mysqld, mysql-etap, oracle-etap stopped and disabled")
+    return True
+
+
 # Made with Bob
