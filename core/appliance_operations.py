@@ -1563,7 +1563,8 @@ def install_patch_on_appliance(
 def monitor_patch_installation(
     config,
     logger,
-    appliance_name: str,
+    verbose: bool = True,
+    appliance_name: str = "",
     patch_numbers: Optional[List[str]] = None,
     check_interval: int = 60,
     max_checks: int = 60,
@@ -1571,7 +1572,8 @@ def monitor_patch_installation(
     appear_max: int = 0,
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = False) -> bool:
+    debug: bool = False,
+    **kwargs) -> bool:
 
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password)
     if not params:

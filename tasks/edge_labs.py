@@ -415,6 +415,7 @@ def deploy_edge_gateway(config, logger, verbose=True,
                         install_script="edge-install.sh",
                         script_timeout=600,
                         debug=False, **kwargs):
+
     _header(logger, "DEPLOY EDGE GATEWAY ON SAUROPOD")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
@@ -587,7 +588,9 @@ def install_policy_on_sauropod(config, logger, verbose=True,
                                units="sauropod.demo.guardium",
                                install_action="install_override",
                                debug=False, **kwargs):
+
     _header(logger, "INSTALL POLICY ON SAUROPOD")
+    
     logger.info(f"  policy={policy_name}, units={units}, install_action={install_action}")
 
     pwd = config.get_custom_variable('pwd')
