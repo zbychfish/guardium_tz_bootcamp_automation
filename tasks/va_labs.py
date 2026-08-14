@@ -387,8 +387,7 @@ def import_dps(
     dps_file: str = None,
     demo_user: str = "demo",
     headless: bool = True,
-    **kwargs
-) -> bool:
+    **kwargs) -> bool:
     _header(logger, "IMPORT DPS")
 
     if not _require(logger, dps_file=dps_file):
