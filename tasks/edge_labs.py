@@ -24,7 +24,6 @@ def _header(logger, title: str) -> None:
     logger.info(title)
     logger.info("=" * 60)
 
-
 def install_edge_patch_via_api(config, logger, verbose=True,
                                cm_appliance="cm",
                                patch_filename="SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig",
@@ -97,8 +96,6 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     logger.info("✓ Edge patch installation initiated via REST API on CM")
     return True
 
-
-
 def register_edge_gateway(config, logger, verbose=True,
                           cm_appliance="cm",
                           exports_to="cm.demo.guardium",
@@ -108,7 +105,9 @@ def register_edge_gateway(config, logger, verbose=True,
                           version="v2.1.1",
                           deploy_proxy=True,
                           debug=False, **kwargs):
+
     _header(logger, "REGISTER EDGE GATEWAY ON CM")
+
     logger.info(f"  name={name}, namespace={namespace}, exportsTo={exports_to}")
     logger.info(f"  storageclass_rw_once={storageclass_rw_once}, version={version}, deployProxy={deploy_proxy}")
 
@@ -143,7 +142,6 @@ def register_edge_gateway(config, logger, verbose=True,
 
     logger.info("✓ Edge gateway registered successfully on CM")
     return True
-
 
 def install_k3s_on_sauropod(config, logger, verbose=True,
                             k3s_version="v1.32.13+k3s1",
@@ -282,12 +280,12 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
     finally:
         ssh.disconnect()
 
-
 def download_edge_bundle_via_api(config, logger, verbose=True,
                                  cm_appliance="cm",
                                  edge_name="sauropod.demo.guardium",
                                  sauropod_dest="/tmp/edge.tar.gz",
                                  debug=False, **kwargs):
+
     _header(logger, "DOWNLOAD EDGE BUNDLE VIA REST API TO SAUROPOD")
 
     pwd = config.get_custom_variable('pwd')
@@ -359,7 +357,6 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
         except OSError:
             pass
 
-
 def prepare_sauropod_for_edge(config, logger, verbose=True,
                               debug=False, **kwargs):
     _header(logger, "PREPARE SAUROPOD FOR EDGE DEPLOYMENT")
@@ -412,7 +409,6 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
         return False
     finally:
         ssh.disconnect()
-
 
 def deploy_edge_gateway(config, logger, verbose=True,
                         edge_dir="/tmp/sauropod.demo.guardium",
@@ -506,7 +502,6 @@ def deploy_edge_gateway(config, logger, verbose=True,
     finally:
         client.close()
 
-
 def monitor_edge_gateway_deployment(config, logger, verbose=True,
                                     namespace="edge",
                                     pod_prefix="edge-manager",
@@ -514,6 +509,7 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
                                     log_interval=30, log_max=60,
                                     completion_marker="EDGE_SERVICES_INSTALLATION_STATUS is Completed",
                                     debug=False, **kwargs):
+
     _header(logger, "MONITOR EDGE GATEWAY DEPLOYMENT ON SAUROPOD")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
@@ -585,7 +581,6 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
     finally:
         ssh.disconnect()
 
-
 def install_policy_on_sauropod(config, logger, verbose=True,
                                cm_appliance="cm",
                                policy_name="Default bootcamp policy",
@@ -621,7 +616,6 @@ def install_policy_on_sauropod(config, logger, verbose=True,
     logger.info(f"✓ Policy '{policy_name}' installed on sauropod")
     return True
 
-
 def import_edge_dashboard(config, logger, verbose=True,
                           cm_appliance="cm",
                           definitions_dir="/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
@@ -640,7 +634,6 @@ def import_edge_dashboard(config, logger, verbose=True,
     if success:
         logger.info("✓ Edge dashboard imported successfully")
     return success
-
 
 def configure_stap_for_edge_on_sauropod(config, logger, verbose=True,
                                         cm_appliance="cm",
