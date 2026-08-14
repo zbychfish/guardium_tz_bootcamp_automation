@@ -830,20 +830,11 @@ groups:
     deployed_with: []
     dependencies: [oracle_lab]
     stages:
-      - name: stop_raptor_databases
-        function: stop_raptor_databases
-        module: tasks.general_labs
-        description: "Stop all database services on raptor: Informix, MongoDB, MySQL, mysql-etap, oracle-etap"
-        args:
-          debug: false
-
       - name: import_policies_reports_dashboard
         function: import_policies_reports_dashboard
         module: tasks.general_labs
         description: "Import Policies and Reports dashboard to CM via REST API"
         args:
-          cm_appliance: "cm"
-          definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
           debug: false
 
       - name: add_postgres_app_profile_member
@@ -851,7 +842,6 @@ groups:
         module: tasks.general_labs
         description: "Add raptor postgres application profile tuple member to group 'Postgres application profiles'"
         args:
-          cm_appliance: "cm"
           debug: false
 
       - name: configure_engine_on_raptor
@@ -859,8 +849,6 @@ groups:
         module: tasks.general_labs
         description: "Configure Inspection Engine on raptor STAP (compute_average, inspect_data, log_records, record_empty)"
         args:
-          cm_appliance: "cm"
-          collector_appliance: "coll1"
           debug: false
 
       - name: set_stap_firewall_flags_on_raptor
@@ -868,7 +856,6 @@ groups:
         module: tasks.general_labs
         description: "Set STAP_FIREWALL_INSTALLED=1 and STAP_FIREWALL_DEFAULT_STATE=1 on raptor STAP, then restart agent via gim_schedule_install"
         args:
-          cm_appliance: "cm"
           debug: false
 
       - name: run_dbtraffic_pgsql_on_raptor
@@ -883,8 +870,6 @@ groups:
         module: tasks.general_labs
         description: "Install policy 'Application data access control' on coll1"
         args:
-          cm_appliance: "cm"
-          collector_appliance: "coll1"
           debug: false
 
   va_api:
