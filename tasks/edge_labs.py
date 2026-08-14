@@ -11,6 +11,7 @@ import paramiko
 
 from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
+from core.appliance_operations import _get_appliance_connection_params
 from core.guardium_rest_api import create_guardium_api, import_definitions_files
 from core.logger import get_logger
 from core.ssh_client import SSHClient
@@ -29,6 +30,7 @@ def install_edge_patch_via_api(config, logger, verbose=True,
                                patch_filename="SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig",
                                mode="local_only",
                                debug=False, **kwargs):
+                               
     _header(logger, "INSTALL EDGE PATCH ON CM VIA REST API")
 
     m = re.search(r'12\.0p(\d+)', os.path.basename(patch_filename))
@@ -38,22 +40,12 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     patch_number = int(m.group(1))
     logger.info(f"Patch number: {patch_number}")
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(cm_appliance)
-    if not appliance_config:
-        logger.error(f"Appliance '{cm_appliance}' not found in machines_info.json")
+    params = _get_appliance_connection_params(config, logger, cm_appliance)
+    if not params:
         return False
-    cm_ip = appliance_config.get('ip')
-    if not cm_ip:
-        logger.error(f"Appliance '{cm_appliance}' has no IP")
-        return False
-
-    appliance_type = appliance_config.get('type', 'cm')
-    cli_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
-    cli_pwd = config.get_custom_variable('cli_pwd')
-    if not cli_pwd:
-        logger.error("cli_pwd not found in custom_variables")
-        return False
+    cm_ip = params['host']
+    cli_pwd = params['password']
+    cli_prompt = params['prompt_regex']
 
     logger.info("➜ Registering patches on CM: show system patch available...")
     cli = ApplianceClient(
@@ -120,22 +112,12 @@ def monitor_edge_patch_installation(config, logger, verbose=True,
         return False
     patch_number_str = m.group(1)
 
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(cm_appliance)
-    if not appliance_config:
-        logger.error(f"Appliance '{cm_appliance}' not found in machines_info.json")
+    params = _get_appliance_connection_params(config, logger, cm_appliance)
+    if not params:
         return False
-    cm_ip = appliance_config.get('ip')
-    if not cm_ip:
-        logger.error(f"Appliance '{cm_appliance}' has no IP")
-        return False
-
-    appliance_type = appliance_config.get('type', 'cm')
-    cli_prompt = appliance_loader.get_default_prompt(appliance_type, configured=True) or r'[\w-]+(\.demo\.guardium)?> '
-    cli_pwd = config.get_custom_variable('cli_pwd')
-    if not cli_pwd:
-        logger.error("cli_pwd not found in custom_variables")
-        return False
+    cm_ip = params['host']
+    cli_pwd = params['password']
+    cli_prompt = params['prompt_regex']
 
     def _cli_show_patch_install():
         client = ApplianceClient(
