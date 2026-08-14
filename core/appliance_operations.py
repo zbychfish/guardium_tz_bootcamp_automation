@@ -1422,8 +1422,8 @@ def install_patch_on_appliance(
     reinstall_answer: str = "y",
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = False,
-) -> bool:
+    debug: bool = False,) -> bool:
+    
     import socket
 
     if not patch_selection:
