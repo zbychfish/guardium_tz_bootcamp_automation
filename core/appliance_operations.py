@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Appliance Operations - Reusable functions for Guardium appliance operations
@@ -32,9 +32,9 @@ def execute_on_appliances_async(
     max_workers = min(len(appliances), 20)
     total = len(appliances)
 
-    logger.info(f"➜ {operation_name} — {total} appliances, {max_workers} parallel")
+    logger.info(f"âžś {operation_name} â€” {total} appliances, {max_workers} parallel")
     for a in appliances:
-        logger.info(f"  ○ {a}")
+        logger.info(f"  â—‹ {a}")
 
     results = {}
     errors = {}
@@ -65,10 +65,10 @@ def execute_on_appliances_async(
             completed_count += 1
             elapsed_str = f"{elapsed:.0f}s" if elapsed < 60 else f"{int(elapsed)//60}m{int(elapsed)%60:02d}s"
             if success:
-                logger.info(f"  ✓ [{completed_count}/{total}] {appliance_name} ({elapsed_str})")
+                logger.info(f"  âś“ [{completed_count}/{total}] {appliance_name} ({elapsed_str})")
             else:
-                msg = f" — {error}" if error else ""
-                logger.error(f"  ✗ [{completed_count}/{total}] {appliance_name} ({elapsed_str}){msg}")
+                msg = f" â€” {error}" if error else ""
+                logger.error(f"  âś— [{completed_count}/{total}] {appliance_name} ({elapsed_str}){msg}")
 
     return results, errors
 
@@ -167,20 +167,20 @@ def restart_appliance(
                 return False
 
             if mysql_attempt > 1:
-                logger.info(f"[{appliance_name}] ➜ restart system (attempt {mysql_attempt}/{mysql_busy_retries})")
+                logger.info(f"[{appliance_name}] âžś restart system (attempt {mysql_attempt}/{mysql_busy_retries})")
             else:
-                logger.info(f"[{appliance_name}] ➜ restart system")
+                logger.info(f"[{appliance_name}] âžś restart system")
             result = client.execute_restart_with_check()
             client.disconnect()
 
             if "System is restarting" in result:
-                logger.info(f"[{appliance_name}] ✓ restart initiated")
+                logger.info(f"[{appliance_name}] âś“ restart initiated")
 
                 if not wait_for_availability:
                     return True
 
                 total_timeout = max_retries * retry_interval
-                logger.info(f"[{appliance_name}] ⌛ waiting for online (timeout ~{total_timeout}s)")
+                logger.info(f"[{appliance_name}] âŚ› waiting for online (timeout ~{total_timeout}s)")
                 start_time = time.time()
 
                 for retry_count in range(1, max_retries + 1):
@@ -193,7 +193,7 @@ def restart_appliance(
                         if test_client.connect():
                             test_client.disconnect()
                             elapsed = int(time.time() - start_time)
-                            logger.info(f"[{appliance_name}] ✓ back online ({elapsed}s, {retry_count} attempts)")
+                            logger.info(f"[{appliance_name}] âś“ back online ({elapsed}s, {retry_count} attempts)")
                             return True
                     except Exception:
                         pass
@@ -201,27 +201,27 @@ def restart_appliance(
                     time.sleep(retry_interval)
 
                 elapsed = int(time.time() - start_time)
-                logger.error(f"[{appliance_name}] ✗ timeout ({elapsed}s, {max_retries} attempts)")
+                logger.error(f"[{appliance_name}] âś— timeout ({elapsed}s, {max_retries} attempts)")
                 return False
 
             elif "MySQL is busy" in result:
                 if mysql_attempt < mysql_busy_retries:
-                    logger.warning(f"[{appliance_name}] ⚠ MySQL busy (attempt {mysql_attempt}/{mysql_busy_retries}), waiting {mysql_busy_wait}s...")
+                    logger.warning(f"[{appliance_name}] âš  MySQL busy (attempt {mysql_attempt}/{mysql_busy_retries}), waiting {mysql_busy_wait}s...")
                     time.sleep(mysql_busy_wait)
                     continue
                 else:
-                    logger.error(f"[{appliance_name}] ✗ MySQL busy after {mysql_busy_retries} attempts")
+                    logger.error(f"[{appliance_name}] âś— MySQL busy after {mysql_busy_retries} attempts")
                     return False
             else:
-                logger.error(f"[{appliance_name}] ✗ unexpected result: {result}")
+                logger.error(f"[{appliance_name}] âś— unexpected result: {result}")
                 return False
 
         except Exception as e:
-            logger.error(f"[{appliance_name}] ✗ {e}")
+            logger.error(f"[{appliance_name}] âś— {e}")
             logger.error(traceback.format_exc())
             return False
 
-    logger.error(f"[{appliance_name}] ✗ restart failed after all retries")
+    logger.error(f"[{appliance_name}] âś— restart failed after all retries")
     return False
 
 def setup_appnode(
@@ -234,6 +234,7 @@ def setup_appnode(
     debug: bool = True,
     retry_interval: int = 60,
     max_retries: int = 10) -> bool:
+
     import traceback
 
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
@@ -253,7 +254,7 @@ def setup_appnode(
             logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ store unit type app-node")
+        logger.info(f"[{appliance_name}] âžś store unit type app-node")
         try:
             client.execute_command_with_confirmation(
                 command="store unit type app-node",
@@ -261,10 +262,10 @@ def setup_appnode(
                 response="y",
                 confirm_idle=0.2
             )
-            logger.info(f"[{appliance_name}] ✓ command sent, system restarting")
+            logger.info(f"[{appliance_name}] âś“ command sent, system restarting")
         except RuntimeError as e:
             if "Channel closed" in str(e):
-                logger.info(f"[{appliance_name}] ✓ system restarting (connection closed)")
+                logger.info(f"[{appliance_name}] âś“ system restarting (connection closed)")
             else:
                 raise
 
@@ -273,7 +274,7 @@ def setup_appnode(
         except Exception:
             pass
 
-        logger.info(f"[{appliance_name}] ⌛ waiting online (max {max_retries * retry_interval}s)")
+        logger.info(f"[{appliance_name}] âŚ› waiting online (max {max_retries * retry_interval}s)")
         start_time = time.time()
 
         for retry_count in range(1, max_retries + 1):
@@ -286,25 +287,25 @@ def setup_appnode(
                 )
                 if test_client.connect():
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"[{appliance_name}] ✓ back online ({elapsed}s, {retry_count} attempts)")
-                    logger.info(f"[{appliance_name}] ➜ show unit type")
+                    logger.info(f"[{appliance_name}] âś“ back online ({elapsed}s, {retry_count} attempts)")
+                    logger.info(f"[{appliance_name}] âžś show unit type")
                     verify_result = test_client.execute_command("show unit type")
                     test_client.disconnect()
                     if "App-Node" in verify_result or "App_Node" in verify_result:
-                        logger.info(f"[{appliance_name}] ✓ unit type=App-Node")
+                        logger.info(f"[{appliance_name}] âś“ unit type=App-Node")
                         return True
                     else:
-                        logger.error(f"[{appliance_name}] ✗ unexpected unit type: {verify_result.strip()}")
+                        logger.error(f"[{appliance_name}] âś— unexpected unit type: {verify_result.strip()}")
                         return False
             except Exception:
                 pass
 
         elapsed = int(time.time() - start_time)
-        logger.error(f"[{appliance_name}] ✗ timeout ({elapsed}s, {max_retries} attempts)")
+        logger.error(f"[{appliance_name}] âś— timeout ({elapsed}s, {max_retries} attempts)")
         return False
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -337,7 +338,7 @@ def setup_kafka_node(
             logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ store unit type kafka-node")
+        logger.info(f"[{appliance_name}] âžś store unit type kafka-node")
         try:
             client.execute_command_with_confirmation(
                 command="store unit type kafka-node",
@@ -345,10 +346,10 @@ def setup_kafka_node(
                 response="y",
                 confirm_idle=0.2
             )
-            logger.info(f"[{appliance_name}] ✓ command sent, system restarting")
+            logger.info(f"[{appliance_name}] âś“ command sent, system restarting")
         except RuntimeError as e:
             if "Channel closed" in str(e):
-                logger.info(f"[{appliance_name}] ✓ system restarting (connection closed)")
+                logger.info(f"[{appliance_name}] âś“ system restarting (connection closed)")
             else:
                 raise
 
@@ -357,7 +358,7 @@ def setup_kafka_node(
         except Exception:
             pass
 
-        logger.info(f"[{appliance_name}] ⌛ waiting online (max {max_retries * retry_interval}s)")
+        logger.info(f"[{appliance_name}] âŚ› waiting online (max {max_retries * retry_interval}s)")
         start_time = time.time()
 
         for retry_count in range(1, max_retries + 1):
@@ -370,25 +371,25 @@ def setup_kafka_node(
                 )
                 if test_client.connect():
                     elapsed = int(time.time() - start_time)
-                    logger.info(f"[{appliance_name}] ✓ back online ({elapsed}s, {retry_count} attempts)")
-                    logger.info(f"[{appliance_name}] ➜ show unit type")
+                    logger.info(f"[{appliance_name}] âś“ back online ({elapsed}s, {retry_count} attempts)")
+                    logger.info(f"[{appliance_name}] âžś show unit type")
                     verify_result = test_client.execute_command("show unit type")
                     test_client.disconnect()
                     if "Kafka" in verify_result:
-                        logger.info(f"[{appliance_name}] ✓ unit type=Kafka-Node")
+                        logger.info(f"[{appliance_name}] âś“ unit type=Kafka-Node")
                         return True
                     else:
-                        logger.error(f"[{appliance_name}] ✗ unexpected unit type: {verify_result.strip()}")
+                        logger.error(f"[{appliance_name}] âś— unexpected unit type: {verify_result.strip()}")
                         return False
             except Exception:
                 pass
 
         elapsed = int(time.time() - start_time)
-        logger.error(f"[{appliance_name}] ✗ timeout ({elapsed}s, {max_retries} attempts)")
+        logger.error(f"[{appliance_name}] âś— timeout ({elapsed}s, {max_retries} attempts)")
         return False
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -425,15 +426,15 @@ def configure_aggr_settings(
             logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ store run_cleanup_orphans_daily off")
+        logger.info(f"[{appliance_name}] âžś store run_cleanup_orphans_daily off")
         result1 = client.execute_command("store run_cleanup_orphans_daily off")
         if "The parameter has been changed" in result1:
-            logger.info(f"[{appliance_name}] ✓ run_cleanup_orphans_daily=off")
+            logger.info(f"[{appliance_name}] âś“ run_cleanup_orphans_daily=off")
         else:
-            logger.warning(f"[{appliance_name}] ⚠ unexpected response: {result1}")
+            logger.warning(f"[{appliance_name}] âš  unexpected response: {result1}")
 
         if appliance_type != 'cm':
-            logger.info(f"[{appliance_name}] ⊘ purge_age_period skipped (type={appliance_type})")
+            logger.info(f"[{appliance_name}] âŠ purge_age_period skipped (type={appliance_type})")
             client.disconnect()
             return True
 
@@ -441,7 +442,7 @@ def configure_aggr_settings(
             logger.error(f"[{appliance_name}] channel not available")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ store purge_age_period 0")
+        logger.info(f"[{appliance_name}] âžś store purge_age_period 0")
         client.channel.send(b"store purge_age_period 0\n")
         time.sleep(1)
 
@@ -468,15 +469,15 @@ def configure_aggr_settings(
             output = strip_ansi(output)
 
         if "The purge_age period has been changed" in output:
-            logger.info(f"[{appliance_name}] ✓ purge_age_period=0")
+            logger.info(f"[{appliance_name}] âś“ purge_age_period=0")
         else:
-            logger.warning(f"[{appliance_name}] ⚠ unexpected response: {output}")
+            logger.warning(f"[{appliance_name}] âš  unexpected response: {output}")
 
         client.disconnect()
         return True
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -513,19 +514,19 @@ def set_shared_secret(
             logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ store system shared secret ***")
+        logger.info(f"[{appliance_name}] âžś store system shared secret ***")
         output = client.execute_command(f"store system shared secret {target_shared_secret}")
         client.disconnect()
 
         if "error" in output.lower() or "failed" in output.lower():
-            logger.error(f"[{appliance_name}] ✗ {output}")
+            logger.error(f"[{appliance_name}] âś— {output}")
             return False
 
-        logger.info(f"[{appliance_name}] ✓ shared secret set")
+        logger.info(f"[{appliance_name}] âś“ shared secret set")
         return True
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -556,7 +557,7 @@ def register_appliance(
             logger.error(f"[{appliance_name}] no Central Manager found in machines_info.json")
             return False
         if len(cm_appliances) > 1:
-            logger.warning(f"[{appliance_name}] multiple CMs: {list(cm_appliances.keys())} — using first")
+            logger.warning(f"[{appliance_name}] multiple CMs: {list(cm_appliances.keys())} â€” using first")
         cm_name = next(iter(cm_appliances))
         cm_ip = cm_appliances[cm_name].get('ip')
         logger.info(f"[{appliance_name}] auto-detected CM: {cm_name} at {cm_ip}")
@@ -576,7 +577,7 @@ def register_appliance(
         return c if c.connect() else None
 
     def _check_managed(c):
-        logger.info(f"[{appliance_name}] ➜ show unit type")
+        logger.info(f"[{appliance_name}] âžś show unit type")
         out = c.execute_command("show unit type")
         logger.info(f"[{appliance_name}] {out.strip()}")
         c.disconnect()
@@ -593,12 +594,12 @@ def register_appliance(
             logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ show unit type")
+        logger.info(f"[{appliance_name}] âžś show unit type")
         logger.info(f"[{appliance_name}] {client.execute_command('show unit type').strip()}")
 
         command = f"register management {cm_ip} {cm_port}"
-        logger.info(f"[{appliance_name}] ➜ {command}")
-        logger.info(f"[{appliance_name}] ⌛ up to {timeout}s...")
+        logger.info(f"[{appliance_name}] âžś {command}")
+        logger.info(f"[{appliance_name}] âŚ› up to {timeout}s...")
 
         try:
             output, fail_detected = client.execute_command_with_early_fail_detection(
@@ -608,7 +609,7 @@ def register_appliance(
                 logger.info(f"[{appliance_name}] {output.strip()}")
 
             if fail_detected:
-                logger.warning(f"[{appliance_name}] ⚠ Fail: detected")
+                logger.warning(f"[{appliance_name}] âš  Fail: detected")
                 client.disconnect()
                 reconnected = _reconnect()
                 if not reconnected:
@@ -616,37 +617,37 @@ def register_appliance(
                     return False
                 managed = _check_managed(reconnected)
                 if managed:
-                    logger.info(f"[{appliance_name}] ✓ Managed (despite Fail: message)")
+                    logger.info(f"[{appliance_name}] âś“ Managed (despite Fail: message)")
                 else:
-                    logger.error(f"[{appliance_name}] ✗ not Managed after Fail:")
+                    logger.error(f"[{appliance_name}] âś— not Managed after Fail:")
                 return managed
 
             managed = _check_managed(client)
             if managed:
-                logger.info(f"[{appliance_name}] ✓ registered (Managed)")
+                logger.info(f"[{appliance_name}] âś“ registered (Managed)")
             elif "unit_type" in output.lower() or "registered" in output.lower():
-                logger.info(f"[{appliance_name}] ✓ registered")
+                logger.info(f"[{appliance_name}] âś“ registered")
                 managed = True
             else:
-                logger.warning(f"[{appliance_name}] ⚠ registration unclear — treating as success")
+                logger.warning(f"[{appliance_name}] âš  registration unclear â€” treating as success")
                 managed = True
             return managed
 
         except TimeoutError:
-            logger.debug(f"[{appliance_name}] ⚠ timeout, reconnecting")
+            logger.debug(f"[{appliance_name}] âš  timeout, reconnecting")
             reconnected = _reconnect()
             if not reconnected:
                 logger.error(f"[{appliance_name}] failed to reconnect after timeout")
                 return False
             managed = _check_managed(reconnected)
             if managed:
-                logger.info(f"[{appliance_name}] ✓ registered (after timeout)")
+                logger.info(f"[{appliance_name}] âś“ registered (after timeout)")
             else:
-                logger.debug(f"[{appliance_name}] ⚠ timeout, not Managed")
+                logger.debug(f"[{appliance_name}] âš  timeout, not Managed")
             return managed
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -678,7 +679,7 @@ def set_timezone(
             logger.error(f"[{appliance_name}] failed to connect")
             return False
 
-        logger.info(f"[{appliance_name}] ➜ show system clock all")
+        logger.info(f"[{appliance_name}] âžś show system clock all")
         output = client.execute_command("show system clock all")
         if not output:
             client.disconnect()
@@ -689,11 +690,11 @@ def set_timezone(
         logger.info(f"[{appliance_name}] current timezone: {current_timezone}")
 
         if current_timezone == target_timezone:
-            logger.info(f"[{appliance_name}] ✓ timezone already {target_timezone}")
+            logger.info(f"[{appliance_name}] âś“ timezone already {target_timezone}")
             client.disconnect()
             return True
 
-        logger.info(f"[{appliance_name}] ➜ store system clock timezone {target_timezone}")
+        logger.info(f"[{appliance_name}] âžś store system clock timezone {target_timezone}")
         output = client.execute_command_with_confirmation(
             command=f"store system clock timezone {target_timezone}",
             response="y"
@@ -702,20 +703,20 @@ def set_timezone(
             logger.info(f"[{appliance_name}] {output.strip()}")
 
         time.sleep(1)
-        logger.info(f"[{appliance_name}] ➜ show system clock all (verify)")
+        logger.info(f"[{appliance_name}] âžś show system clock all (verify)")
         output = client.execute_command("show system clock all")
         if output:
             new_timezone = output.strip().splitlines()[-1]
             if new_timezone == target_timezone:
-                logger.info(f"[{appliance_name}] ✓ timezone={new_timezone}")
+                logger.info(f"[{appliance_name}] âś“ timezone={new_timezone}")
             else:
-                logger.warning(f"[{appliance_name}] ⚠ expected {target_timezone}, got {new_timezone}")
+                logger.warning(f"[{appliance_name}] âš  expected {target_timezone}, got {new_timezone}")
 
         client.disconnect()
         return True
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -779,17 +780,17 @@ def configure_system_settings_consolidated(
             )
             if debug and output:
                 _log(output)
-            _log(f"✓ hostname={hostname}")
+            _log(f"âś“ hostname={hostname}")
         except TimeoutError:
-            _log("⚠ timeout during hostname change, continuing...", 'warning')
+            _log("âš  timeout during hostname change, continuing...", 'warning')
 
         try:
             output = client.execute_command(f"store system domain {domain}")
             if debug and output:
                 _log(output)
-            _log(f"✓ domain={domain}")
+            _log(f"âś“ domain={domain}")
         except TimeoutError:
-            _log("⚠ timeout during domain change, continuing...", 'warning')
+            _log("âš  timeout during domain change, continuing...", 'warning')
 
         _prev_timeout = client.timeout
         client.timeout = 600
@@ -801,9 +802,9 @@ def configure_system_settings_consolidated(
             )
             if debug and output:
                 _log(output)
-            _log("✓ network restarted")
+            _log("âś“ network restarted")
         except (TimeoutError, RuntimeError):
-            _log("✓ network restart in progress (connection dropped - normal)")
+            _log("âś“ network restart in progress (connection dropped - normal)")
         finally:
             client.timeout = _prev_timeout
 
@@ -813,17 +814,17 @@ def configure_system_settings_consolidated(
         )
         if debug and output:
             _log(output)
-        _log("✓ small_disk enabled")
+        _log("âś“ small_disk enabled")
 
         output = client.execute_command("store gui session_timeout 9999")
         if debug and output:
             _log(output)
-        _log("✓ gui session_timeout=9999")
+        _log("âś“ gui session_timeout=9999")
 
         output = client.execute_command("store timeout cli_session 600")
         if debug and output:
             _log(output)
-        _log("✓ cli_session timeout=600")
+        _log("âś“ cli_session timeout=600")
 
         output = client.execute_command_with_confirmation(
             command="restart gui",
@@ -832,15 +833,15 @@ def configure_system_settings_consolidated(
         )
         if debug and output:
             _log(output)
-        _log("✓ gui restarted")
+        _log("âś“ gui restarted")
 
         output = client.execute_command(f"store network interface ip {ip_address}{prefix}")
         if debug and output:
             _log(output)
         if "This change will take effect after the next network restart" in output or "ok" in output:
-            _log(f"✓ ip={ip_address}{prefix}")
+            _log(f"âś“ ip={ip_address}{prefix}")
         else:
-            _log(f"⚠ ip={ip_address}{prefix} — unexpected response", 'warning')
+            _log(f"âš  ip={ip_address}{prefix} â€” unexpected response", 'warning')
 
         output = client.execute_command_with_confirmation(
             command=f"store system clock timezone {target_timezone}",
@@ -848,17 +849,17 @@ def configure_system_settings_consolidated(
         )
         if debug and output:
             _log(output)
-        _log(f"✓ timezone={target_timezone}")
+        _log(f"âś“ timezone={target_timezone}")
 
         output = client.execute_command(f"store system time_server hostname {' '.join(ntp_servers)}")
         if debug and output:
             _log(output)
-        _log(f"✓ ntp={' '.join(ntp_servers)}")
+        _log(f"âś“ ntp={' '.join(ntp_servers)}")
 
         output = client.execute_command("store system time_server state on")
         if debug and output:
             _log(output)
-        _log("✓ time sync enabled")
+        _log("âś“ time sync enabled")
 
         hosts = {}
         for name, cfg in config.get_regular_machines().items():
@@ -875,20 +876,20 @@ def configure_system_settings_consolidated(
 
         for fqdn, ip in hosts.items():
             client.execute_command(f"support store hosts {ip} {fqdn}")
-        _log(f"✓ hosts={len(hosts)} entries")
+        _log(f"âś“ hosts={len(hosts)} entries")
 
         target_gid = gid if gid is not None else random.randint(1000, 100000)
         output = client.execute_command(f"store product gid {target_gid}")
         if debug and output:
             _log(output)
-        _log(f"✓ gid={target_gid}")
+        _log(f"âś“ gid={target_gid}")
 
         client.disconnect()
-        _log(f"✓ done: hostname={hostname} ip={ip_address}{prefix} tz={target_timezone} gid={target_gid}")
+        _log(f"âś“ done: hostname={hostname} ip={ip_address}{prefix} tz={target_timezone} gid={target_gid}")
         return True
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         if debug:
             logger.error(traceback.format_exc())
         return False
@@ -931,7 +932,7 @@ def reset_cli_password(
             return False
 
     try:
-        logger.info(f"➜ SSH {host} as cloudsupport")
+        logger.info(f"âžś SSH {host} as cloudsupport")
         ssh_client = paramiko.SSHClient()
         ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_client.connect(
@@ -943,7 +944,7 @@ def reset_cli_password(
             timeout=30
         )
 
-        logger.info("➜ echo 'cli:***' | sudo chpasswd")
+        logger.info("âžś echo 'cli:***' | sudo chpasswd")
         stdin, stdout, stderr = ssh_client.exec_command(
             f"echo 'cli:{cli_password}' | sudo chpasswd", timeout=30
         )
@@ -960,14 +961,14 @@ def reset_cli_password(
         ssh_client.close()
 
         if exit_code == 0:
-            logger.info(f"✓ CLI password reset on {appliance_name}")
+            logger.info(f"âś“ CLI password reset on {appliance_name}")
             return True
         else:
-            logger.error(f"✗ chpasswd failed on {appliance_name} (exit code: {exit_code})")
+            logger.error(f"âś— chpasswd failed on {appliance_name} (exit code: {exit_code})")
             return False
 
     except Exception as e:
-        logger.error(f"✗ {appliance_name}: {e}")
+        logger.error(f"âś— {appliance_name}: {e}")
         if debug:
             logger.error(traceback.format_exc())
         return False
@@ -1072,7 +1073,7 @@ def prepare_appliance_for_patching(
                         ssh_client.close()
                         return False
 
-            logger.info(f"[{appliance_name}] ✓ {len(patch_files)} patch files copied to /tmp/")
+            logger.info(f"[{appliance_name}] âś“ {len(patch_files)} patch files copied to /tmp/")
 
             stdin, stdout, stderr = ssh_client.exec_command('sudo mkdir -p /var/IBM/Guardium/log/patches/')
             if stdout.channel.recv_exit_status() != 0:
@@ -1086,11 +1087,11 @@ def prepare_appliance_for_patching(
                 ssh_client.close()
                 return False
 
-            logger.info(f"[{appliance_name}] ✓ patch files moved to /var/IBM/Guardium/log/patches/")
+            logger.info(f"[{appliance_name}] âś“ patch files moved to /var/IBM/Guardium/log/patches/")
             ssh_client.close()
 
         except Exception as e:
-            logger.error(f"[{appliance_name}] ✗ SSH error: {e}")
+            logger.error(f"[{appliance_name}] âś— SSH error: {e}")
             logger.error(traceback.format_exc())
             return False
 
@@ -1113,11 +1114,11 @@ def prepare_appliance_for_patching(
         logger.info(f"[{appliance_name}] available patches:\n{patch_output.strip()}")
         cli_client.disconnect()
 
-        logger.info(f"[{appliance_name}] ✓ ready for patching")
+        logger.info(f"[{appliance_name}] âś“ ready for patching")
         return True
 
     except Exception as e:
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -1159,7 +1160,7 @@ def copy_files_to_appliance(
         return False
 
     _header(logger, f"COPY FILES TO APPLIANCE: {appliance_name}")
-    logger.info(f"[{appliance_name}] {len(files_to_copy)} file(s) → {target_dir}")
+    logger.info(f"[{appliance_name}] {len(files_to_copy)} file(s) â†’ {target_dir}")
 
     try:
         raptor_ip = config.get_machine_ip('raptor', use_private=True)
@@ -1184,14 +1185,14 @@ def copy_files_to_appliance(
 
         for file_path in files_to_copy:
             filename = os.path.basename(file_path)
-            logger.info(f"[{appliance_name}] ➜ scp {filename}")
+            logger.info(f"[{appliance_name}] âžś scp {filename}")
             if sshpass_available:
                 scp_command = (f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} "
                                f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
                                f"root@{raptor_ip}:{file_path} /tmp/{filename}")
                 stdin, stdout, stderr = ssh_client.exec_command(scp_command)
                 if stdout.channel.recv_exit_status() != 0:
-                    logger.error(f"[{appliance_name}] ✗ scp {filename}: {stderr.read().decode()}")
+                    logger.error(f"[{appliance_name}] âś— scp {filename}: {stderr.read().decode()}")
                     ssh_client.close()
                     return False
             else:
@@ -1217,33 +1218,33 @@ def copy_files_to_appliance(
                 channel.close()
                 stdin, stdout, _ = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
                 if stdout.read().decode().strip() != "OK":
-                    logger.error(f"[{appliance_name}] ✗ scp {filename} failed")
+                    logger.error(f"[{appliance_name}] âś— scp {filename} failed")
                     ssh_client.close()
                     return False
 
-        logger.info(f"[{appliance_name}] ✓ {len(files_to_copy)} file(s) in /tmp/")
+        logger.info(f"[{appliance_name}] âś“ {len(files_to_copy)} file(s) in /tmp/")
 
         stdin, stdout, stderr = ssh_client.exec_command(f'sudo mkdir -p {target_dir}')
         if stdout.channel.recv_exit_status() != 0:
-            logger.error(f"[{appliance_name}] ✗ mkdir {target_dir}: {stderr.read().decode()}")
+            logger.error(f"[{appliance_name}] âś— mkdir {target_dir}: {stderr.read().decode()}")
             ssh_client.close()
             return False
 
-        logger.info(f"[{appliance_name}] ➜ mv /tmp/{file_pattern} {target_dir} && chown {owner}")
+        logger.info(f"[{appliance_name}] âžś mv /tmp/{file_pattern} {target_dir} && chown {owner}")
         stdin, stdout, stderr = ssh_client.exec_command(
             f'sudo mv /tmp/{file_pattern} {target_dir} && sudo chown {owner} {target_dir}/{file_pattern}')
         if stdout.channel.recv_exit_status() != 0:
-            logger.error(f"[{appliance_name}] ✗ mv/chown: {stderr.read().decode()}")
+            logger.error(f"[{appliance_name}] âś— mv/chown: {stderr.read().decode()}")
             ssh_client.close()
             return False
 
         ssh_client.close()
-        logger.info(f"[{appliance_name}] ✓ files in {target_dir}")
+        logger.info(f"[{appliance_name}] âś“ files in {target_dir}")
         return True
 
     except Exception as e:
         import traceback
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         if debug:
             logger.error(traceback.format_exc())
         return False
@@ -1284,7 +1285,7 @@ def copy_single_file_to_appliance(
 
     filename = os.path.basename(source_file_path)
     _header(logger, f"COPY FILE TO APPLIANCE: {appliance_name}")
-    logger.info(f"[{appliance_name}] {filename} → {target_dir}")
+    logger.info(f"[{appliance_name}] {filename} â†’ {target_dir}")
 
     try:
         raptor_ip = config.get_machine_ip('raptor', use_private=True)
@@ -1307,14 +1308,14 @@ def copy_single_file_to_appliance(
         stdin, stdout, _ = ssh_client.exec_command('which sshpass')
         sshpass_available = stdout.channel.recv_exit_status() == 0
 
-        logger.info(f"[{appliance_name}] ➜ scp {filename}")
+        logger.info(f"[{appliance_name}] âžś scp {filename}")
         if sshpass_available:
             scp_cmd = (f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} "
                        f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
                        f"root@{raptor_ip}:{source_file_path} /tmp/{filename}")
             stdin, stdout, stderr = ssh_client.exec_command(scp_cmd, timeout=300)
             if stdout.channel.recv_exit_status() != 0:
-                logger.error(f"[{appliance_name}] ✗ scp failed: {stderr.read().decode()}")
+                logger.error(f"[{appliance_name}] âś— scp failed: {stderr.read().decode()}")
                 ssh_client.close()
                 return False
         else:
@@ -1341,33 +1342,33 @@ def copy_single_file_to_appliance(
 
         stdin, stdout, _ = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
         if stdout.read().decode().strip() != "OK":
-            logger.error(f"[{appliance_name}] ✗ scp {filename} failed")
+            logger.error(f"[{appliance_name}] âś— scp {filename} failed")
             ssh_client.close()
             return False
 
-        logger.info(f"[{appliance_name}] ✓ {filename} in /tmp/")
+        logger.info(f"[{appliance_name}] âś“ {filename} in /tmp/")
 
         stdin, stdout, stderr = ssh_client.exec_command(f'sudo mkdir -p {target_dir}')
         if stdout.channel.recv_exit_status() != 0:
-            logger.error(f"[{appliance_name}] ✗ mkdir {target_dir}: {stderr.read().decode()}")
+            logger.error(f"[{appliance_name}] âś— mkdir {target_dir}: {stderr.read().decode()}")
             ssh_client.close()
             return False
 
-        logger.info(f"[{appliance_name}] ➜ mv /tmp/{filename} {target_dir} && chown {owner}")
+        logger.info(f"[{appliance_name}] âžś mv /tmp/{filename} {target_dir} && chown {owner}")
         stdin, stdout, stderr = ssh_client.exec_command(
             f'sudo mv /tmp/{filename} {target_dir} && sudo chown {owner} {target_dir}/{filename}')
         if stdout.channel.recv_exit_status() != 0:
-            logger.error(f"[{appliance_name}] ✗ mv/chown: {stderr.read().decode()}")
+            logger.error(f"[{appliance_name}] âś— mv/chown: {stderr.read().decode()}")
             ssh_client.close()
             return False
 
         ssh_client.close()
-        logger.info(f"[{appliance_name}] ✓ {filename} in {target_dir}")
+        logger.info(f"[{appliance_name}] âś“ {filename} in {target_dir}")
         return True
 
     except Exception as e:
         import traceback
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         if debug:
             logger.error(traceback.format_exc())
         return False
@@ -1405,16 +1406,16 @@ def get_patch_installation_order(
         try:
             position = sorted_patches.index(patch_spec) + 1
             patch_positions.append(str(position))
-            logger.info(f"  {patch_spec} → position {position}")
+            logger.info(f"  {patch_spec} â†’ position {position}")
         except ValueError:
-            logger.warning(f"  {patch_spec} → NOT FOUND in sorted list")
+            logger.warning(f"  {patch_spec} â†’ NOT FOUND in sorted list")
 
     if not patch_positions:
         logger.error("no patches mapped from patch_order.txt")
         return None
 
     patch_selection = ','.join(patch_positions)
-    logger.info(f"✓ patch order: {patch_selection}")
+    logger.info(f"âś“ patch order: {patch_selection}")
     return patch_selection
 
 def install_patch_on_appliance(
@@ -1466,7 +1467,7 @@ def install_patch_on_appliance(
         channel.settimeout(0.1)
 
         command = "store system patch install sys"
-        logger.info(f"[{appliance_name}] ➜ {command}")
+        logger.info(f"[{appliance_name}] âžś {command}")
         channel.send((command + "\r").encode())
 
         buf = ""
@@ -1496,7 +1497,7 @@ def install_patch_on_appliance(
                                         print(ansi_escape.sub('', extra), end='', flush=True)
                             except:
                                 pass
-                            logger.info(f"[{appliance_name}] ➜ patch selection: {patch_selection}")
+                            logger.info(f"[{appliance_name}] âžś patch selection: {patch_selection}")
                             channel.send((patch_selection + "\r").encode())
                             patch_selected = True
                             last_activity = time.time()
@@ -1513,7 +1514,7 @@ def install_patch_on_appliance(
                                         print(ansi_escape.sub('', extra), end='', flush=True)
                             except:
                                 pass
-                            logger.info(f"[{appliance_name}] ➜ reinstall answer: {reinstall_answer}")
+                            logger.info(f"[{appliance_name}] âžś reinstall answer: {reinstall_answer}")
                             channel.send((reinstall_answer + "\r").encode())
                             reinstall_answered = True
                             last_activity = time.time()
@@ -1532,7 +1533,7 @@ def install_patch_on_appliance(
                         except:
                             pass
                         client.disconnect()
-                        logger.info(f"[{appliance_name}] ✓ patch install command completed")
+                        logger.info(f"[{appliance_name}] âś“ patch install command completed")
                         time.sleep(10)
                         return monitor_patch_installation(
                             config=config, logger=logger, appliance_name=appliance_name,
@@ -1542,24 +1543,24 @@ def install_patch_on_appliance(
 
             except socket.timeout:
                 if time.time() - last_activity > 300:
-                    logger.warning(f"[{appliance_name}] ⚠ no activity for 5 minutes")
+                    logger.warning(f"[{appliance_name}] âš  no activity for 5 minutes")
                     break
                 time.sleep(0.1)
             except Exception as e:
-                logger.error(f"[{appliance_name}] ✗ {e}")
+                logger.error(f"[{appliance_name}] âś— {e}")
                 break
 
             if channel.closed:
-                logger.warning(f"[{appliance_name}] ⚠ channel closed unexpectedly")
+                logger.warning(f"[{appliance_name}] âš  channel closed unexpectedly")
                 break
 
         client.disconnect()
-        logger.warning(f"[{appliance_name}] ⚠ patch installation may not have completed")
+        logger.warning(f"[{appliance_name}] âš  patch installation may not have completed")
         return False
 
     except Exception as e:
         import traceback
-        logger.error(f"[{appliance_name}] ✗ {e}")
+        logger.error(f"[{appliance_name}] âś— {e}")
         logger.error(traceback.format_exc())
         return False
 
@@ -1603,16 +1604,16 @@ def monitor_patch_installation(
             )
             
             if not client.connect():
-                logger.warning(f"[{appliance_name}] ⚠ connect failed, retrying in {check_interval}s")
+                logger.warning(f"[{appliance_name}] âš  connect failed, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
 
-            logger.info(f"[{appliance_name}] ➜ show system patch install")
+            logger.info(f"[{appliance_name}] âžś show system patch install")
             output = client.execute_command("show system patch install")
             client.disconnect()
 
             if not output:
-                logger.warning(f"[{appliance_name}] ⚠ no output, retrying in {check_interval}s")
+                logger.warning(f"[{appliance_name}] âš  no output, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
 
@@ -1631,7 +1632,7 @@ def monitor_patch_installation(
             patch_numbers_to_check = patch_numbers or list(patch_status.keys())
 
             if not patch_numbers_to_check:
-                logger.warning(f"[{appliance_name}] ⚠ no patches found, retrying in {check_interval}s")
+                logger.warning(f"[{appliance_name}] âš  no patches found, retrying in {check_interval}s")
                 time.sleep(check_interval)
                 continue
 
@@ -1653,26 +1654,26 @@ def monitor_patch_installation(
                 else:
                     in_progress += 1
 
-            done_str = ", ".join(done_patches) if done_patches else "—"
-            logger.info(f"[{appliance_name}]: installed={done_str} | ⏳ {in_progress} | ✗ {len(fail_patches)}")
+            done_str = ", ".join(done_patches) if done_patches else "â€”"
+            logger.info(f"[{appliance_name}]: installed={done_str} | âŹł {in_progress} | âś— {len(fail_patches)}")
 
             if in_progress == 0:
                 if fail_patches:
-                    logger.error(f"[{appliance_name}] ✗ failed patches: {', '.join(fail_patches)}")
+                    logger.error(f"[{appliance_name}] âś— failed patches: {', '.join(fail_patches)}")
                     return False
-                logger.info(f"[{appliance_name}] ✓ all patches installed successfully")
+                logger.info(f"[{appliance_name}] âś“ all patches installed successfully")
                 return True
 
             time.sleep(check_interval)
 
         except Exception as e:
             import traceback
-            logger.warning(f"[{appliance_name}] ⚠ check error: {e}")
+            logger.warning(f"[{appliance_name}] âš  check error: {e}")
             if debug:
                 logger.error(traceback.format_exc())
             time.sleep(check_interval)
 
-    logger.error(f"[{appliance_name}] ✗ timeout after {max_checks} checks")
+    logger.error(f"[{appliance_name}] âś— timeout after {max_checks} checks")
     return False
 
 def install_and_monitor_patches(
@@ -1707,9 +1708,9 @@ def install_and_monitor_patches(
             m = re.search(r'p(\d+)', filename)
             if m:
                 available_patches[i] = m.group(1)
-                logger.info(f"  {i}: {filename} → patch {m.group(1)}")
+                logger.info(f"  {i}: {filename} â†’ patch {m.group(1)}")
             else:
-                logger.warning(f"  {i}: {filename} → patch number not found")
+                logger.warning(f"  {i}: {filename} â†’ patch number not found")
 
         if not available_patches:
             logger.error("could not extract patch numbers from *.sig files")
@@ -1721,9 +1722,9 @@ def install_and_monitor_patches(
                 pos = int(pos_str)
                 if pos in available_patches:
                     patch_numbers.append(available_patches[pos])
-                    logger.info(f"  position {pos} → patch {available_patches[pos]}")
+                    logger.info(f"  position {pos} â†’ patch {available_patches[pos]}")
                 else:
-                    logger.warning(f"  position {pos} → not found (range: 1-{len(available_patches)})")
+                    logger.warning(f"  position {pos} â†’ not found (range: 1-{len(available_patches)})")
             except ValueError:
                 logger.warning(f"  invalid position: {pos_str}")
 
@@ -1731,11 +1732,11 @@ def install_and_monitor_patches(
             logger.error("could not determine patch numbers from selection")
             return False
 
-        logger.info(f"➜ monitoring patches: {', '.join(patch_numbers)}")
+        logger.info(f"âžś monitoring patches: {', '.join(patch_numbers)}")
 
     except Exception as e:
         import traceback
-        logger.warning(f"[{appliance_name}] ⚠ could not resolve patch numbers: {e} — monitoring all")
+        logger.warning(f"[{appliance_name}] âš  could not resolve patch numbers: {e} â€” monitoring all")
         if debug:
             logger.error(traceback.format_exc())
         patch_numbers = None
@@ -1747,7 +1748,7 @@ def install_and_monitor_patches(
     ):
         return False
 
-    logger.info(f"[{appliance_name}] ⏳ waiting {check_interval}s before monitoring")
+    logger.info(f"[{appliance_name}] âŹł waiting {check_interval}s before monitoring")
     time.sleep(check_interval)
 
     if not monitor_patch_installation(
@@ -1757,7 +1758,7 @@ def install_and_monitor_patches(
     ):
         return False
 
-    logger.info(f"[{appliance_name}] ✓ patches installed and verified")
+    logger.info(f"[{appliance_name}] âś“ patches installed and verified")
     return True
 
 def install_gim_module(
@@ -1782,56 +1783,56 @@ def install_gim_module(
     if not demo_password:
         demo_password = config.get_custom_variable('pwd')
     if not demo_password:
-        logger.error("demo password required — set 'pwd' in custom_variables")
+        logger.error("demo password required â€” set 'pwd' in custom_variables")
         return False
 
     try:
         api = create_guardium_api(config, logger, appliance_name)
 
-        logger.info(f"➜ authenticate as {demo_user}")
+        logger.info(f"âžś authenticate as {demo_user}")
         token = api.get_token(username=demo_user, password=demo_password)
-        logger.info("✓ authenticated")
+        logger.info("âś“ authenticated")
         if debug:
             logger.info(f"  token: {token[:30]}...")
 
-        logger.info(f"➜ gim_client_assign client={client_ip} module={module} version={module_version}")
+        logger.info(f"âžś gim_client_assign client={client_ip} module={module} version={module_version}")
         assign_response = api.gim_client_assign(client_ip=client_ip, module=module, module_version=module_version)
-        logger.info("✓ module assigned")
+        logger.info("âś“ module assigned")
         if debug:
             logger.info(f"  response: {assign_response}")
 
         if params:
             for param_name, param_value in params.items():
-                logger.info(f"➜ gim_client_params {param_name}={param_value}")
+                logger.info(f"âžś gim_client_params {param_name}={param_value}")
                 param_response = api.gim_client_params(client_ip=client_ip, param_name=param_name, param_value=str(param_value))
                 if debug:
                     logger.info(f"  response: {param_response}")
-            logger.info(f"✓ {len(params)} parameter(s) set")
+            logger.info(f"âś“ {len(params)} parameter(s) set")
 
-        logger.info(f"➜ gim_schedule_install client={client_ip} date=now")
+        logger.info(f"âžś gim_schedule_install client={client_ip} date=now")
         schedule_response = api.gim_schedule_install(client_ip=client_ip, date="now")
-        logger.info("✓ installation scheduled")
+        logger.info("âś“ installation scheduled")
         if debug:
             logger.info(f"  response: {schedule_response}")
 
         if monitor_installation:
-            logger.info(f"⌛ waiting {installation_delay}s before monitoring")
+            logger.info(f"âŚ› waiting {installation_delay}s before monitoring")
             time.sleep(installation_delay)
 
             pending = ["initial"]
             check_count = 0
             while pending:
                 check_count += 1
-                logger.info(f"➜ gim_list_client_modules check #{check_count}")
+                logger.info(f"âžś gim_list_client_modules check #{check_count}")
                 modules = api.gim_list_client_modules(client_ip=client_ip)
 
                 if "ErrorCode" in modules or "ErrorMessage" in modules:
-                    logger.error(f"✗ API error: {modules.get('ErrorCode')} — {modules.get('ErrorMessage')}")
+                    logger.error(f"âś— API error: {modules.get('ErrorCode')} â€” {modules.get('ErrorMessage')}")
                     return False
 
                 msg = modules.get("Message", "")
                 if not msg:
-                    logger.warning("⚠ API returned empty Message")
+                    logger.warning("âš  API returned empty Message")
 
                 entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", msg) if e.strip()]
 
@@ -1854,595 +1855,21 @@ def install_gim_module(
                 pending = [m for m in result if m["state"] != "INSTALLED"]
                 if pending:
                     for m in pending:
-                        logger.info(f"  ⌛ {m['name']}: {m['state']}")
+                        logger.info(f"  âŚ› {m['name']}: {m['state']}")
                     time.sleep(30)
                 else:
                     for m in result:
-                        logger.info(f"  ✓ {m['name']}: {m['state']} v{m['installed_version']}")
+                        logger.info(f"  âś“ {m['name']}: {m['state']} v{m['installed_version']}")
 
-        logger.info(f"✓ GIM module {module} installed on {client_ip}")
+        logger.info(f"âś“ GIM module {module} installed on {client_ip}")
         return True
 
     except Exception as e:
         import traceback
-        logger.error(f"✗ {e}")
+        logger.error(f"âś— {e}")
         if debug:
             logger.error(traceback.format_exc())
         return False
-
-def enable_ltr_on_appnode(
-    config,
-    logger,
-    appliance_name: str,
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    
-    
-    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
-    if not params:
-        return False
-
-    host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
-    appliance_type = params['appliance_type']
-
-    logger.info("=" * 80)
-    logger.info(f"ENABLE LTR ON APPNODE: {appliance_name}")
-    logger.info("=" * 80)
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
-    try:
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=300,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Step 1: store datalake install
-        logger.info("\n➜ Step 1: Installing datalake...")
-        logger.info("Executing: store datalake install")
-        result1 = client.execute_command("store datalake install", timeout=300)
-        
-        if "Datalake installation was successful" in result1:
-            logger.info("✓ Datalake installation was successful")
-        else:
-            logger.error("✗ Datalake installation failed")
-            logger.error(f"Output: {result1}")
-            client.disconnect()
-            return False
-        
-        # Step 2: store datalake all_in_one xxsmall
-        logger.info("\n➜ Step 2: Configuring datalake all_in_one xxsmall...")
-        logger.info("Executing: store datalake all_in_one xxsmall")
-        result2 = client.execute_command("store datalake all_in_one xxsmall", timeout=300)
-        
-        if "Datalake all_in_one was brought up correctly" in result2:
-            logger.info("✓ Datalake all_in_one was brought up correctly")
-        else:
-            logger.error("✗ Datalake all_in_one configuration failed")
-            logger.error(f"Output: {result2}")
-            client.disconnect()
-            return False
-        
-        # Step 3: store datalake service start
-        logger.info("\n➜ Step 3: Starting datalake service...")
-        logger.info("Executing: store datalake service start")
-        result3 = client.execute_command("store datalake service start", timeout=300)
-        logger.info(f"Command output: {result3}")
-        
-        # Step 4: show datalake status - verify it's running
-        logger.info("\n➜ Step 4: Verifying datalake status...")
-        logger.info("Executing: show datalake status")
-        result4 = client.execute_command("show datalake status", timeout=60)
-        
-        if "Datalake is running!" in result4:
-            logger.info("✓ Datalake is running!")
-        else:
-            logger.error("✗ Datalake is not running")
-            logger.error(f"Output: {result4}")
-            client.disconnect()
-            return False
-        
-        client.disconnect()
-        
-        logger.info("\n" + "=" * 80)
-        logger.info("LTR enabled successfully on appnode")
-        logger.info("=" * 80)
-        return True
-        
-    except Exception as e:
-        logger.error(f"Error enabling LTR on appnode: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
-def import_datalake_s3_certificate(
-    config,
-    logger,
-    appliance_name: str,
-    certificate_file_path: str = "/home/minio/ca/certs/ca.crt",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    
-    
-    logger.info("=" * 80)
-    logger.info(f"IMPORT DATALAKE S3 CERTIFICATE: {appliance_name}")
-    logger.info("=" * 80)
-
-    logger.info(f"Reading certificate from local file: {certificate_file_path}")
-    
-    try:
-        with open(certificate_file_path, 'r') as f:
-            certificate_content = f.read()
-        
-        if not certificate_content or 'BEGIN CERTIFICATE' not in certificate_content:
-            logger.error("Invalid certificate content")
-            return False
-        
-        logger.info("✓ Certificate read successfully from local file")
-        
-    except FileNotFoundError:
-        logger.error(f"Certificate file not found: {certificate_file_path}")
-        return False
-    except Exception as e:
-        logger.error(f"Error reading certificate file: {e}")
-        return False
-    
-    params = _get_appliance_connection_params(config, logger, appliance_name, user, password, prompt_regex)
-    if not params:
-        return False
-
-    host, user, password, prompt_regex = params['host'], params['user'], params['password'], params['prompt_regex']
-    appliance_type = params['appliance_type']
-
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
-    try:
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=120,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Verify channel is available
-        if client.channel is None:
-            logger.error("SSH channel not available after connection")
-            return False
-        
-        logger.info("\n➜ Importing S3 certificate for datalake...")
-        logger.info("Executing: store certificate application datalake s3 console")
-        
-        import time
-        import sys
-        
-        # Send command
-        client.channel.send(b"store certificate application datalake s3 console\r")
-        
-        # Wait for prompt asking for certificate
-        time.sleep(1)
-        buf = ""
-        deadline = time.time() + 30
-        
-        while time.time() < deadline:
-            if client.channel.recv_ready():
-                chunk = client.channel.recv(65535).decode(errors="replace")
-                buf += chunk
-                if debug:
-                    print(f"[DEBUG] Received: {repr(chunk)}", file=sys.stderr)
-                
-                # Check if we see the certificate prompt
-                if "Please paste your Trusted certificate below in PEM encoded format" in buf:
-                    logger.info("✓ Certificate prompt detected")
-                    break
-            time.sleep(0.1)
-        
-        # Send certificate content line by line
-        logger.info("Sending certificate content...")
-        for line in certificate_content.splitlines():
-            client.channel.send((line + "\n").encode())
-            time.sleep(0.01)
-        
-        # Send CTRL+D to finish input
-        logger.info("Sending CTRL+D...")
-        time.sleep(0.5)
-        client.channel.send(b"\x04")  # CTRL+D
-        
-        # Wait for completion message
-        time.sleep(2)
-        buf = ""
-        deadline = time.time() + 60
-        
-        while time.time() < deadline:
-            if client.channel.recv_ready():
-                chunk = client.channel.recv(65535).decode(errors="replace")
-                buf += chunk
-                if debug:
-                    print(f"[DEBUG] Received: {repr(chunk)}", file=sys.stderr)
-            
-            # Check for success message
-            if "SUCCESS: Certificate imported successfully" in buf:
-                logger.info("✓ SUCCESS: Certificate imported successfully")
-                client.disconnect()
-                logger.info("=" * 80)
-                logger.info("Datalake S3 certificate imported successfully")
-                logger.info("=" * 80)
-                return True
-            
-            # Check if prompt returned (command completed)
-            if client.prompt_re.search(buf):
-                break
-            
-            time.sleep(0.1)
-        
-        client.disconnect()
-        
-        if "SUCCESS: Certificate imported successfully" in buf:
-            logger.info("✓ SUCCESS: Certificate imported successfully")
-            logger.info("=" * 80)
-            logger.info("Datalake S3 certificate imported successfully")
-            logger.info("=" * 80)
-            return True
-        else:
-            logger.error("✗ Certificate import failed or success message not detected")
-            logger.error(f"Output: {buf}")
-            return False
-        
-    except Exception as e:
-        logger.error(f"Error importing certificate: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
-def distribute_datalake_certificate(
-    config,
-    logger,
-    appliance_name: str = "cm",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    timeout: int = 300,
-    check_interval: int = 10,
-    debug: bool = False
-) -> bool:
-    
-    from .appliance_config_loader import ApplianceConfigLoader
-    from .appliance_client import ApplianceClient
-    import time
-    import re
-    
-    logger.info("=" * 80)
-    logger.info(f"DISTRIBUTE DATALAKE CERTIFICATE FROM {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Get all appliances to determine expected entries
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    all_appliances = appliance_loader.get_all_appliances()
-    
-    # Count appnodes and collectors
-    appnodes = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'appnode']
-    collectors = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'collector']
-    cms = [name for name, cfg in all_appliances.items() if cfg.get('type') == 'cm']
-
-    # Every managed appliance (appnode + collector) gets 1 Success entry for datalake-s3-gui.
-    # Exactly one appnode (the LTR node) gets an additional Success entry for datalake-gui.
-    managed = len(appnodes) + len(collectors)
-    expected_success_entries = managed + 1  # +1 for datalake-gui on LTR appnode
-    expected_info_entries = 2  # CM entries (datalake-gui + datalake-s3-gui)
-
-    logger.info(f"Expected distribution targets:")
-    logger.info(f"  - Appnodes: {len(appnodes)} ({', '.join(appnodes)})")
-    logger.info(f"  - Collectors: {len(collectors)} ({', '.join(collectors)})")
-    logger.info(f"  - CM: {len(cms)} ({', '.join(cms)})")
-    logger.info(f"Expected results:")
-    logger.info(f"  - Success entries: {expected_success_entries} ({managed} x datalake-s3-gui + 1 x datalake-gui)")
-    logger.info(f"  - INFO entries: {expected_info_entries}")
-    
-    # Get CM appliance config
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Connecting to {appliance_name} ({appliance_type}) at {host}")
-    
-    try:
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=120,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Verify channel is available
-        if client.channel is None:
-            logger.error("SSH channel not available after connection")
-            return False
-        
-        # Execute distribution command
-        logger.info("\n➜ Executing certificate distribution...")
-        logger.info("Command: distribute application certificate datalake all_managed true")
-        
-        try:
-            output = client.execute_command("distribute application certificate datalake all_managed true", timeout=300)
-            logger.info("✓ Distribution command executed")
-            if debug:
-                logger.debug(f"Output: {output}")
-        except Exception as e:
-            logger.error(f"Failed to execute distribution command: {e}")
-            client.disconnect()
-            return False
-        
-        # Monitor distribution status
-        logger.info(f"\n➜ Monitoring distribution status (timeout: {timeout}s, check interval: {check_interval}s)...")
-        
-        start_time = time.time()
-        success_count = 0
-        info_count = 0
-        
-        while time.time() - start_time < timeout:
-            time.sleep(check_interval)
-            
-            # Check status
-            try:
-                output = client.execute_command("distribute certificate showlog all", timeout=300)
-            except Exception as e:
-                logger.warning(f"Failed to check status: {e}")
-                continue
-            
-            # Count Success and INFO entries
-            success_count = len(re.findall(r'\bSuccess\b', output, re.IGNORECASE))
-            info_count = len(re.findall(r'\bINFO\b', output))
-            
-            elapsed = int(time.time() - start_time)
-            logger.info(f"[{elapsed}s] Status: Success={success_count}/{expected_success_entries}, INFO={info_count}/{expected_info_entries}")
-            
-            if debug:
-                logger.debug(f"Current output:\n{output}")
-            
-            # Check if distribution is complete
-            if success_count >= expected_success_entries and info_count >= expected_info_entries:
-                logger.info("\n" + "=" * 80)
-                logger.info("✓ CERTIFICATE DISTRIBUTION COMPLETED SUCCESSFULLY")
-                logger.info("=" * 80)
-                logger.info(f"Final status:")
-                logger.info(f"  - Success entries: {success_count}/{expected_success_entries}")
-                logger.info(f"  - INFO entries: {info_count}/{expected_info_entries}")
-                logger.info(f"  - Time elapsed: {elapsed}s")
-                
-                if debug:
-                    logger.debug(f"\nFinal output:\n{output}")
-                
-                client.disconnect()
-                return True
-        
-        # Timeout reached
-        logger.error("\n" + "=" * 80)
-        logger.error("✗ CERTIFICATE DISTRIBUTION TIMEOUT")
-        logger.error("=" * 80)
-        logger.error(f"Distribution did not complete within {timeout}s")
-        logger.error(f"Final status:")
-        logger.error(f"  - Success entries: {success_count}/{expected_success_entries}")
-        logger.error(f"  - INFO entries: {info_count}/{expected_info_entries}")
-        
-        # Show final output for debugging
-        try:
-            final_output = client.execute_command("distribute certificate showlog all", timeout=300)
-            logger.error(f"\nFinal output:\n{final_output}")
-        except Exception as e:
-            logger.error(f"Failed to get final output: {e}")
-        
-        client.disconnect()
-        return False
-        
-    except Exception as e:
-        logger.error(f"Error during certificate distribution: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
-def activate_ltr(
-    config,
-    logger,
-    appliance_name: str = "cm",
-    user: Optional[str] = None,
-    password: Optional[str] = None,
-    prompt_regex: Optional[str] = None,
-    debug: bool = True
-) -> bool:
-    
-    from .appliance_config_loader import ApplianceConfigLoader
-    from .appliance_client import ApplianceClient
-    
-    logger.info("=" * 80)
-    logger.info(f"ACTIVATE LTR (LONG TERM RETENTION) ON {appliance_name}")
-    logger.info("=" * 80)
-    
-    # Get admin password from custom_variables
-    admin_password = config.get_custom_variable('pwd')
-    if not admin_password:
-        logger.error("Admin password not found in custom_variables (pwd)")
-        return False
-    
-    logger.info("✓ Admin password retrieved from custom_variables (pwd)")
-    
-    # Get CM appliance config
-    appliance_loader = ApplianceConfigLoader(config_loader=config)
-    appliance_config = appliance_loader.get_appliance(appliance_name)
-    
-    if not appliance_config:
-        logger.error(f"Appliance '{appliance_name}' not found in machines_info.json")
-        return False
-    
-    appliance_type = appliance_config.get('type')
-    host = appliance_config.get('ip')
-    
-    if not host:
-        logger.error(f"No IP address configured for appliance '{appliance_name}'")
-        return False
-    
-    if not user:
-        if appliance_type:
-            user = appliance_loader.get_default_user(appliance_type)
-        else:
-            user = "cli"
-    
-    if not password:
-        password = config.get_custom_variable('cli_pwd')
-    if not password:
-        logger.error("Password not provided and cli_pwd not found in custom_variables")
-        return False
-    
-    if not prompt_regex:
-        if appliance_type:
-            prompt_regex = appliance_loader.get_default_prompt(appliance_type, configured=True)
-        if not prompt_regex:
-            logger.error(f"No prompt_regex provided and no default found for type '{appliance_type}'")
-            return False
-    
-    logger.info(f"Appliance: {appliance_name} ({appliance_type}) at {host}")
-    logger.info(f"User: {user}")
-    
-    # Build the grdapi command
-    command = (
-        f'grdapi configure_complete_cold_storage '
-        f'protocol="CUSTOM" '
-        f'objectStorageEndpoint="https://raptor.demo.guardium:9000" '
-        f'accessKey=minioadmin '
-        f'secretKey="{admin_password}" '
-        f'dataBucket=guardium-ltr '
-        f'resultSchema="datalake_reports" '
-        f'region="US_EAST_1" '
-        f'coldCatalogEndpoint="thrift://appnode1.demo.guardium:9083" '
-        f'coldCatalogSchema="datalake" '
-        f'coldStorageName="datalake" '
-        f'queryEngineHost="appnode1.demo.guardium" '
-        f'debug=3'
-    )
-    
-    logger.info("\n➜ Executing LTR activation command...")
-    logger.info(f"Command: {command.replace(admin_password, '***')}")
-    
-    try:
-        client = ApplianceClient(
-            host=host,
-            user=user,
-            password=password,
-            prompt_regex=prompt_regex,
-            initial_pattern=None,
-            timeout=300,
-            strip_ansi=True,
-            debug=debug
-        )
-        
-        if not client.connect():
-            logger.error("Failed to connect to appliance")
-            return False
-        
-        # Execute the command with extended timeout (5 minutes)
-        output = client.execute_command(command, timeout=300)
-        
-        client.disconnect()
-        
-        # Check for success indicators
-        success_indicators = [
-            "Cold Storage Maintenance Setup Completed",
-            "Cold Storage ID:",
-            "Cold Storage Name: datalake",
-            '"status":"success"',
-            "Complete cold storage configuration successful"
-        ]
-        
-        found_indicators = []
-        for indicator in success_indicators:
-            if indicator.lower() in output.lower():
-                found_indicators.append(indicator)
-        
-        logger.info("\n" + "=" * 80)
-        if len(found_indicators) >= 3:
-            logger.info("✓ LTR ACTIVATION SUCCESSFUL")
-            logger.info("=" * 80)
-            logger.info(f"Found {len(found_indicators)}/{len(success_indicators)} success indicators:")
-            for indicator in found_indicators:
-                logger.info(f"  ✓ {indicator}")
-            
-            if debug:
-                logger.debug(f"\nFull output:\n{output}")
-            
-            return True
-        else:
-            logger.error("✗ LTR ACTIVATION FAILED")
-            logger.error("=" * 80)
-            logger.error(f"Found only {len(found_indicators)}/{len(success_indicators)} success indicators:")
-            for indicator in found_indicators:
-                logger.error(f"  ✓ {indicator}")
-            logger.error(f"\nOutput:\n{output}")
-            return False
-        
-    except Exception as e:
-        logger.error(f"Error activating LTR: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
-
 
 def prepare_log_guard_dir(
     config,
@@ -2489,20 +1916,20 @@ def prepare_log_guard_dir(
             allow_agent=False,
             timeout=30
         )
-        logger.info(f"✓ Connected to {appliance_name} ({host})")
+        logger.info(f"âś“ Connected to {appliance_name} ({host})")
         for cmd in cmds:
             stdin, stdout, stderr = ssh_client.exec_command(cmd)
             rc = stdout.channel.recv_exit_status()
             if rc != 0:
                 err = stderr.read().decode().strip()
-                logger.error(f"✗ [{appliance_name}] '{cmd}' failed (rc={rc}): {err}")
+                logger.error(f"âś— [{appliance_name}] '{cmd}' failed (rc={rc}): {err}")
                 return False
             if debug:
-                logger.info(f"  [{appliance_name}] {cmd} → ok")
-        logger.info(f"✓ /var/log/guard prepared on {appliance_name}")
+                logger.info(f"  [{appliance_name}] {cmd} â†’ ok")
+        logger.info(f"âś“ /var/log/guard prepared on {appliance_name}")
         return True
     except Exception as e:
-        logger.error(f"✗ SSH failed on {appliance_name}: {e}")
+        logger.error(f"âś— SSH failed on {appliance_name}: {e}")
         return False
     finally:
         ssh_client.close()

@@ -837,19 +837,18 @@ groups:
     stages:
       - name: setup_minio_on_raptor
         function: setup_minio_on_raptor
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Prepare MinIO certificate authority, trust chain, private key, and CSR on raptor"
-      
+
       - name: setup_appnode
         function: setup_appnode
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Setup app-node on appliance by executing 'store unit type app-node', wait for reboot and reconnection"
         args:
           appliance_name: "appnode1"
-          debug: false
           retry_interval: 60
           max_retries: 10
-      
+
       - name: prepare_appnode_for_patching
         function: copy_single_file_to_appliance_task
         module: tasks.setup_appliances
@@ -859,8 +858,7 @@ groups:
           source_file_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/extensions/SqlGuard-12.0p80111_datalake_May_15_2026.tgz.enc.sig"
           target_dir: "/var/IBM/Guardium/log/patches/"
           owner: "tomcat:tomcat"
-          debug: false
-      
+
       - name: install_patch_on_appnode
         function: install_patch_on_appliance_single
         module: tasks.setup_appliances
@@ -869,51 +867,41 @@ groups:
           appliance_name: "appnode1"
           patch_selection: "1"
           reinstall_answer: "y"
-          debug: false
-      
+
       - name: enable_ltr_on_appnode
         function: enable_ltr_on_appnode
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Enable LTR (Lake Threat Response) on appnode1 - install, configure, start datalake and verify status"
         args:
           appliance_name: "appnode1"
-          debug: false
-      
+
       - name: import_minio_CA_certificate
         function: import_minio_CA_certificate
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Import MinIO S3 certificate to CM for datalake integration"
         args:
           appliance_name: "cm"
           certificate_file_path: "/home/minio/ca/certs/ca.crt"
-          debug: false
-      
+
       - name: distribute_minio_certificate
         function: distribute_minio_certificate
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Distribute datalake certificate to all managed appliances (appnodes and collectors)"
         args:
-          appliance_name: "cm"
           timeout: 600
           check_interval: 10
-          debug: false
-      
+
       - name: activate_ltr
         function: activate_ltr
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Activate LTR (Long Term Retention) by configuring complete cold storage on CM with MinIO S3 backend"
-        args:
-          appliance_name: "cm"
-          debug: false
-      
+
       - name: import_ltr_dashboard
         function: import_ltr_dashboard
-        module: tasks.labs
+        module: tasks.ltr_labs
         description: "Import LTR dashboard (exp_dashboard_ltr.sql) to CM via REST API"
         args:
-          cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
-          debug: false
 
   edge_lab:
     name: "Edge Lab"
