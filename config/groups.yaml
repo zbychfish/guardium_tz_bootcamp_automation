@@ -500,59 +500,44 @@ groups:
       
       - name: enable_vulnerability_management
         function: enable_vulnerability_management
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Enable VULNERABILITY_MANAGEMENT feature flag on CM and verify State=ENABLED"
-        args:
-          cm_appliance: "cm"
-          debug: false
 
       - name: create_va_postgres_account
         function: create_va_postgres_account
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Create sqlguard user, gdmmonitor group and grant VA monitoring privileges on PostgreSQL (raptor)"
 
       - name: import_va_postgres_definitions
         function: import_va_postgres_definitions
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Import VA security assessment definitions for PostgreSQL on raptor to CM"
         args:
           cm_appliance: "cm"
           definitions_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/"
-          debug: false
 
       - name: import_dps
         function: import_dps
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Upload and import DPS file via Guardium Web UI (Playwright): Harden → Vulnerability Assessment → Customer Uploads"
         args:
-          cm_appliance: "cm"
           dps_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q2_20260515.enc"
-          demo_user: "demo"
-          headless: true
 
       - name: fetch_cm_certificate_on_sauropod
         function: fetch_cm_certificate_on_sauropod
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Fetch CM TLS certificate from cm.demo.guardium:8443 and save to /root/gn-trainings/vascanner/certs/vascanner.pem on sauropod"
         args:
-          cm_host: "cm.demo.guardium"
-          cm_port: 8443
           cert_path: "/root/gn-trainings/vascanner/certs/vascanner.pem"
-          debug: false
 
       - name: create_va_api_key
         function: create_va_api_key
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Create VA API key 'vascanner' on CM via grdapi and save to .va_api_key"
-        args:
-          cm_appliance: "cm"
-          key_name: "vascanner"
-          key_file: ".va_api_key"
-          debug: false
 
       - name: deploy_vascanner_on_sauropod
         function: deploy_vascanner_on_sauropod
-        module: tasks.labs
+        module: tasks.va_labs
         description: "Login to cp.icr.io, pull va-scanner image, write config, run container on sauropod"
         args:
           image: "cp.icr.io/cp/ibm-guardium-data-security-center/guardium/vascanner-12.2.0/va-scanner:vascanner-v12.2.0"
@@ -560,10 +545,6 @@ groups:
           config_file: "/opt/vascanner/config"
           certs_dir: "/root/gn-trainings/vascanner/certs"
           va_agent_name: "VA_SCANNER_ON_SAUROPOD"
-          cm_host: "cm.demo.guardium"
-          cm_port: 8443
-          key_file: ".va_api_key"
-          debug: false
 
   winstap_lab:
     name: "WinSTAP Lab"
