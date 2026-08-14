@@ -827,7 +827,7 @@ groups:
   policies_reports_part1:
     name: "Policies and Reports"
     description: "Basics - Policies and Reports"
-    deployed_with: []
+    deployed_with: [standard_demo]
     dependencies: [oracle_lab]
     stages:
       - name: import_policies_reports_dashboard

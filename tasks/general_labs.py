@@ -138,6 +138,7 @@ def configure_engine_on_raptor(config, logger, verbose=True,
     return True
 
 def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
+
     _header(logger, "RUN DBTRAFFIC PGSQL ON RAPTOR")
 
     base = "/opt/guardium_tz_bootcamp_automation/upload/guardium_notes_dbtraffic"
@@ -154,7 +155,6 @@ def run_dbtraffic_pgsql_on_raptor(config, logger, verbose=True, **kwargs):
 
     logger.info("✓ dbtraffic pgsql completed on raptor")
     return True
-
 
 def add_postgres_app_profile_member(config, logger, verbose=True,
                                     cm_appliance="cm", **kwargs):
@@ -181,7 +181,6 @@ def add_postgres_app_profile_member(config, logger, verbose=True,
     api.create_group_member(desc=group_desc, member=member)
     logger.info(f"✓ Member added to group '{group_desc}'")
     return True
-
 
 def install_app_data_access_policy(config, logger, verbose=True,
                                    cm_appliance="cm", collector_appliance="coll1",
