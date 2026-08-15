@@ -332,24 +332,20 @@ def cycle_kafka_nodes(
     cm_appliance: str = "cm",
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
-    wait_seconds: int = 300,
+    stop_wait_seconds: int = 300,
+    start_wait_seconds: int = 900,
     debug: bool = False,
     **kwargs) -> bool:
 
-    _header(logger, "CYCLE KAFKA NODES (stop/start x2)")
+    _header(logger, "CYCLE KAFKA NODES (stop → start)")
 
     params = _get_appliance_connection_params(config, logger, cm_appliance)
     if not params:
         return False
 
-    stop_cmd  = f"grdapi stop_kafka_nodes  clusterName={cluster_name} memberList={member_list}"
-    start_cmd = f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}"
-
     steps = [
-        ("stop",  stop_cmd,  True),
-        ("start", start_cmd, True),
-        ("stop",  stop_cmd,  True),
-        ("start", start_cmd, True),
+        ("stop",  f"grdapi stop_kafka_nodes  clusterName={cluster_name} memberList={member_list}", stop_wait_seconds),
+        ("start", f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}", start_wait_seconds),
     ]
 
     for action, cmd, wait_after in steps:
@@ -374,9 +370,8 @@ def cycle_kafka_nodes(
         finally:
             client.disconnect()
 
-        if wait_after:
-            logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
-            time.sleep(wait_seconds)
+        logger.info(f"⌛ waiting {wait_after}s ({wait_after // 60} min)...")
+        time.sleep(wait_after)
 
     logger.info("✓ CYCLE KAFKA NODES — completed")
     return True
