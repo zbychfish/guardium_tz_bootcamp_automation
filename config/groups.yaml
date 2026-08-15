@@ -780,17 +780,17 @@ groups:
         args:
           debug: true
 
-      # - name: start_kafka_nodes
-      #   function: start_kafka_nodes
-      #   module: tasks.uc_labs
-      #   description: "Start kafka nodes on cluster, wait 60s before and 5min after (async command)"
-      #   args:
-      #     debug: true
-
       - name: create_uc_credential
         function: create_uc_credential_for_oracle_container
         module: tasks.uc_labs
         description: "Create UC credential oracle_container_sauropod"
+        args:
+          debug: true
+
+      - name: cycle_kafka_nodes
+        function: cycle_kafka_nodes
+        module: tasks.uc_labs
+        description: "Start kafka cluster, some issues and must do do a cycle"
         args:
           debug: true
 

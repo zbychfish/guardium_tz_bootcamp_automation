@@ -325,6 +325,66 @@ def register_kafka_cluster(
     logger.info("✓ Kafka cluster registration completed")
     return True
 
+def cycle_kafka_nodes(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    cluster_name: str = "kafka_cluster_1",
+    member_list: str = "kafka1.demo.guardium",
+    wait_seconds: int = 300,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "CYCLE KAFKA NODES (stop/start x2)")
+
+    params = _get_appliance_connection_params(config, logger, cm_appliance)
+    if not params:
+        return False
+
+    stop_cmd  = f"grdapi stop_kafka_nodes  clusterName={cluster_name} memberList={member_list}"
+    start_cmd = f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}"
+
+    steps = [
+        ("stop",  stop_cmd,  True),
+        ("start", start_cmd, True),
+        ("stop",  stop_cmd,  True),
+        ("start", start_cmd, True),
+    ]
+
+    client = ApplianceClient(
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
+        timeout=120, strip_ansi=True, debug=debug, logger=logger
+    )
+    if not client.connect():
+        logger.error(f"✗ failed to connect to {cm_appliance}")
+        return False
+
+    try:
+        logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) before first stop...")
+        time.sleep(wait_seconds)
+
+        for action, cmd, wait_after in steps:
+            logger.info(f"➜ {action}: {cmd}")
+            result = client.execute_command(cmd, timeout=120)
+            if debug:
+                logger.info(f"  output: {result}")
+            logger.info(f"✓ {action} executed")
+
+            if wait_after:
+                logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
+                time.sleep(wait_seconds)
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        logger.error(traceback.format_exc())
+        return False
+    finally:
+        client.disconnect()
+
+    logger.info("✓ CYCLE KAFKA NODES — completed")
+    return True
+
 def create_uc_credential_for_oracle_container(
     config,
     logger,
