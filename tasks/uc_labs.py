@@ -284,8 +284,8 @@ def register_kafka_cluster(
         if debug:
             logger.info(f"  API response: {result}")
         if isinstance(result, dict) and result.get('ErrorCode'):
-            logger.warning(f"⚠ attempt {attempt}/10 failed (ErrorCode {result['ErrorCode']}): {result.get('ErrorMessage', '')} — retrying in 30s...")
-            time.sleep(30)
+            logger.warning(f"⚠ attempt {attempt}/10 failed (ErrorCode {result['ErrorCode']}): {result.get('ErrorMessage', '')} — retrying in 60s...")
+            time.sleep(60)
         else:
             logger.info(f"✓ cluster registration accepted (attempt {attempt}/10)")
             registered = True
@@ -351,9 +351,6 @@ def cycle_kafka_nodes(
         ("stop",  stop_cmd,  True),
         ("start", start_cmd, True),
     ]
-
-    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) before first stop...")
-    time.sleep(wait_seconds)
 
     for action, cmd, wait_after in steps:
         client = ApplianceClient(
