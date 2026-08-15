@@ -352,35 +352,34 @@ def cycle_kafka_nodes(
         ("start", start_cmd, True),
     ]
 
-    client = ApplianceClient(
-        host=params['host'], user=params['user'], password=params['password'],
-        prompt_regex=params['prompt_regex'], initial_pattern=None,
-        timeout=120, strip_ansi=True, debug=debug, logger=logger
-    )
-    if not client.connect():
-        logger.error(f"✗ failed to connect to {cm_appliance}")
-        return False
+    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) before first stop...")
+    time.sleep(wait_seconds)
 
-    try:
-        logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) before first stop...")
-        time.sleep(wait_seconds)
-
-        for action, cmd, wait_after in steps:
+    for action, cmd, wait_after in steps:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
+            timeout=120, strip_ansi=True, debug=debug, logger=logger
+        )
+        try:
+            if not client.connect():
+                logger.error(f"✗ failed to connect to {cm_appliance} for '{action}'")
+                return False
             logger.info(f"➜ {action}: {cmd}")
             result = client.execute_command(cmd, timeout=120)
             if debug:
                 logger.info(f"  output: {result}")
             logger.info(f"✓ {action} executed")
+        except Exception as e:
+            logger.error(f"✗ {action} failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
+        finally:
+            client.disconnect()
 
-            if wait_after:
-                logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
-                time.sleep(wait_seconds)
-    except Exception as e:
-        logger.error(f"✗ {e}")
-        logger.error(traceback.format_exc())
-        return False
-    finally:
-        client.disconnect()
+        if wait_after:
+            logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
+            time.sleep(wait_seconds)
 
     logger.info("✓ CYCLE KAFKA NODES — completed")
     return True
