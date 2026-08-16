@@ -719,13 +719,6 @@ groups:
           etap_email: "guardadmin@gmail.com"
           debug: false
 
-      - name: stop_etap_services
-        function: stop_etap_services
-        module: tasks.etap_labs
-        description: "Stop and disable mysql-etap and oracle-etap systemd services"
-        args:
-          debug: false
-
       - name: setup_stap_with_oua_on_sauropod
         function: setup_stap_with_oua_on_sauropod
         module: tasks.agent_labs
