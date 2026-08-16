@@ -816,13 +816,7 @@ groups:
     deployed_with: [standard_demo]
     dependencies: [oracle_lab]
     stages:
-      - name: import_policies_reports_dashboard
-        function: import_policies_reports_dashboard
-        module: tasks.general_labs
-        description: "Import Policies and Reports dashboard to CM via REST API"
-        args:
-          debug: false
-
+      
       - name: add_postgres_app_profile_member
         function: add_postgres_app_profile_member
         module: tasks.general_labs
@@ -855,6 +849,13 @@ groups:
         function: install_app_data_access_policy
         module: tasks.general_labs
         description: "Install policy 'Application data access control' on coll1"
+        args:
+          debug: false
+
+      - name: import_policies_reports_dashboard
+        function: import_policies_reports_dashboard
+        module: tasks.general_labs
+        description: "Import Policies and Reports dashboard to CM via REST API"
         args:
           debug: false
 
