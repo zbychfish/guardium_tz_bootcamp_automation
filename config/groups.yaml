@@ -793,7 +793,7 @@ groups:
         description: "Cycle Kafka nodes: stop → 5min → start → 15min"
         args:
           stop_wait_seconds: 300
-          start_wait_seconds: 1500 
+          start_wait_seconds: 1200
           debug: true
 
       - name: import_uc_profile
