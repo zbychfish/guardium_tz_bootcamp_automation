@@ -238,6 +238,14 @@ def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = T
 
         logger.info("✓ kernel-devel, Java 11 and podman installed on sauropod")
 
+        for action in ("start", "enable"):
+            logger.info(f"➜ systemctl {action} podman-restart")
+            result = ssh.execute_command(f"systemctl {action} podman-restart", timeout=30, print_output=verbose)
+            if result['rc'] != 0:
+                logger.error(f"✗ systemctl {action} podman-restart: {result['stderr']}")
+                return False
+            logger.info(f"✓ systemctl {action} podman-restart")
+
     finally:
         ssh.disconnect()
 

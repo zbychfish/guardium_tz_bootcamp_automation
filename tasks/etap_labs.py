@@ -248,6 +248,15 @@ def setup_raptor_to_deploy_etap(
         logger.error(f"✗ dnf install failed: {e}")
         return False
 
+    for action, svc in [("start", "podman-restart"), ("enable", "podman-restart")]:
+        logger.info(f"➜ systemctl {action} {svc}")
+        try:
+            run_local_command(command=f"systemctl {action} {svc}", shell=True, timeout=30, check=True)
+            logger.info(f"✓ systemctl {action} {svc}")
+        except Exception as e:
+            logger.error(f"✗ systemctl {action} {svc}: {e}")
+            return False
+
     etap_version = None
 
     logger.info("➜ skopeo list-tags icr.io/guardium/guardium_external_s-tap")

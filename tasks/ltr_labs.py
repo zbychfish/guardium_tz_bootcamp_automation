@@ -61,7 +61,6 @@ def setup_minio_on_raptor(
         "openssl genrsa -out /home/minio/certs/private.key 4096 && chmod 600 /home/minio/certs/private.key",
         f'openssl req -new -key /home/minio/certs/private.key -out /home/minio/minio.csr -subj "/CN=minio.demo.guardium" -addext "subjectAltName=DNS:raptor.demo.guardium,IP:{raptor_ip}"',
         "openssl x509 -req -in /home/minio/minio.csr -CA /home/minio/ca/certs/ca.crt -CAkey /home/minio/ca/private/ca.key -CAcreateserial -out /home/minio/certs/public.crt -days 3600 -sha256 -copy_extensions copy",
-        "dnf -y install podman",
         "mkdir -p /home/data/minio",
         "chmod 700 /home/data/minio",
         "curl -L -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc",
@@ -79,6 +78,7 @@ def setup_minio_on_raptor(
     post_cmds = [
         f"/usr/local/bin/mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{pwd}'",
         "/usr/local/bin/mc mb myminio/guardium-ltr",
+        "podman update --restart=always minio",
     ]
 
     for cmd in pre_cmds:
