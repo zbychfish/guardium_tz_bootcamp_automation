@@ -523,6 +523,11 @@ def setup_oracle_container_on_sauropod(
             return False
         logger.info("  ✓ Oracle container started")
 
+        logger.info("  ➜ podman update --restart=always oracle_db_21c")
+        if not _ssh_cmd(ssh, "podman update --restart=always oracle_db_21c", logger, "podman update restart policy"):
+            return False
+        logger.info("  ✓ restart policy set to always")
+
         logger.info(f"  ➜ rm -f {remote_image_path}")
         result = ssh.execute_command(f"rm -f {remote_image_path}", print_output=False)
         if result['rc'] != 0:
