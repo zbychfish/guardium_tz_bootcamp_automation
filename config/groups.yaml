@@ -756,7 +756,7 @@ groups:
   oracle_lab_uc2:
     name: "Oracle Lab UC2"
     description: "Deploy Universal Connector 2.0 for Oracle container on sauropod"
-    deployed_with: []
+    deployed_with: [new_architecture]
     dependencies: [oracle_lab]
     stages:
       - name: run_uc_and_setup_kafka_node
