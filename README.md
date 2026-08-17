@@ -261,7 +261,6 @@ python automation.py
 |------|----------|
 | [`CODING_GUIDELINES.md`](CODING_GUIDELINES.md) | Development conventions (logging, style, kwargs) |
 | [`GROUPS_GUIDE.md`](GROUPS_GUIDE.md) | Groups system quick reference |
-| [`QUICKSTART.md`](QUICKSTART.md) | Getting started in 5 minutes |
 | [`STAGE_MECHANISM.md`](STAGE_MECHANISM.md) | Stage checkpoint / continue-mode details |
 | [`tasks/README_APPLIANCES.md`](tasks/README_APPLIANCES.md) | Appliance client and operations reference |
 
