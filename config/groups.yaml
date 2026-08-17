@@ -960,6 +960,7 @@ groups:
         module: tasks.ltr_labs
         description: "Activate LTR (Long Term Retention) by configuring complete cold storage on CM with MinIO S3 backend"
         args:
+          retry_wait_seconds: 600
           debug: false
 
       - name: import_ltr_dashboard

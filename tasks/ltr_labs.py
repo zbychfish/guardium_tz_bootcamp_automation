@@ -380,9 +380,10 @@ def activate_ltr(
     logger,
     verbose: bool = False,
     appliance_name: str = "cm",
+    retry_wait_seconds: int = 600,
     debug: bool = False,
     **kwargs) -> bool:
-    
+
     _header(logger, f"ACTIVATE LTR ON {appliance_name}")
 
     admin_pwd = config.get_custom_variable('pwd')
@@ -410,40 +411,53 @@ def activate_ltr(
     )
     logger.info(f"➜ {cmd.replace(admin_pwd, '***')}")
 
-    try:
-        client = ApplianceClient(
-            host=params['host'], user=params['user'], password=params['password'],
-            prompt_regex=params['prompt_regex'],
-            initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
-        )
-        if not client.connect():
-            logger.error(f"Failed to connect to {appliance_name}")
+    indicators = [
+        "Cold Storage Maintenance Setup Completed",
+        "Cold Storage ID:",
+        "Cold Storage Name: datalake",
+        '"status":"success"',
+        "Complete cold storage configuration successful",
+    ]
+    streaming_error = "Step 3/4 FAILED: Data streaming configuration failed"
+
+    for attempt in range(1, 3):
+        try:
+            client = ApplianceClient(
+                host=params['host'], user=params['user'], password=params['password'],
+                prompt_regex=params['prompt_regex'],
+                initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
+            )
+            if not client.connect():
+                logger.error(f"Failed to connect to {appliance_name}")
+                return False
+
+            try:
+                output = client.execute_command(cmd, timeout=300)
+            finally:
+                client.disconnect()
+
+        except Exception as e:
+            logger.error(f"✗ Error activating LTR (attempt {attempt}/2): {e}")
+            if debug:
+                logger.error(traceback.format_exc())
             return False
 
-        try:
-            output = client.execute_command(cmd, timeout=300)
-        finally:
-            client.disconnect()
-
-        indicators = [
-            "Cold Storage Maintenance Setup Completed",
-            "Cold Storage ID:",
-            "Cold Storage Name: datalake",
-            '"status":"success"',
-            "Complete cold storage configuration successful",
-        ]
         found = [ind for ind in indicators if ind.lower() in output.lower()]
         if len(found) >= 3:
             logger.info(f"✓ LTR activated ({len(found)}/{len(indicators)} indicators)")
             return True
+
+        if streaming_error in output and attempt == 1:
+            logger.warning(f"⚠ Streaming error detected — waiting {retry_wait_seconds}s ({retry_wait_seconds // 60} min) before retry...")
+            time.sleep(retry_wait_seconds)
+            logger.info("➜ Retrying activate_ltr (attempt 2/2)...")
+            continue
+
         logger.error(f"✗ LTR activation failed ({len(found)}/{len(indicators)} indicators)\n{output}")
         return False
 
-    except Exception as e:
-        logger.error(f"✗ Error activating LTR: {e}")
-        if debug:
-            logger.error(traceback.format_exc())
-        return False
+    logger.error("✗ LTR activation failed after 2 attempts")
+    return False
 
 def import_ltr_dashboard(
     config,
