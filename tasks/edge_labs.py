@@ -59,24 +59,24 @@ def install_edge_patch_via_api(config, logger, verbose=True,
         finally:
             cli.disconnect()
 
-    logger.info("➜ show system patch available (attempt 1/2, timeout=600s)...")
-    try:
-        patch_output = _show_patch_available(600)
-        logger.info(f"Available patches:\n{patch_output}")
-        logger.info("✓ Patches registered on CM")
-    except Exception as e:
-        logger.warning(f"⚠ Attempt 1 failed: {e} — retrying in 5 minutes...")
-        time.sleep(300)
-        logger.info("➜ show system patch available (attempt 2/2, timeout=300s)...")
+    patch_output = None
+    for attempt in range(1, 4):
+        timeout_secs = 600 if attempt == 1 else 300
+        logger.info(f"➜ show system patch available (attempt {attempt}/3, timeout={timeout_secs}s)...")
         try:
-            patch_output = _show_patch_available(300)
+            patch_output = _show_patch_available(timeout_secs)
             logger.info(f"Available patches:\n{patch_output}")
             logger.info("✓ Patches registered on CM")
-        except Exception as e2:
-            logger.error(f"✗ CLI command failed on retry: {e2}")
-            if debug:
-                logger.error(traceback.format_exc())
-            return False
+            break
+        except Exception as e:
+            if attempt < 3:
+                logger.warning(f"⚠ Attempt {attempt}/3 failed: {e} — retrying in 5 minutes...")
+                time.sleep(300)
+            else:
+                logger.error(f"✗ CLI command failed after 3 attempts: {e}")
+                if debug:
+                    logger.error(traceback.format_exc())
+                return False
 
     api = create_guardium_api(config, logger, cm_appliance)
     pwd = config.get_custom_variable('pwd')
