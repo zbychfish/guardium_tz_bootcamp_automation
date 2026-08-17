@@ -785,7 +785,7 @@ groups:
         module: tasks.uc_labs
         description: "Stop Kafka nodes and wait 15min"
         args:
-          wait_seconds: 900
+          wait_seconds: 300
           debug: true
 
       - name: import_uc_profile
@@ -803,7 +803,7 @@ groups:
         args:
           cm_appliance: "cm"
           profile_name: "oracle_21_container_sauropod"
-          wait_seconds: 600
+          wait_seconds: 1200
           debug: true
 
       - name: bulk_install_uc_profile
