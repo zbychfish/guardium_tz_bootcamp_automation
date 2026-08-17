@@ -255,12 +255,18 @@ def import_minio_CA_certificate(
                 if "SUCCESS: Certificate imported successfully" in buf:
                     logger.info("✓ Certificate imported successfully")
                     return True
+                if "Restarting GUI service" in buf:
+                    logger.info("✓ Certificate imported (GUI restarting)")
+                    return True
                 if client.prompt_re.search(buf):
                     break
                 time.sleep(0.1)
 
             if "SUCCESS: Certificate imported successfully" in buf:
                 logger.info("✓ Certificate imported successfully")
+                return True
+            if "Restarting GUI service" in buf:
+                logger.info("✓ Certificate imported (GUI restarting)")
                 return True
             logger.error(f"✗ Certificate import failed: {buf}")
             return False
