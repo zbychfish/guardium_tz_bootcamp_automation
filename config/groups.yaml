@@ -796,6 +796,16 @@ groups:
           test_connections: false
           debug: true
 
+      - name: test_uc_profile_connection
+        function: test_uc_profile_connection
+        module: tasks.uc_labs
+        description: "Wait 10min then test UC profile connection on cm"
+        args:
+          cm_appliance: "cm"
+          profile_name: "oracle_21_container_sauropod"
+          wait_seconds: 600
+          debug: true
+
       - name: bulk_install_uc_profile
         function: bulk_install_uc_profile
         module: tasks.uc_labs

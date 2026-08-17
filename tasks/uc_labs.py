@@ -451,6 +451,48 @@ def import_uc_profile_oracle_container(
     logger.info("✓ Wait completed")
     return True
 
+def test_uc_profile_connection(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    profile_name: str = "oracle_21_container_sauropod",
+    wait_seconds: int = 600,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "TEST UC PROFILE CONNECTION")
+
+    params = _get_appliance_connection_params(config, logger, cm_appliance)
+    if not params:
+        return False
+
+    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) before test...")
+    time.sleep(wait_seconds)
+
+    cmd = f"grdapi universal_connector_test_profile_connection name={profile_name}"
+    client = ApplianceClient(
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
+        timeout=120, strip_ansi=True, debug=debug, logger=logger
+    )
+    try:
+        if not client.connect():
+            logger.error(f"✗ failed to connect to {cm_appliance}")
+            return False
+        logger.info(f"➜ {cmd}")
+        result = client.execute_command(cmd, timeout=120)
+        if debug:
+            logger.info(f"  output: {result}")
+        logger.info("✓ test_profile_connection executed")
+        return True
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        logger.error(traceback.format_exc())
+        return False
+    finally:
+        client.disconnect()
+
 def bulk_install_uc_profile(
     config,
     logger,
