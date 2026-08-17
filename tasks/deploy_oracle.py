@@ -523,10 +523,19 @@ def setup_oracle_container_on_sauropod(
             return False
         logger.info("  ✓ Oracle container started")
 
-        logger.info("  ➜ podman update --restart=always oracle_db_21c")
-        if not _ssh_cmd(ssh, "podman update --restart=always oracle_db_21c", logger, "podman update restart policy"):
-            return False
-        logger.info("  ✓ restart policy set to always")
+        # switch to restart=always when podman 5.x will be available
+        # podman update --restart=always oracle_db_21c
+        for cmd, desc in [
+            ("podman generate systemd --name oracle_db_21c --files",                                        "podman generate systemd"),
+            ("mv container-oracle_db_21c.service /etc/systemd/system/",                                    "mv service file"),
+            ("sed -i 's/Restart=no/Restart=always/' /etc/systemd/system/container-oracle_db_21c.service", "sed Restart=always"),
+            ("systemctl daemon-reload",                                                                      "daemon-reload"),
+            ("systemctl enable container-oracle_db_21c.service",                                            "enable service"),
+        ]:
+            logger.info(f"  ➜ {cmd}")
+            if not _ssh_cmd(ssh, cmd, logger, desc):
+                return False
+        logger.info("  ✓ oracle_db_21c configured for auto-restart via systemd")
 
         logger.info(f"  ➜ rm -f {remote_image_path}")
         result = ssh.execute_command(f"rm -f {remote_image_path}", print_output=False)
