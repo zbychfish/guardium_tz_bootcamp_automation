@@ -185,13 +185,60 @@ def add_postgres_app_profile_member(config, logger, verbose=True,
 def install_app_data_access_policy(config, logger, verbose=True,
                                    cm_appliance="cm", collector_appliance="coll1",
                                    policy_name="Application data access control",
+                                   definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
                                    debug=False, **kwargs):
-    return install_policy_on_collector(
-        config=config,
-        logger=logger,
-        verbose=verbose,
-        cm_appliance=cm_appliance,
-        collector_appliance=collector_appliance,
-        policy_name=policy_name,
-        debug=debug
-    )
+    from core.guardium_rest_api import create_guardium_api
+
+    _header(logger, "INSTALL APP DATA ACCESS POLICY")
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"✗ Collector '{collector_appliance}' not found")
+        return False
+    collector_ip = collector_config.get('ip')
+    if not collector_ip:
+        logger.error(f"✗ No IP for collector '{collector_appliance}'")
+        return False
+
+    demo_password = config.get_custom_variable('pwd')
+    if not demo_password:
+        logger.error("✗ pwd not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, appliance_name=cm_appliance)
+    api.get_token(username='demo', password=demo_password)
+    logger.info("✓ Authenticated")
+
+    for outer_attempt in range(1, 3):
+        logger.info(f"➜ install_policy attempt {outer_attempt}/2")
+        result = api.install_policy(
+            policy=policy_name,
+            api_target_host=collector_ip,
+            max_retries=5,
+            retry_delay=120,
+            debug=debug
+        )
+        error_code = result.get('ErrorCode') or result.get('ID', '0')
+        error_message = result.get('ErrorMessage') or result.get('Message', '')
+
+        if error_code == '0':
+            logger.info(f"✓ Policy '{policy_name}' installed on {collector_appliance}")
+            return True
+
+        if error_code == '3001':
+            logger.warning(f"⚠ Policy not found (Code=3001) — re-importing definitions (attempt {outer_attempt}/2)")
+            if not import_policies_reports_dashboard(
+                config=config, logger=logger, verbose=verbose,
+                cm_appliance=cm_appliance, definitions_dir=definitions_dir, debug=debug
+            ):
+                logger.error("✗ Re-import of definitions failed")
+                return False
+            logger.info("✓ Definitions re-imported, retrying install_policy...")
+            continue
+
+        logger.error(f"✗ install_policy failed: Code={error_code}, Message={error_message}")
+        return False
+
+    logger.error(f"✗ install_policy failed after re-import retry")
+    return False
