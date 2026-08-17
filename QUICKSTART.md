@@ -32,7 +32,7 @@ ssh:
 
 Set SSH password (optional):
 ```bash
-export SSH_PASSWORD="your_password"
+export SSH_PASSWORD="<your_password>"
 ```
 
 ## 🎯 Create Your First Task

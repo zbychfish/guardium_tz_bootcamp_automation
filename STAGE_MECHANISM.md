@@ -13,7 +13,7 @@ The `stage` parameter is defined in the `custom_variables` section of `/root/mac
 ```json
 {
   "custom_variables": {
-    "pwd": "Guardium123!",
+    "pwd": "<your_password>",
     "stage": "setup_remote_hana"
   }
 }
@@ -62,7 +62,7 @@ The framework uses `state.json` to track completed tasks:
 ```json
 {
   "custom_variables": {
-    "pwd": "Guardium123!",
+    "pwd": "<your_password>",
     "stage": "setup_local_raptor"
   }
 }
@@ -85,7 +85,7 @@ python automation.py --continue
 ```json
 {
   "custom_variables": {
-    "pwd": "Guardium123!",
+    "pwd": "<your_password>",
     "stage": "setup_remote_toolnode"
   }
 }
@@ -194,7 +194,7 @@ post_deploy:
         - name: extract-machines-info
           playbook: "playbooks/post-deploy/extract-machines-info2.yml"
           variables:
-            pwd: "Guardium123!"
+            pwd: "<your_password>"
             stage: "setup_remote_toolnode"  # ← Define stage here
         
         - name: setup-environment

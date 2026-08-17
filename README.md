@@ -79,7 +79,7 @@ This file is written by the TechZone post-deploy playbook and consumed automatic
     { "name": "ceratops-xyz", "public_ip": "...", "private_ip": "..." }
   ],
   "custom_variables": {
-    "pwd":             "Guardium1!",
+    "pwd":             "<your_password>",
     "deployment_type": "standard_demo",
     "cli_pwd":         "...",
     "cloudsupport_pwd":"...",
