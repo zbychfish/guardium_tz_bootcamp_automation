@@ -332,46 +332,40 @@ def cycle_kafka_nodes(
     cm_appliance: str = "cm",
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
-    stop_wait_seconds: int = 300,
-    start_wait_seconds: int = 900,
+    wait_seconds: int = 900,
     debug: bool = False,
     **kwargs) -> bool:
 
-    _header(logger, "CYCLE KAFKA NODES (stop → start)")
+    _header(logger, "CYCLE KAFKA NODES (stop → wait)")
 
     params = _get_appliance_connection_params(config, logger, cm_appliance)
     if not params:
         return False
 
-    steps = [
-        ("stop",  f"grdapi stop_kafka_nodes  clusterName={cluster_name} memberList={member_list}", stop_wait_seconds),
-        ("start", f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}", start_wait_seconds),
-    ]
-
-    for action, cmd, wait_after in steps:
-        client = ApplianceClient(
-            host=params['host'], user=params['user'], password=params['password'],
-            prompt_regex=params['prompt_regex'], initial_pattern=None,
-            timeout=120, strip_ansi=True, debug=debug, logger=logger
-        )
-        try:
-            if not client.connect():
-                logger.error(f"✗ failed to connect to {cm_appliance} for '{action}'")
-                return False
-            logger.info(f"➜ {action}: {cmd}")
-            result = client.execute_command(cmd, timeout=120)
-            if debug:
-                logger.info(f"  output: {result}")
-            logger.info(f"✓ {action} executed")
-        except Exception as e:
-            logger.error(f"✗ {action} failed: {e}")
-            logger.error(traceback.format_exc())
+    cmd = f"grdapi stop_kafka_nodes clusterName={cluster_name} memberList={member_list}"
+    client = ApplianceClient(
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
+        timeout=120, strip_ansi=True, debug=debug, logger=logger
+    )
+    try:
+        if not client.connect():
+            logger.error(f"✗ failed to connect to {cm_appliance}")
             return False
-        finally:
-            client.disconnect()
+        logger.info(f"➜ stop: {cmd}")
+        result = client.execute_command(cmd, timeout=120)
+        if debug:
+            logger.info(f"  output: {result}")
+        logger.info("✓ stop executed")
+    except Exception as e:
+        logger.error(f"✗ stop failed: {e}")
+        logger.error(traceback.format_exc())
+        return False
+    finally:
+        client.disconnect()
 
-        logger.info(f"⌛ waiting {wait_after}s ({wait_after // 60} min)...")
-        time.sleep(wait_after)
+    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
+    time.sleep(wait_seconds)
 
     logger.info("✓ CYCLE KAFKA NODES — completed")
     return True

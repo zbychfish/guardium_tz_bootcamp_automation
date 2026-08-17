@@ -57,8 +57,7 @@ class GuardiumRestAPI:
         client_id: str = "BOOTCAMP",
         client_secret: Optional[str] = None,
         verify_ssl: bool = False,
-        logger=None
-    ):
+        logger=None):
     
         self.base_url = base_url.rstrip('/')
         self.client_id = client_id
@@ -220,8 +219,7 @@ class GuardiumRestAPI:
         self,
         client_ip: str,
         module: str,
-        module_version: str
-    ) -> dict:
+        module_version: str) -> dict:
         url = f'{self.base_url}/restAPI/gim_client_assign'
         headers = self.get_headers()
         
@@ -240,8 +238,7 @@ class GuardiumRestAPI:
         self,
         client_ip: str,
         param_name: str,
-        param_value: Optional[str] = None
-    ) -> dict:
+        param_value: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/gim_client_params'
         headers = self.get_headers()
         
@@ -263,8 +260,7 @@ class GuardiumRestAPI:
         self,
         client_ip: str,
         date: str,
-        module: Optional[str] = None
-    ) -> dict:
+        module: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/gim_schedule_install'
         headers = self.get_headers()
         
@@ -281,6 +277,7 @@ class GuardiumRestAPI:
         response.raise_for_status()
         
         return response.json()
+    
     def gim_list_client_modules(self, client_ip: str) -> dict:
         url = f'{self.base_url}/restAPI/gim_list_client_modules'
         headers = self.get_headers()
@@ -425,8 +422,7 @@ class GuardiumRestAPI:
         password: str,
         stap_host: str,
         username: str,
-        api_target_host: Optional[str] = None
-    ) -> dict:
+        api_target_host: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/stap'
         data: Dict[str, Any] = {
             'password': password,
@@ -449,8 +445,7 @@ class GuardiumRestAPI:
         data_pull_rows: Optional[str] = None,
         timeout: Optional[str] = None,
         user_role: Optional[str] = None,
-        api_target_host: Optional[str] = None
-    ) -> dict:
+        api_target_host: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/create_sql_configuration'
         data: Dict[str, Any] = {
             'dbType': db_type,
@@ -474,8 +469,7 @@ class GuardiumRestAPI:
 
     def get_kafka_clusters(
         self,
-        api_target_host: Optional[str] = None
-    ) -> dict:
+        api_target_host: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/kafka_cluster'
         params = {}
         if api_target_host:
@@ -489,8 +483,7 @@ class GuardiumRestAPI:
         cluster_name: str,
         member_list: str,
         apply_cruise_control: bool = False,
-        api_target_host: Optional[str] = None
-    ) -> dict:
+        api_target_host: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/kafka_cluster'
         data: Dict[str, Any] = {
             'clusterName': cluster_name,
@@ -511,8 +504,7 @@ class GuardiumRestAPI:
         description: str = "",
         files_params: Optional[list] = None,
         files_paths: Optional[list] = None,
-        api_target_host: Optional[str] = None
-    ) -> dict:
+        api_target_host: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/ucCredential'
         credential: Dict[str, Any] = {
             'name': name,
@@ -546,8 +538,7 @@ class GuardiumRestAPI:
         csv_path: str,
         jar_file: Optional[str] = None,
         update_mode: bool = False,
-        test_connections: bool = True
-    ) -> dict:
+        test_connections: bool = True) -> dict:
         url = f'{self.base_url}/restAPI/importProfilesFromFile'
         headers = {'Authorization': f'Bearer {self.access_token}'}
         files = {'path': open(csv_path, 'rb')}
@@ -578,8 +569,7 @@ class GuardiumRestAPI:
         unit_ip_list: str,
         mode: str = "local_only",
         patch_date: Optional[str] = None,
-        api_target_host: Optional[str] = None
-    ) -> dict:
+        api_target_host: Optional[str] = None) -> dict:
         url = f'{self.base_url}/restAPI/patch_install'
         headers = self.get_headers()
         data: dict = {
