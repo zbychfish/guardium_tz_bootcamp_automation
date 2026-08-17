@@ -230,22 +230,47 @@ def import_minio_CA_certificate(
             logger.info("➜ store certificate application datalake s3 console")
             client.channel.send(b"store certificate application datalake s3 console\r")
 
+            # Phase 1: wait for paste prompt or replace confirmation
             buf = ""
             deadline = time.time() + 30
+            paste_prompt_found = False
             while time.time() < deadline:
                 if client.channel.recv_ready():
                     buf += client.channel.recv(65535).decode(errors="replace")
-                    if "Please paste your Trusted certificate below in PEM encoded format" in buf:
-                        logger.info("✓ Certificate prompt detected")
-                        break
+                if "Please paste your Trusted certificate below in PEM encoded format" in buf:
+                    logger.info("✓ Certificate prompt detected")
+                    paste_prompt_found = True
+                    break
+                if "will not be replaced" in buf or "already exists" in buf.lower():
+                    # Guardium asks to confirm replacement — send 'y'
+                    logger.info("⚠ Certificate already exists — sending 'y' to replace")
+                    client.channel.send(b"y\r")
+                    buf = ""
+                    # wait again for paste prompt
+                    deadline2 = time.time() + 30
+                    while time.time() < deadline2:
+                        if client.channel.recv_ready():
+                            buf += client.channel.recv(65535).decode(errors="replace")
+                        if "Please paste your Trusted certificate below in PEM encoded format" in buf:
+                            logger.info("✓ Certificate prompt detected after confirmation")
+                            paste_prompt_found = True
+                            break
+                        time.sleep(0.1)
+                    break
                 time.sleep(0.1)
 
+            if not paste_prompt_found:
+                logger.error(f"✗ Certificate paste prompt not found, buf: {buf[:300]}")
+                return False
+
+            # Phase 2: send certificate content
             for line in cert_content.splitlines():
                 client.channel.send((line + "\n").encode())
                 time.sleep(0.01)
             time.sleep(0.5)
             client.channel.send(b"\x04")
 
+            # Phase 3: wait for success or GUI restart
             time.sleep(2)
             buf = ""
             deadline = time.time() + 60
