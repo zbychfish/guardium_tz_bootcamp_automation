@@ -764,6 +764,7 @@ groups:
         module: tasks.uc_labs
         description: "Run Universal Connector on coll1 and setup kafka-node on kafka1"
         args:
+          wait_seconds: 60
           debug: true
 
       - name: register_kafka_cluster
@@ -771,6 +772,7 @@ groups:
         module: tasks.uc_labs
         description: "Register Kafka cluster via REST API"
         args:
+          stabilize_seconds: 300
           debug: true
 
       - name: create_uc_credential
@@ -780,30 +782,31 @@ groups:
         args:
           debug: true
 
-      - name: cycle_kafka_nodes
-        function: cycle_kafka_nodes
-        module: tasks.uc_labs
-        description: "Stop Kafka nodes and wait 15min"
-        args:
-          wait_seconds: 300
-          debug: true
-
       - name: import_uc_profile
         function: import_uc_profile_oracle_container
         module: tasks.uc_labs
         description: "Import UC profile from oracle_21_container_sauropod.csv"
         args:
           test_connections: false
+          wait_seconds: 900
+          debug: true
+
+      - name: cycle_kafka_nodes
+        function: cycle_kafka_nodes
+        module: tasks.uc_labs
+        description: "Stop Kafka nodes (wait 5min) then start (wait 20min)"
+        args:
+          stop_wait_seconds: 300
+          start_wait_seconds: 1200
           debug: true
 
       - name: test_uc_profile_connection
         function: test_uc_profile_connection
         module: tasks.uc_labs
-        description: "Wait 10min then test UC profile connection on cm"
+        description: "Test UC profile connection on cm"
         args:
           cm_appliance: "cm"
           profile_name: "oracle_21_container_sauropod"
-          wait_seconds: 1200
           debug: true
 
       - name: bulk_install_uc_profile

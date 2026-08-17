@@ -201,6 +201,7 @@ def run_uc_and_setup_kafka_node(
     verbose: bool = False,
     collector_appliance: str = "coll1",
     kafka_appliance: str = "kafka1",
+    wait_seconds: int = 60,
     debug: bool = False,
     **kwargs) -> bool:
     
@@ -245,8 +246,8 @@ def run_uc_and_setup_kafka_node(
     if not setup_kafka_node(config=config, logger=logger, appliance_name=kafka_appliance, debug=debug):
         return False
 
-    logger.info("⌛ Waiting 1 minute...")
-    time.sleep(60)
+    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
+    time.sleep(wait_seconds)
     logger.info("✓ RUN UC AND SETUP KAFKA NODE — completed")
     return True
 
@@ -258,6 +259,7 @@ def register_kafka_cluster(
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
     apply_cruise_control: bool = False,
+    stabilize_seconds: int = 300,
     debug: bool = True,
     **kwargs) -> bool:
 
@@ -273,7 +275,6 @@ def register_kafka_cluster(
 
     logger.info(f"  cluster={cluster_name} members={member_list} cruise_control={apply_cruise_control}")
 
-    registered = False
     for attempt in range(1, 11):
         logger.info(f"➜ create_kafka_cluster (attempt {attempt}/10)")
         result = api.create_kafka_cluster(
@@ -288,40 +289,13 @@ def register_kafka_cluster(
             time.sleep(60)
         else:
             logger.info(f"✓ cluster registration accepted (attempt {attempt}/10)")
-            registered = True
             break
-
-    if not registered:
+    else:
         logger.error("✗ Kafka cluster registration failed after 10 attempts")
         return False
 
-    for attempt in range(1, 7):
-        logger.info(f"➜ get_kafka_clusters (attempt {attempt}/6)")
-        clusters = api.get_kafka_clusters()
-        if debug:
-            logger.info(f"  response: {clusters}")
-
-        if isinstance(clusters, list):
-            items = clusters
-        elif isinstance(clusters, dict):
-            items = next((v for k, v in clusters.items() if isinstance(v, list)), [])
-        else:
-            items = []
-
-        if any(c.get('name') == cluster_name or c.get('clusterName') == cluster_name
-               for c in items if isinstance(c, dict)):
-            logger.info(f"✓ Kafka cluster '{cluster_name}' confirmed")
-            break
-
-        if attempt < 6:
-            logger.warning(f"⚠ cluster not found yet (attempt {attempt}/6), waiting 60s...")
-            time.sleep(60)
-    else:
-        logger.error(f"✗ Kafka cluster '{cluster_name}' not found after 6 attempts")
-        return False
-
-    logger.info("⌛ Waiting 5 minutes for Kafka cluster to stabilize...")
-    time.sleep(300)
+    logger.info(f"⌛ waiting {stabilize_seconds}s ({stabilize_seconds // 60} min) for Kafka cluster to stabilize...")
+    time.sleep(stabilize_seconds)
     logger.info("✓ Kafka cluster registration completed")
     return True
 
@@ -332,40 +306,46 @@ def cycle_kafka_nodes(
     cm_appliance: str = "cm",
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
-    wait_seconds: int = 900,
+    stop_wait_seconds: int = 300,
+    start_wait_seconds: int = 1200,
     debug: bool = False,
     **kwargs) -> bool:
 
-    _header(logger, "CYCLE KAFKA NODES (stop → wait)")
+    _header(logger, "CYCLE KAFKA NODES (stop → start)")
 
     params = _get_appliance_connection_params(config, logger, cm_appliance)
     if not params:
         return False
 
-    cmd = f"grdapi stop_kafka_nodes clusterName={cluster_name} memberList={member_list}"
-    client = ApplianceClient(
-        host=params['host'], user=params['user'], password=params['password'],
-        prompt_regex=params['prompt_regex'], initial_pattern=None,
-        timeout=120, strip_ansi=True, debug=debug, logger=logger
-    )
-    try:
-        if not client.connect():
-            logger.error(f"✗ failed to connect to {cm_appliance}")
-            return False
-        logger.info(f"➜ stop: {cmd}")
-        result = client.execute_command(cmd, timeout=120)
-        if debug:
-            logger.info(f"  output: {result}")
-        logger.info("✓ stop executed")
-    except Exception as e:
-        logger.error(f"✗ stop failed: {e}")
-        logger.error(traceback.format_exc())
-        return False
-    finally:
-        client.disconnect()
+    steps = [
+        ("stop",  f"grdapi stop_kafka_nodes  clusterName={cluster_name} memberList={member_list}", stop_wait_seconds),
+        ("start", f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}", start_wait_seconds),
+    ]
 
-    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min)...")
-    time.sleep(wait_seconds)
+    for action, cmd, wait_after in steps:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'], initial_pattern=None,
+            timeout=120, strip_ansi=True, debug=debug, logger=logger
+        )
+        try:
+            if not client.connect():
+                logger.error(f"✗ failed to connect to {cm_appliance} for '{action}'")
+                return False
+            logger.info(f"➜ {action}: {cmd}")
+            result = client.execute_command(cmd, timeout=120)
+            if debug:
+                logger.info(f"  output: {result}")
+            logger.info(f"✓ {action} executed")
+        except Exception as e:
+            logger.error(f"✗ {action} failed: {e}")
+            logger.error(traceback.format_exc())
+            return False
+        finally:
+            client.disconnect()
+
+        logger.info(f"⌛ waiting {wait_after}s ({wait_after // 60} min)...")
+        time.sleep(wait_after)
 
     logger.info("✓ CYCLE KAFKA NODES — completed")
     return True
@@ -418,6 +398,7 @@ def import_uc_profile_oracle_container(
     jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
     update_mode: bool = False,
     test_connections: bool = True,
+    wait_seconds: int = 900,
     debug: bool = True,
     **kwargs) -> bool:
 
@@ -446,8 +427,8 @@ def import_uc_profile_oracle_container(
         logger.info(f"  API response: {result}")
     logger.info("✓ UC profile imported")
 
-    logger.info("⌛ Waiting 1 minute for UC profile to be processed...")
-    time.sleep(60)
+    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) for UC profile to be processed...")
+    time.sleep(wait_seconds)
     logger.info("✓ Wait completed")
     return True
 
@@ -457,7 +438,6 @@ def test_uc_profile_connection(
     verbose: bool = False,
     cm_appliance: str = "cm",
     profile_name: str = "oracle_21_container_sauropod",
-    wait_seconds: int = 600,
     debug: bool = False,
     **kwargs) -> bool:
 
@@ -466,9 +446,6 @@ def test_uc_profile_connection(
     params = _get_appliance_connection_params(config, logger, cm_appliance)
     if not params:
         return False
-
-    logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) before test...")
-    time.sleep(wait_seconds)
 
     cmd = f"grdapi universal_connector_test_profile_connection name={profile_name}"
     client = ApplianceClient(
