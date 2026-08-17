@@ -767,19 +767,19 @@ groups:
           wait_seconds: 60
           debug: true
 
-      - name: register_kafka_cluster
-        function: register_kafka_cluster
-        module: tasks.uc_labs
-        description: "Register Kafka cluster via REST API"
-        args:
-          stabilize_seconds: 300
-          debug: true
-
       - name: create_uc_credential
         function: create_uc_credential_for_oracle_container
         module: tasks.uc_labs
         description: "Create UC credential oracle_container_sauropod"
         args:
+          debug: true
+
+      - name: register_kafka_cluster
+        function: register_kafka_cluster
+        module: tasks.uc_labs
+        description: "Register Kafka cluster via REST API"
+        args:
+          stabilize_seconds: 120
           debug: true
 
       - name: import_uc_profile
@@ -788,16 +788,16 @@ groups:
         description: "Import UC profile from oracle_21_container_sauropod.csv"
         args:
           test_connections: false
-          wait_seconds: 900
+          wait_seconds: 1200
           debug: true
 
       - name: cycle_kafka_nodes
         function: cycle_kafka_nodes
         module: tasks.uc_labs
-        description: "Stop Kafka nodes (wait 5min) then start (wait 20min)"
+        description: "Stop Kafka nodes (wait 5min) then start (wait 10min)"
         args:
           stop_wait_seconds: 300
-          start_wait_seconds: 1200
+          start_wait_seconds: 600
           debug: true
 
       - name: test_uc_profile_connection
