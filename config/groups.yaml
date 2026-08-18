@@ -6,7 +6,7 @@ groups:
   initial_preparation:
     name: "Initial Preparation"
     description: "Basic system setup and database deployments before marker creation"
-    deployed_with: [init]
+    deployed_with: [databases]
     dependencies: []  # No dependencies - this is the first group
     stages:
       - name: setup_hosts_local
@@ -165,7 +165,7 @@ groups:
   database_preparations:
     name: "Standard databases installation"
     description: "setup DB engines on bootcamp machines"
-    deployed_with: [databases]
+    deployed_with: [databases2]
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
