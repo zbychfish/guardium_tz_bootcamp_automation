@@ -34,7 +34,7 @@ def update_system_packages(config: ConfigLoader, logger, verbose: bool = True, *
     return True
 
 
-def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
+def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True, cos_prefix: str = "master", **kwargs) -> bool:
     logger.info("Creating upload directory")
     if not execute_commands(["mkdir -p /opt/guardium_tz_bootcamp_automation/upload"], logger):
         logger.error("✗ Failed to create upload directory")
@@ -49,6 +49,9 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True, *
     if not all([api_id, api_key, endpoint, bucket]):
         logger.error("✗ Missing COS credentials in custom_variables (s3_source_api_id/key/endpoint/bucket)")
         return False
+
+    prefix = cos_prefix.rstrip("/") + "/"
+    logger.info(f"COS prefix: {prefix}")
 
     try:
         import warnings
@@ -67,16 +70,19 @@ def prepare_upload_content(config: ConfigLoader, logger, verbose: bool = True, *
         local_base = "/opt/guardium_tz_bootcamp_automation/upload/source_files/"
         paginator = cos.get_paginator("list_objects_v2")
         downloaded = 0
-        for page in paginator.paginate(Bucket=bucket):
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
                 key = obj["Key"]
-                local_path = os.path.join(local_base, key)
+                relative_key = key[len(prefix):]
+                if not relative_key:
+                    continue
+                local_path = os.path.join(local_base, relative_key)
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                logger.info(f"  ↓ {key}")
+                logger.info(f"  ↓ {relative_key}")
                 cos.download_file(bucket, key, local_path)
                 downloaded += 1
 
-        logger.info(f"✓ Downloaded {downloaded} file(s) from COS")
+        logger.info(f"✓ Downloaded {downloaded} file(s) from COS (prefix: {prefix})")
     except Exception as e:
         logger.error(f"✗ Failed to download from IBM COS: {e}")
         return False

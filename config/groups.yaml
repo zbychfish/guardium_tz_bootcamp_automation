@@ -35,6 +35,7 @@ groups:
         module: tasks.preparation_for_services_deployment
         description: "Create upload directory, download source_files from IBM COS, clone guardium_notes_dbtraffic"
         args:
+          cos_prefix: "v14"
           debug: false
 
       - name: configure_dbtraffic
