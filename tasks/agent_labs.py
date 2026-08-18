@@ -319,6 +319,8 @@ def correct_mysql_ie(
 
     logger.info(f"➜ STAP_DISCOVERY_ENABLED=0 on {stap_host}")
     api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_ENABLED", param_value="0")
+    logger.info(f"➜ STAP_DISCOVERY_DBS on {stap_host}")
+    api.gim_client_params(client_ip=stap_host, param_name="STAP_DISCOVERY_DBS", param_value="oracle:db2:informix:postgres:sybase:teradata:netezza:memsql:mariadb:verticadb:mongodb")
     api.gim_schedule_install(client_ip=stap_host, date="now")
 
     if not _monitor_gim(api, stap_host, logger):
