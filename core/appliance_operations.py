@@ -560,17 +560,19 @@ def register_appliance(
                 managed = True
             return managed
 
-        except TimeoutError:
-            logger.debug(f"[{appliance_name}] ⚠ timeout, reconnecting")
+        except (TimeoutError, RuntimeError):
+            logger.info(f"[{appliance_name}] ⚠ channel closed (expected during registration) — waiting 60s")
+            import time
+            time.sleep(60)
             reconnected = _reconnect()
             if not reconnected:
-                logger.error(f"[{appliance_name}] failed to reconnect after timeout")
+                logger.error(f"[{appliance_name}] failed to reconnect after channel close")
                 return False
             managed = _check_managed(reconnected)
             if managed:
-                logger.info(f"[{appliance_name}] ✓ registered (after timeout)")
+                logger.info(f"[{appliance_name}] ✓ registered (Managed)")
             else:
-                logger.debug(f"[{appliance_name}] ⚠ timeout, not Managed")
+                logger.error(f"[{appliance_name}] ✗ not Managed after reconnect")
             return managed
 
     except Exception as e:
