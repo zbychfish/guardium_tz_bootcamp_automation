@@ -416,6 +416,7 @@ def set_shared_secret(
         return False
 
     target_shared_secret = config.get_custom_variable('shared_secret') or "guardium"
+    target_gid = random.randint(1000, 100000)
 
     try:
         client = ApplianceClient(
@@ -435,13 +436,20 @@ def set_shared_secret(
 
         logger.info(f"[{appliance_name}] ➜ store system shared secret ***")
         output = client.execute_command(f"store system shared secret {target_shared_secret}")
-        client.disconnect()
 
         if "error" in output.lower() or "failed" in output.lower():
+            client.disconnect()
             logger.error(f"[{appliance_name}] ✗ {output}")
             return False
 
         logger.info(f"[{appliance_name}] ✓ shared secret set")
+
+        output = client.execute_command(f"store product gid {target_gid}")
+        if debug and output:
+            logger.info(f"[{appliance_name}] {output}")
+        logger.info(f"[{appliance_name}] ✓ gid={target_gid}")
+
+        client.disconnect()
         return True
 
     except Exception as e:
@@ -650,7 +658,6 @@ def configure_system_settings_consolidated(
     timezone: Optional[str] = None,
     ntp_servers: Optional[List[str]] = None,
     configure_hosts: bool = True,
-    gid: Optional[int] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
@@ -798,14 +805,8 @@ def configure_system_settings_consolidated(
             client.execute_command(f"support store hosts {ip} {fqdn}")
         _log(f"✓ hosts={len(hosts)} entries")
 
-        target_gid = gid if gid is not None else random.randint(1000, 100000)
-        output = client.execute_command(f"store product gid {target_gid}")
-        if debug and output:
-            _log(output)
-        _log(f"✓ gid={target_gid}")
-
         client.disconnect()
-        _log(f"✓ done: hostname={hostname} ip={ip_address}{prefix} tz={target_timezone} gid={target_gid}")
+        _log(f"✓ done: hostname={hostname} ip={ip_address}{prefix} tz={target_timezone}")
         return True
 
     except Exception as e:

@@ -96,7 +96,7 @@ def set_shared_secret_all(
     shared_secret: Optional[str] = None,
     debug: bool = True,
     **kwargs) -> bool:
-    _header(logger, "SET SHARED SECRET ON ALL APPLIANCES")
+    _header(logger, "SET SHARED SECRET AND GID ON ALL APPLIANCES")
 
     all_appliances = _get_all_appliances(config, logger)
     if not all_appliances:
@@ -623,7 +623,6 @@ def configure_system_settings_all(
     timezone: Optional[str] = None,
     ntp_servers: Optional[list] = None,
     configure_hosts: bool = True,
-    gid: Optional[int] = None,
     user: Optional[str] = None,
     password: Optional[str] = None,
     prompt_regex: Optional[str] = None,
@@ -661,7 +660,6 @@ def configure_system_settings_all(
         timezone=timezone,
         ntp_servers=ntp_servers,
         configure_hosts=configure_hosts,
-        gid=gid,
         user=user,
         password=password,
         prompt_regex=prompt_regex,
