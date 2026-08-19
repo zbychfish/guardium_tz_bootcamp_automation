@@ -572,7 +572,6 @@ groups:
         module: tasks.va_labs
         description: "Upload and import DPS file via Guardium Web UI (Playwright): Harden → Vulnerability Assessment → Customer Uploads"
         args:
-          dps_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/dps/Guardium_V12_Quarterly_DPS_2026_Q3_20260817.enc"
           debug: false
 
       - name: fetch_cm_certificate_on_sauropod
