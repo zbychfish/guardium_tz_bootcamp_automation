@@ -165,7 +165,7 @@ groups:
   database_preparations:
     name: "Standard databases installation"
     description: "setup DB engines on bootcamp machines"
-    deployed_with: [databases2]
+    deployed_with: [databases]
     dependencies: [initial_preparation]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
