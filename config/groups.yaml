@@ -1021,10 +1021,10 @@ groups:
           check_interval: 15
           debug: false
 
-      - name: register_edge_gateway
+      - name: register_edge_gateway 
         function: register_edge_gateway
         module: tasks.edge_labs
-        description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge"
+        description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge - POPRAWIC purge_age"
         args:
           cm_appliance: "cm"
           exports_to: "cm.demo.guardium"
@@ -1033,7 +1033,7 @@ groups:
           storageclass_rw_once: "local-path"
           version: "v2.2.0"
           deploy_proxy: true
-          purge_age: 30
+          # purge_age: 30
           debug: false
 
       - name: download_edge_bundle_via_api
