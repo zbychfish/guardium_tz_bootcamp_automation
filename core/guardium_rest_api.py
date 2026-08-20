@@ -636,7 +636,7 @@ class GuardiumRestAPI:
         storageclass_rw_once: str,
         version: str,
         deploy_proxy: Union[bool, int] = True,
-        purge_age: Optional[int] = 30,
+        # purge_age: Optional[int] = 30,
         description: Optional[str] = None,
         backup_exports: Optional[str] = None,
         cpu_limits: Optional[str] = None,
@@ -654,8 +654,8 @@ class GuardiumRestAPI:
             'version': version,
             'deployProxy': str(int(deploy_proxy)),
         }
-        if purge_age is not None:
-            data['purgeAge'] = purge_age
+        # if purge_age is not None:
+        #     data['purgeAge'] = purge_age
         if description is not None:
             data['description'] = description
         if backup_exports is not None:

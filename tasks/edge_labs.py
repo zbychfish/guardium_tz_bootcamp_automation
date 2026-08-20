@@ -110,13 +110,13 @@ def register_edge_gateway(config, logger, verbose=True,
                           storageclass_rw_once="local-path",
                           version="v2.1.1",
                           deploy_proxy=True,
-                          purge_age: int = 30,
+                          # purge_age: int = 30,
                           debug=False, **kwargs):
 
     _header(logger, "REGISTER EDGE GATEWAY ON CM")
 
     logger.info(f"  name={name}, namespace={namespace}, exportsTo={exports_to}")
-    logger.info(f"  storageclass_rw_once={storageclass_rw_once}, version={version}, deployProxy={deploy_proxy}, purgeAge={purge_age}")
+    logger.info(f"  storageclass_rw_once={storageclass_rw_once}, version={version}, deployProxy={deploy_proxy}")
 
     pwd = config.get_custom_variable('pwd')
     if not pwd:
@@ -134,7 +134,7 @@ def register_edge_gateway(config, logger, verbose=True,
             storageclass_rw_once=storageclass_rw_once,
             version=version,
             deploy_proxy=deploy_proxy,
-            purge_age=purge_age,
+            # purge_age=purge_age,
         )
     except Exception as e:
         logger.error(f"✗ register_edge API call failed: {e}")
