@@ -239,7 +239,7 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     deployed_with: [appliances]
-    dependencies: [initial_preparation]
+    dependencies: [initial_preparation, database_preparations]
     stages:
       - name: reset_cli_password_all
         function: reset_cli_password_all
@@ -975,7 +975,7 @@ groups:
     name: "Edge Lab"
     description: "Install Edge patch on CM and configure Edge features"
     deployed_with: [new_architecture]
-    dependencies: []
+    dependencies: [va_api]
     stages:
       - name: prepare_cm_for_edge_patching  
         function: copy_single_file_to_appliance_task
