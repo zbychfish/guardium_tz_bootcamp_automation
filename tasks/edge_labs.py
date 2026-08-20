@@ -26,7 +26,7 @@ def _header(logger, title: str) -> None:
 
 def install_edge_patch_via_api(config, logger, verbose=True,
                                cm_appliance="cm",
-                               patch_filename="SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig",
+                               patch_filename="SqlGuard-12.0p15003_Edge_Jun_26_2026.tgz.enc.sig",
                                mode="local_only",
                                debug=False, **kwargs):
                                

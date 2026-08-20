@@ -992,7 +992,7 @@ groups:
         description: "Initiate Edge patch installation on cm via REST API patch_install"
         args:
           cm_appliance: "cm"
-          patch_filename: "SqlGuard-12.0p15002_Edge_Apr_14_2026.tgz.enc.sig"
+          patch_filename: "SqlGuard-12.0p15003_Edge_Jun_26_2026.tgz.enc.sig"
           mode: "local_only"
           debug: false
 
@@ -1002,7 +1002,7 @@ groups:
         description: "Monitor Edge patch installation on cm: wait for appear (15s), then DONE (60s)"
         args:
           appliance_name: "cm"
-          patch_numbers: ["15002"]
+          patch_numbers: ["15003"]
           appear_interval: 15
           appear_max: 40
           check_interval: 60
