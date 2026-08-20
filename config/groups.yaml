@@ -1031,8 +1031,9 @@ groups:
           name: "sauropod.demo.guardium"
           namespace: "edge"
           storageclass_rw_once: "local-path"
-          version: "v2.1.1"
+          version: "v2.2.0"
           deploy_proxy: true
+          purge_age: 30
           debug: false
 
       - name: download_edge_bundle_via_api
