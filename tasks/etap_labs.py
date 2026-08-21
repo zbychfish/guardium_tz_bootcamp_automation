@@ -9,7 +9,7 @@ from core.logger import get_logger
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_client import ApplianceClient
 from core.ssh_client import SSHClient
-from core.utils import execute_local_command, run_local_command
+from core.utils import execute_local_command, run_local_command, dnf_install
 
 logger = get_logger(__name__)
 
