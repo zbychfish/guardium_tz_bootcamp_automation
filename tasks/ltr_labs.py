@@ -352,8 +352,8 @@ def distribute_minio_certificate(
             return False
 
         try:
-            logger.info("➜ distribute application certificate datalake all_managed true")
-            client.execute_command("distribute application certificate datalake all_managed true", timeout=300)
+            logger.info("➜ distribute application certificate datalake all_managed true --restart_cm_gui=true")
+            client.execute_command("distribute application certificate datalake all_managed true --restart_cm_gui=true", timeout=300)
             logger.info("✓ Distribution command executed")
 
             start = time.time()
