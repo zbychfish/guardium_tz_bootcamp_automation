@@ -1034,7 +1034,7 @@ groups:
           version: "v2.2.0"
           deploy_proxy: true
           # purge_age: 30
-          debug: false
+          debug: true
 
       - name: download_edge_bundle_via_api
         function: download_edge_bundle_via_api
