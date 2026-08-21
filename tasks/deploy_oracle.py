@@ -91,7 +91,14 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
 
             # ── prerequisites ─────────────────────────────────────────────────
             logger.info(f"  ➜ dnf install --nogpgcheck {preinstall_dest}")
-            if not _ssh_cmds(ssh, [f"dnf install -y --nogpgcheck {preinstall_dest}"], logger, "install Oracle prerequisites", timeout=600):
+            for _attempt in range(1, 6):
+                if _ssh_cmds(ssh, [f"dnf install -y --nogpgcheck {preinstall_dest}"], logger, "install Oracle prerequisites", timeout=600):
+                    break
+                if _attempt < 5:
+                    logger.warning(f"⚠ rpm.lock busy, waiting 60s (attempt {_attempt}/5)...")
+                    time.sleep(60)
+            else:
+                logger.error("✗ Failed to install Oracle prerequisites after 5 attempts")
                 return False
             logger.info("  ✓ Oracle prerequisites installed")
 
