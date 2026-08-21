@@ -105,7 +105,9 @@ def create_mysql_config_file(password: str, logger, verbose: bool = True) -> boo
         return False
 
 
-def deploy_mysql_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bool:
+def deploy_mysql_on_raptor(config, logger, verbose: bool = True,
+                           mysql_release_rpm: str = "https://dev.mysql.com/get/mysql84-community-release-el9-5.noarch.rpm",
+                           **kwargs) -> bool:
     _header(logger, "MySQL deployment on raptor")
 
     password = config.get_custom_variable('pwd')
@@ -120,7 +122,7 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bo
     # ], logger, verbose):
     #     logger.error("✗ MySQL repo configuration failed")
     #     return False
-    if not dnf_install("https://dev.mysql.com/get/mysql84-community-release-el9-5.noarch.rpm", logger):
+    if not dnf_install(mysql_release_rpm, logger):
         logger.error("✗ MySQL repo RPM installation failed")
         return False
     if not dnf_install("mysql-community-server", logger):

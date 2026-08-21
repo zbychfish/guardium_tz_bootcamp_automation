@@ -173,6 +173,7 @@ groups:
         module: tasks.deploy_mysql
         description: "Deploy MySQL 9.7 on raptor"
         args:
+          mysql_release_rpm: "https://dev.mysql.com/get/mysql84-community-release-el9-5.noarch.rpm"
           debug: false
       
       - name: deploy_mongo_on_raptor
