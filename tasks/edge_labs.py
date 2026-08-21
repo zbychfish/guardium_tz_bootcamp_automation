@@ -15,6 +15,7 @@ from core.appliance_operations import _get_appliance_connection_params
 from core.guardium_rest_api import create_guardium_api, import_definitions_files
 from core.logger import get_logger
 from core.ssh_client import SSHClient
+from core.utils import ssh_dnf_install
 
 logger = get_logger(__name__)
 
@@ -404,9 +405,7 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
             logger.info(f"  ✓ {desc}")
 
         logger.info("➜ Installing expect on sauropod...")
-        result = ssh.execute_command("dnf -y install expect", print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ Failed to install expect: {result['stderr']}")
+        if not ssh_dnf_install(ssh, "expect", logger):
             return False
         logger.info("✓ expect installed on sauropod")
         return True

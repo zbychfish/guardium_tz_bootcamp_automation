@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import ConfigLoader
+from core import ConfigLoader, ssh_dnf_install
 from core.ssh_client import SSHClient
 
 
@@ -91,7 +91,7 @@ def deploy_oracle_on_sauropod(config: ConfigLoader, logger, verbose: bool = True
 
             # ── prerequisites ─────────────────────────────────────────────────
             logger.info(f"  ➜ dnf install --nogpgcheck {preinstall_dest}")
-            if not _ssh_cmds(ssh, [f"dnf install -y --nogpgcheck {preinstall_dest}"], logger, "install Oracle prerequisites", timeout=600):
+            if not ssh_dnf_install(ssh, f"--nogpgcheck {preinstall_dest}", logger, extra_flags="-y", timeout=600):
                 return False
             logger.info("  ✓ Oracle prerequisites installed")
 

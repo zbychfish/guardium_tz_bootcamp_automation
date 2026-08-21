@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import ConfigLoader
+from core import ConfigLoader, dnf_install
 
 
 def _header(logger, title: str):
@@ -53,9 +53,11 @@ def deploy_postgres_on_raptor(config: ConfigLoader, logger, verbose: bool = True
     try:
         # ── Step 1: install + init ────────────────────────────────────────────
         logger.info("  ➜ dnf install @postgresql:16 + postgresql-contrib")
+        if not dnf_install("@postgresql:16", logger, extra_flags="-qy"):
+            return False
+        if not dnf_install("postgresql-contrib", logger, extra_flags="-qy"):
+            return False
         for cmd, timeout, desc, *inp in [
-            (["dnf", "-qy", "install", "@postgresql:16"],             600, "install @postgresql:16"),
-            (["dnf", "-qy", "install", "postgresql-contrib"],         600, "install postgresql-contrib"),
             (["postgresql-setup", "--initdb", "--unit", "postgresql"], 300, "initdb"),
             (["chpasswd"],                                              60, "set postgres OS password", f"postgres:{password}"),
         ]:

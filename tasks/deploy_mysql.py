@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_local_command, execute_commands, execute_mysql_sql, write_file, ConfigLoader
+from core import execute_local_command, execute_commands, execute_mysql_sql, write_file, ConfigLoader, dnf_install
 
 
 def _header(logger, title: str):
@@ -111,19 +111,23 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bo
     password = config.get_custom_variable('pwd')
 
     logger.info("  ➜ Installing mysql-community-server via dnf")
-    commands = [
+    if not execute_commands([
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
-        "dnf install -y https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm",
         "dnf config-manager --disable mysql-9.7-lts-community",
         "dnf config-manager --disable mysql-tools-9.7-lts-community",
         "dnf config-manager --enable mysql-8.4-lts-community",
         "dnf config-manager --enable mysql-tools-8.4-lts-community",
-        "dnf install -y mysql-community-server",
-        "systemctl start mysqld",
-        "systemctl enable mysqld",
-    ]
-    if not execute_commands(commands, logger, verbose):
+    ], logger, verbose):
+        logger.error("✗ MySQL repo configuration failed")
+        return False
+    if not dnf_install("https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm", logger):
+        logger.error("✗ MySQL repo RPM installation failed")
+        return False
+    if not dnf_install("mysql-community-server", logger):
         logger.error("✗ MySQL installation failed")
+        return False
+    if not execute_commands(["systemctl start mysqld", "systemctl enable mysqld"], logger, verbose):
+        logger.error("✗ MySQL service start failed")
         return False
     logger.info("  ✓ mysqld installed and started")
 

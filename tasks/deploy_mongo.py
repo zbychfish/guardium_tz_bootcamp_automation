@@ -12,7 +12,7 @@ from urllib.parse import quote_plus
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_local_command, execute_commands, execute_mongo_js, modify_config_file, write_file, ConfigLoader
+from core import execute_local_command, execute_commands, execute_mongo_js, modify_config_file, write_file, ConfigLoader, dnf_install
 
 
 def _header(logger, title: str):
@@ -222,15 +222,12 @@ def deploy_mongo_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bo
     if not create_mongodb_repo_file(logger, verbose):
         return False
 
-    commands = [
-        "dnf install -y mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise",
-        "systemctl enable mongod",
-        "systemctl start mongod",
-        "sleep 5",
-    ]
     logger.info("  ➜ dnf install mongodb-enterprise + enable/start mongod")
-    if not execute_commands(commands, logger, verbose):
+    if not dnf_install("mongodb-enterprise-database mongodb-enterprise-tools mongodb-mongosh-shared-openssl3 mongodb-enterprise", logger):
         logger.error("✗ MongoDB installation failed")
+        return False
+    if not execute_commands(["systemctl enable mongod", "systemctl start mongod", "sleep 5"], logger, verbose):
+        logger.error("✗ MongoDB service start failed")
         return False
 
     logger.info("  ➜ systemctl is-active mongod")

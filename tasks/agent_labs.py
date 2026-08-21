@@ -12,7 +12,7 @@ from core.appliance_operations import copy_files_to_appliance, install_gim_modul
 from core.appliance_client import ApplianceClient
 from core.guardium_rest_api import create_guardium_api
 from core.ssh_client import SSHClient
-from core.utils import execute_local_command, execute_commands, run_local_command
+from core.utils import execute_local_command, execute_commands, run_local_command, dnf_install, ssh_dnf_install
 
 logger = get_logger(__name__)
 
@@ -141,13 +141,10 @@ def install_gim_on_raptor(
         logger.error(f"GIM installer not found: {gim_installer_path}")
         return False
 
-    try:
-        logger.info("➜ dnf install perl-File-Copy perl-Sys-Hostname")
-        run_local_command(command="dnf install -y perl-File-Copy perl-Sys-Hostname", shell=True, timeout=180, check=True)
-        logger.info("✓ Perl packages installed")
-    except Exception as e:
-        logger.error(f"✗ dnf install failed: {e}")
+    logger.info("➜ dnf install perl-File-Copy perl-Sys-Hostname")
+    if not dnf_install("perl-File-Copy perl-Sys-Hostname", logger):
         return False
+    logger.info("✓ Perl packages installed")
 
     shell_dir = os.path.dirname(gim_installer_path)
     try:
@@ -224,7 +221,7 @@ def install_stap_on_raptor(
         return False
 
     logger.info("➜ dnf install kernel-devel kernel-headers")
-    if not execute_commands(["dnf install -y kernel-devel-$(uname -r) kernel-headers-$(uname -r)"], logger, verbose=verbose):
+    if not dnf_install("kernel-devel-$(uname -r) kernel-headers-$(uname -r)", logger):
         logger.error("failed to install kernel packages")
         return False
     logger.info("✓ kernel packages installed")
@@ -758,9 +755,7 @@ ORCLPDB1 =
             return False
         logger.info("✓ RPM uploaded")
 
-        result = ssh.execute_command(f"dnf -y install {remote_rpm}", timeout=120, print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ dnf install failed: {result['stderr']}")
+        if not ssh_dnf_install(ssh, remote_rpm, logger, timeout=120):
             return False
         logger.info("✓ Oracle Instant Client installed")
 

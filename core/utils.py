@@ -536,6 +536,45 @@ def execute_commands(commands: list, logger=None, verbose: bool = True, stop_on_
 
 
 # ============================================================================
+# DNF Operations
+# ============================================================================
+
+def dnf_install(packages: str, logger=None, extra_flags: str = "-y",
+                max_retries: int = 5, retry_delay: int = 60) -> bool:
+    log = logger if logger else globals()['logger']
+    cmd = f"dnf install {extra_flags} {packages}"
+    for attempt in range(1, max_retries + 1):
+        result = execute_local_command(cmd, log, verbose=True)
+        if result['rc'] == 0:
+            return True
+        if "rpm.lock" in result['stderr'] and attempt < max_retries:
+            log.warning(f"⚠ rpm.lock busy, waiting {retry_delay}s (attempt {attempt}/{max_retries})...")
+            time.sleep(retry_delay)
+        else:
+            log.error(f"✗ dnf install failed: {result['stderr']}")
+            return False
+    return False
+
+
+def ssh_dnf_install(ssh, packages: str, logger=None, extra_flags: str = "-y",
+                    timeout: int = 600, max_retries: int = 5, retry_delay: int = 60) -> bool:
+    log = logger if logger else globals()['logger']
+    cmd = f"dnf install {extra_flags} {packages}"
+    for attempt in range(1, max_retries + 1):
+        result = ssh.execute_command(cmd, timeout=timeout, print_output=False)
+        if result['rc'] == 0:
+            return True
+        stderr = result.get('stderr', '') or result.get('stdout', '')
+        if "rpm.lock" in stderr and attempt < max_retries:
+            log.warning(f"⚠ rpm.lock busy, waiting {retry_delay}s (attempt {attempt}/{max_retries})...")
+            time.sleep(retry_delay)
+        else:
+            log.error(f"✗ dnf install failed: {stderr}")
+            return False
+    return False
+
+
+# ============================================================================
 # Database Operations
 # ============================================================================
 

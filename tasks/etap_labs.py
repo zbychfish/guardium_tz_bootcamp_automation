@@ -239,14 +239,9 @@ def setup_raptor_to_deploy_etap(
     _header(logger, "SETUP RAPTOR TO DEPLOY ETAP")
 
     logger.info("➜ dnf install podman-docker skopeo")
-    try:
-        result = run_local_command(command="dnf -y install podman-docker skopeo", shell=True, timeout=300, check=True)
-        logger.info("✓ packages installed")
-        if debug and result.stdout:
-            logger.debug(result.stdout)
-    except Exception as e:
-        logger.error(f"✗ dnf install failed: {e}")
+    if not dnf_install("podman-docker skopeo", logger):
         return False
+    logger.info("✓ packages installed")
 
     for action, svc in [("start", "podman-restart"), ("enable", "podman-restart")]:
         logger.info(f"➜ systemctl {action} {svc}")

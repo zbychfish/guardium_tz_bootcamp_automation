@@ -12,6 +12,7 @@ from core.appliance_operations import _get_appliance_connection_params
 from core.guardium_rest_api import create_guardium_api
 from core.logger import get_logger
 from core.ssh_client import SSHClient
+from core.utils import ssh_dnf_install
 
 logger = get_logger(__name__)
 
@@ -72,10 +73,8 @@ def install_filebeat_on_sauropod(
             return False
         logger.info("✓ RPM uploaded")
 
-        logger.info(f"➜ dnf -y install {remote_rpm_path}")
-        result = ssh.execute_command(f"dnf -y install {remote_rpm_path}", timeout=300, print_output=verbose)
-        if result['rc'] != 0:
-            logger.error(f"✗ dnf install failed: {result['stderr']}")
+        logger.info(f"➜ dnf install {remote_rpm_path}")
+        if not ssh_dnf_install(ssh, remote_rpm_path, logger, timeout=300):
             return False
         logger.info("✓ filebeat installed")
 

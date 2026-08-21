@@ -33,6 +33,8 @@ from .utils import wait_for_condition        # Wait for a condition to become tr
 from .utils import run_local_command         # Execute command locally (returns CompletedProcess)
 from .utils import execute_local_command     # Execute command locally (returns dict with rc/stdout/stderr)
 from .utils import execute_commands          # Execute list of commands sequentially
+from .utils import dnf_install               # Run dnf install locally with rpm.lock retry
+from .utils import ssh_dnf_install           # Run dnf install over SSH with rpm.lock retry
 from .utils import execute_mysql_sql         # Execute SQL commands in MySQL
 from .utils import execute_mongo_js          # Execute JavaScript commands in MongoDB
 from .utils import validate_ip               # Validate IP address format
@@ -64,6 +66,8 @@ __all__ = [
     'run_local_command',
     'execute_local_command',
     'execute_commands',
+    'dnf_install',
+    'ssh_dnf_install',
     'execute_mysql_sql',
     'execute_mongo_js',
     'validate_ip',

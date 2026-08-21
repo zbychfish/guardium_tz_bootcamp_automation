@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_commands, execute_local_command, ConfigLoader, write_file
+from core import execute_commands, execute_local_command, ConfigLoader, write_file, dnf_install
 
 
 def _header(logger, title: str):
@@ -47,12 +47,13 @@ def deploy_db2_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bool
         logger.warning("  DB2 license (db2_lic) not found in custom_variables")
 
     logger.info("  ➜ groupadd db2iadm1/db2fadm1 + useradd db2inst1/db2fenc1 + dnf prereqs + sysctl + tar")
+    if not dnf_install("libaio numactl ksh libgcc libstdc++ perl pam libibverbs patch NetworkManager-config-server pam.i686 libstdc++.i686", logger):
+        return False
     commands = [
         "groupadd db2iadm1",
         "groupadd db2fadm1",
         f"useradd -g db2iadm1 -m -p $(openssl passwd -1 '{password}') db2inst1",
         f"useradd -g db2fadm1 -m -p $(openssl passwd -1 '{password}') db2fenc1",
-        "dnf install -y libaio numactl ksh libgcc libstdc++ perl pam libibverbs patch NetworkManager-config-server pam.i686 libstdc++.i686",
         'sysctl -w kernel.sem="250 64000 100 4096"',
         "sysctl -w kernel.shmmni=8192",
         "sysctl -w kernel.shmmax=1073741824",

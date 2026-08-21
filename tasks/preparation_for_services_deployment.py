@@ -12,7 +12,7 @@ from pathlib import Path
 # Add core modules to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
-from core import execute_commands, download_and_extract, ConfigLoader
+from core import execute_commands, download_and_extract, ConfigLoader, dnf_install
 from core.ssh_client import SSHClient
 
 
@@ -24,10 +24,7 @@ def update_system_packages(config: ConfigLoader, logger, verbose: bool = True, *
     logger.info("✓ System packages updated")
 
     logger.info("Installing required packages on raptor")
-    if not execute_commands(
-        ["dnf install -y unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat"],
-        logger
-    ):
+    if not dnf_install("unzip lsof nmap-ncat python3.12 python3.12-pip python3.12-devel git bc java-11-openjdk compat-openssl11 gcc python3.9 python3.9-devel socat", logger):
         logger.error("✗ Package installation failed")
         return False
     logger.info("✓ Required packages installed")

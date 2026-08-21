@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "core"))
 
 from core import ConfigLoader
 from core.ssh_client import SSHClient
+from core.utils import ssh_dnf_install
 
 
 def _header(logger, title: str):
@@ -76,7 +77,7 @@ gpgkey=https://downloads.apache.org/cassandra/KEYS
         logger.info("  ✓ Cassandra repository configured")
 
         logger.info("  ➜ dnf install cassandra")
-        if not _ssh_cmd(ssh, "dnf -y install cassandra", logger, "install Cassandra", timeout=600):
+        if not ssh_dnf_install(ssh, "cassandra", logger, timeout=600):
             return False
         logger.info("  ✓ Cassandra installed")
 
