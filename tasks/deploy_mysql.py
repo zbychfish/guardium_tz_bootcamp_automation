@@ -120,7 +120,7 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bo
     # ], logger, verbose):
     #     logger.error("✗ MySQL repo configuration failed")
     #     return False
-    if not dnf_install("https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm", logger):
+    if not dnf_install("https://dev.mysql.com/get/mysql84-community-release-el9-5.noarch.rpm", logger):
         logger.error("✗ MySQL repo RPM installation failed")
         return False
     if not dnf_install("mysql-community-server", logger):
