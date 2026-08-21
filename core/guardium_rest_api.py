@@ -757,32 +757,13 @@ def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'Guardi
     
     return api
 
-
-# Made with Bob
-
-
 def import_definitions_files(
     config,
     logger,
     appliance_name: str,
     definition_files: list,
     definitions_dir: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
-    debug: bool = False
-) -> bool:
-    """
-    Import definition files to Guardium appliance via REST API.
-    
-    Args:
-        config: Configuration object
-        logger: Logger instance
-        appliance_name: Appliance name
-        definition_files: List of definition file names to import
-        definitions_dir: Directory containing definition files
-        debug: Enable debug output
-    
-    Returns:
-        True if successful, False otherwise
-    """
+    debug: bool = False) -> bool:
     import os
     
     try:
