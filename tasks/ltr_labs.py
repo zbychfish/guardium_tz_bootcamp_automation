@@ -409,7 +409,7 @@ def activate_ltr(
         f'dataBucket=guardium-ltr '
         f'resultSchema="datalake_reports" '
         f'region="US_EAST_1" '
-        f'coldCatalogEndpoint="thrift://appnode1.demo.guardium:8443" '
+        f'coldCatalogEndpoint="https://appnode1.demo.guardium:8443" '
         f'coldCatalogSchema="datalake" '
         f'coldStorageName="datalake" '
         f'queryEngineHost="appnode1.demo.guardium" '
