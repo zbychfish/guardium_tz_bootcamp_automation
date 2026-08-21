@@ -111,15 +111,15 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True, **kwargs) -> bo
     password = config.get_custom_variable('pwd')
 
     logger.info("  ➜ Installing mysql-community-server via dnf")
-    if not execute_commands([
-        "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
-        "dnf config-manager --disable mysql-9.7-lts-community",
-        "dnf config-manager --disable mysql-tools-9.7-lts-community",
-        "dnf config-manager --enable mysql-8.4-lts-community",
-        "dnf config-manager --enable mysql-tools-8.4-lts-community",
-    ], logger, verbose):
-        logger.error("✗ MySQL repo configuration failed")
-        return False
+    # if not execute_commands([
+    #     "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
+    #     "dnf config-manager --disable mysql-9.7-lts-community",
+    #     "dnf config-manager --disable mysql-tools-9.7-lts-community",
+    #     "dnf config-manager --enable mysql-8.4-lts-community",
+    #     "dnf config-manager --enable mysql-tools-8.4-lts-community",
+    # ], logger, verbose):
+    #     logger.error("✗ MySQL repo configuration failed")
+    #     return False
     if not dnf_install("https://dev.mysql.com/get/mysql84-community-release-el9-4.noarch.rpm", logger):
         logger.error("✗ MySQL repo RPM installation failed")
         return False
