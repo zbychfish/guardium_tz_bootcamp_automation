@@ -624,7 +624,11 @@ class GuardiumRestAPI:
 
     def get_bundle(self, name: str) -> bytes:
         url = f'{self.base_url}/restAPI/get_bundle'
+        if self.logger:
+            self.logger.info(f"get_bundle: GET {url}?name={name}")
         response = requests.get(url, params={'name': name}, headers=self.get_headers(), verify=self.verify_ssl)
+        if self.logger:
+            self.logger.info(f"get_bundle: HTTP {response.status_code}, content-length={len(response.content)}, content-type={response.headers.get('Content-Type','?')}")
         response.raise_for_status()
         return response.content
 
