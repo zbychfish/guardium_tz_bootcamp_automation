@@ -167,13 +167,19 @@ def enable_ltr_on_appnode(
             logger.info("➜ store datalake service start")
             client.execute_command("store datalake service start", timeout=300)
 
-            logger.info("➜ show datalake status")
-            status = client.execute_command("show datalake status", timeout=60)
-            if "Datalake is running!" not in status:
-                logger.error(f"✗ Datalake is not running: {status}")
-                return False
-            logger.info("✓ Datalake is running")
-            return True
+            for attempt in range(1, 11):
+                logger.info(f"➜ show datalake status (attempt {attempt}/10)")
+                status = client.execute_command("show datalake status", timeout=60)
+                logger.info(f"  {status.strip()}")
+                if "Datalake is running" in status:
+                    logger.info("✓ Datalake is running")
+                    return True
+                if attempt < 10:
+                    logger.info("⌛ Datalake still starting, waiting 30s...")
+                    time.sleep(30)
+
+            logger.error(f"✗ Datalake is not running after 10 attempts: {status}")
+            return False
 
         finally:
             client.disconnect()
