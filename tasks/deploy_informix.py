@@ -379,4 +379,108 @@ scenario:
     logger.info("✓ Informix deployment completed")
     return True
 
+
+def informix_setup_ssl(
+    config,
+    logger,
+    verbose: bool = True,
+    install_dir: str = INSTALL_DIR,
+    informix_server: str = INFORMIX_SERVER,
+    informix_host: str = INFORMIX_HOST,
+    **kwargs) -> bool:
+
+    _header(logger, "INFORMIX SSL SETUP")
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    service_name = f"informix-{informix_server}"
+    ssl_dir = f"{install_dir}/ssl"
+    keydb = f"{ssl_dir}/{informix_server}.p12"
+    env = _env(install_dir, informix_server)
+
+    logger.info(f"➜ systemctl stop {service_name}")
+    if not _run(f"systemctl stop {service_name}", logger, verbose, f"stop {service_name}"):
+        return False
+    logger.info(f"✓ {service_name} stopped")
+
+    logger.info(f"➜ mkdir -p {ssl_dir}")
+    if not _run(f"su - informix -c 'mkdir -p {ssl_dir}'", logger, verbose, "create ssl dir"):
+        return False
+    logger.info(f"✓ {ssl_dir} created")
+
+    logger.info("➜ gsk8capicmd_64 -keydb -create")
+    if not _run(
+        f"su - informix -c 'export {env}; gsk8capicmd_64 -keydb -create -db {keydb} -pw \"{pwd}\" -type pkcs12 -pqc false -stash'",
+        logger, verbose, "create keydb"
+    ):
+        return False
+    logger.info("✓ keydb created")
+
+    logger.info("➜ gsk8capicmd_64 -cert -create")
+    if not _run(
+        f"su - informix -c 'export {env}; gsk8capicmd_64 -cert -create -db {keydb} -pw \"{pwd}\" -label \"informix_ssl_cert\" -dn \"CN={informix_host},O=Guardium,C=PL\" -size 2048 -expire 3650'",
+        logger, verbose, "create certificate"
+    ):
+        return False
+    logger.info("✓ certificate created")
+
+    # ── sqlhosts: add SSL entry ───────────────────────────────────────────────
+    ssl_entry = f"{informix_server}_ssl   onsocssl        0.0.0.0                 {INFORMIX_PORT + 1}"
+    sqlhosts = f"{install_dir}/etc/sqlhosts"
+    logger.info(f"➜ append SSL entry to {sqlhosts}")
+    if not _run(
+        f"su - informix -c \"echo '{ssl_entry}' >> {sqlhosts}\"",
+        logger, verbose, "append sqlhosts SSL entry"
+    ):
+        return False
+    logger.info("✓ sqlhosts SSL entry added")
+
+    # ── conssl.cfg ────────────────────────────────────────────────────────────
+    conssl_cfg = f"{install_dir}/etc/conssl.cfg"
+    conssl_content = (
+        f"SSL_KEYSTORE_FILE {ssl_dir}/{informix_server}.p12\n"
+        f"SSL_KEYSTORE_STH  {ssl_dir}/{informix_server}.sth\n"
+    )
+    logger.info(f"➜ create {conssl_cfg}")
+    if not _run(
+        f"su - informix -c \"printf '{conssl_content}' > {conssl_cfg}\"",
+        logger, verbose, "create conssl.cfg"
+    ):
+        return False
+    logger.info("✓ conssl.cfg created")
+
+    # ── onconfig: DBSERVERALIASES ─────────────────────────────────────────────
+    onconfig_file = f"{install_dir}/etc/onconfig.{informix_server}"
+    logger.info(f"➜ add DBSERVERALIASES after DBSERVERNAME in {onconfig_file}")
+    if not _run(
+        f"su - informix -c \"sed -i '/^DBSERVERNAME[[:space:]]\\+{informix_server}/a DBSERVERALIASES {informix_server}_ssl' {onconfig_file}\"",
+        logger, verbose, "add DBSERVERALIASES"
+    ):
+        return False
+    logger.info("✓ DBSERVERALIASES added")
+
+    # ── onconfig: VPCLASS encrypt + NETTYPE socssl ────────────────────────────
+    logger.info(f"➜ add VPCLASS encrypt and NETTYPE socssl after SINGLE_CPU_VP in {onconfig_file}")
+    if not _run(
+        f"su - informix -c \"sed -i '/^SINGLE_CPU_VP/a VPCLASS              encrypt,num=1\\nNETTYPE              socssl,1,50,NET' {onconfig_file}\"",
+        logger, verbose, "add VPCLASS encrypt and NETTYPE socssl"
+    ):
+        return False
+    logger.info("✓ VPCLASS encrypt and NETTYPE socssl added")
+
+    # ── onconfig: SSL_KEYSTORE_LABEL ──────────────────────────────────────────
+    logger.info(f"➜ set SSL_KEYSTORE_LABEL in {onconfig_file}")
+    if not _run(
+        f"su - informix -c \"sed -i 's/^SSL_KEYSTORE_LABEL.*/SSL_KEYSTORE_LABEL informix_ssl_cert/' {onconfig_file}\"",
+        logger, verbose, "set SSL_KEYSTORE_LABEL"
+    ):
+        return False
+    logger.info("✓ SSL_KEYSTORE_LABEL set")
+
+    logger.info("✓ Informix SSL configuration completed")
+    return True
+
 # Made with Bob

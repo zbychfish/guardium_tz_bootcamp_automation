@@ -236,6 +236,16 @@ groups:
           jdbc_jars: "/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/jdbc-15.0.1.3.jar:/opt/guardium_tz_bootcamp_automation/upload/source_files/informix/bson-4.11.1.jar"
           debug: false
 
+      - name: informix_setup_ssl
+        function: informix_setup_ssl
+        module: tasks.deploy_informix
+        description: "Configure Informix SSL support"
+        args:
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          informix_host: "raptor.demo.guardium"
+          debug: false
+
   setup_appliances:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
