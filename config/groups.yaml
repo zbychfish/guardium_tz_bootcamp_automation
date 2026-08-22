@@ -6,7 +6,7 @@ groups:
   initial_preparation:
     name: "Initial Preparation"
     description: "Basic system setup and database deployments before marker creation"
-    deployed_with: [databases]
+    deployed_with: [initial]
     dependencies: []  # No dependencies - this is the first group
     stages:
       - name: setup_hosts_local
