@@ -316,6 +316,7 @@ def distribute_minio_certificate(
     logger,
     verbose: bool = False,
     appliance_name: str = "cm",
+    ltr_appnode: str = "appnode1",
     timeout: int = 300,
     check_interval: int = 10,
     debug: bool = False,
@@ -328,18 +329,50 @@ def distribute_minio_certificate(
     from core.appliance_config_loader import ApplianceConfigLoader
     loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = loader.get_all_appliances()
-    appnodes   = [n for n, c in all_appliances.items() if c.get('type') == 'appnode']
-    collectors = [n for n, c in all_appliances.items() if c.get('type') == 'collector']
-    managed = len(appnodes) + len(collectors)
-    expected_success = managed + 1
-    expected_info    = 2
+    # wszyscy managed oprócz CM i ltr_appnode → tylko datalake-s3-gui
+    others = [n for n in all_appliances if n != appliance_name and n != ltr_appnode]
 
-    logger.info(f"  appnodes={appnodes}  collectors={collectors}")
-    logger.info(f"  expected Success={expected_success}  INFO={expected_info}")
+    # CM:          INFO  for each of: datalake-catalog, datalake-gui, datalake-s3-gui
+    # ltr_appnode: Success for each of: datalake-catalog, datalake-gui, datalake-s3-gui
+    # others:      Success for datalake-s3-gui only
+    CM_ALIASES      = {"datalake-catalog", "datalake-gui", "datalake-s3-gui"}
+    APPNODE_ALIASES = {"datalake-catalog", "datalake-gui", "datalake-s3-gui"}
+    OTHER_ALIASES   = {"datalake-s3-gui"}
+
+    logger.info(f"  ltr_appnode={ltr_appnode}  others={others}")
 
     params = _get_appliance_connection_params(config, logger, appliance_name)
     if not params:
         return False
+
+    def _check(output):
+        # parse lines: IP  Hostname  Alias  Status  Message  Timestamp
+        cm_ok      = set()
+        appnode_ok = set()
+        other_ok   = {n: set() for n in others}
+        for line in output.splitlines():
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            hostname = parts[1]   # e.g. cm.demo.guardium
+            alias    = parts[2]   # e.g. datalake-s3-gui
+            status   = parts[3]   # Success / INFO
+            short    = hostname.split('.')[0]   # cm / appnode1 / coll1
+            if status == "INFO" and "finished" in line and short == appliance_name:
+                cm_ok.add(alias)
+            elif status == "Success" and short == ltr_appnode:
+                appnode_ok.add(alias)
+            elif status == "Success" and short in other_ok:
+                other_ok[short].add(alias)
+        missing = []
+        if not CM_ALIASES.issubset(cm_ok):
+            missing.append(f"CM missing INFO: {CM_ALIASES - cm_ok}")
+        if not APPNODE_ALIASES.issubset(appnode_ok):
+            missing.append(f"{ltr_appnode} missing Success: {APPNODE_ALIASES - appnode_ok}")
+        for n in others:
+            if not OTHER_ALIASES.issubset(other_ok.get(n, set())):
+                missing.append(f"{n} missing Success: {OTHER_ALIASES - other_ok.get(n, set())}")
+        return missing
 
     try:
         client = ApplianceClient(
@@ -357,19 +390,19 @@ def distribute_minio_certificate(
             logger.info("✓ Distribution command executed")
 
             start = time.time()
-            success_count = info_count = 0
+            missing = ["initial"]
             while time.time() - start < timeout:
                 time.sleep(check_interval)
                 output = client.execute_command("distribute certificate showlog all", timeout=300)
-                success_count = len(re.findall(r'\bSuccess\b', output, re.IGNORECASE))
-                info_count    = len(re.findall(r'\bINFO\b', output))
+                missing = _check(output)
                 elapsed = int(time.time() - start)
-                logger.info(f"  [{elapsed}s] Success={success_count}/{expected_success}  INFO={info_count}/{expected_info}")
-                if success_count >= expected_success and info_count >= expected_info:
+                if missing:
+                    logger.info(f"  [{elapsed}s] still waiting: {missing}")
+                else:
                     logger.info(f"✓ Certificate distribution completed ({elapsed}s)")
                     return True
 
-            logger.error(f"✗ Distribution timeout after {timeout}s (Success={success_count}/{expected_success}, INFO={info_count}/{expected_info})")
+            logger.error(f"✗ Distribution timeout after {timeout}s, missing: {missing}")
             return False
 
         finally:
