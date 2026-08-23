@@ -1003,11 +1003,11 @@ def configure_informix_exit(
             return False
         logger.info(f"✓ {cfg_file} created")
 
-    # ── 5. activate ifxguard ─────────────────────────────────────────────────
+    # ── 5. activate ifxguard (background — process does not exit) ────────────
     for srv in [informix_server, f"{informix_server}_ssl"]:
         cfg_file = f"{install_dir}/etc/ifxguard.{srv}"
         if not execute_commands([
-            f"su - informix -c 'export {env}; ifxguard -c {cfg_file}'"
+            f"su - informix -c 'export {env}; nohup ifxguard -c {cfg_file} &'"
         ], logger, verbose):
             logger.error(f"✗ Failed to activate ifxguard for {srv}")
             return False
