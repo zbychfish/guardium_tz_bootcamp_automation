@@ -810,6 +810,8 @@ groups:
         module: tasks.uc_labs
         description: "Import UC profile from oracle_21_container_sauropod.csv"
         args:
+          csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
+          jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
           test_connections: false
           wait_seconds: 1200
           debug: true
