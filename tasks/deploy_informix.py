@@ -428,7 +428,7 @@ def informix_setup_ssl(
     logger.info("✓ certificate created")
 
     # ── sqlhosts: add SSL entry ───────────────────────────────────────────────
-    ssl_entry = f"{informix_server}_ssl   onsocssl        0.0.0.0                 {INFORMIX_PORT + 1}"
+    ssl_entry = f"{informix_server}_ssl    onsocssl    0.0.0.0    {INFORMIX_PORT + 1}"
     sqlhosts = f"{install_dir}/etc/sqlhosts"
     logger.info(f"➜ append SSL entry to {sqlhosts}")
     if not _run(
@@ -454,13 +454,13 @@ def informix_setup_ssl(
 
     # ── onconfig: DBSERVERALIASES ─────────────────────────────────────────────
     onconfig_file = f"{install_dir}/etc/onconfig.{informix_server}"
-    logger.info(f"➜ add DBSERVERALIASES after DBSERVERNAME in {onconfig_file}")
+    logger.info(f"➜ set DBSERVERALIASES in {onconfig_file}")
     if not _run(
-        f"su - informix -c \"sed -i '/^DBSERVERNAME[[:space:]]\\+{informix_server}/a DBSERVERALIASES {informix_server}_ssl' {onconfig_file}\"",
-        logger, verbose, "add DBSERVERALIASES"
+        f"su - informix -c \"sed -i 's/^DBSERVERALIASES.*/DBSERVERALIASES {informix_server}_ssl/' {onconfig_file}\"",
+        logger, verbose, "set DBSERVERALIASES"
     ):
         return False
-    logger.info("✓ DBSERVERALIASES added")
+    logger.info("✓ DBSERVERALIASES set")
 
     # ── onconfig: VPCLASS encrypt + NETTYPE socssl ────────────────────────────
     logger.info(f"➜ add VPCLASS encrypt and NETTYPE socssl after SINGLE_CPU_VP in {onconfig_file}")
@@ -479,6 +479,11 @@ def informix_setup_ssl(
     ):
         return False
     logger.info("✓ SSL_KEYSTORE_LABEL set")
+
+    logger.info(f"➜ systemctl start {service_name}")
+    if not _run(f"systemctl start {service_name}", logger, verbose, f"start {service_name}"):
+        return False
+    logger.info(f"✓ {service_name} started")
 
     logger.info("✓ Informix SSL configuration completed")
     return True
