@@ -504,6 +504,18 @@ groups:
           collector_appliance: "coll1"
           debug: false
 
+      - name: configure_informix_exit
+        function: configure_informix_exit
+        module: tasks.agent_labs
+        description: "Configure Informix Exit: start service, authorize user, symlink, ifxguard configs, activate, configure IE on collector"
+        args:
+          cm_appliance: "cm"
+          collector_appliance: "coll1"
+          install_dir: "/opt/ibm/informix"
+          informix_server: "ifxserver"
+          stap_host: "raptor.demo.guardium"
+          debug: false
+
   uc1_lab:
     name: "UC 1.0 lab"
     description: "Universal Connector 1.0 lab setup"

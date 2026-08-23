@@ -943,4 +943,99 @@ def import_oracle_dashboard(
         definitions_dir=definitions_dir, debug=debug
     )
 
+def configure_informix_exit(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    collector_appliance: str = "coll1",
+    install_dir: str = "/opt/ibm/informix",
+    informix_server: str = "ifxserver",
+    stap_host: str = "raptor.demo.guardium",
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "CONFIGURE INFORMIX EXIT")
+
+    env = f"INFORMIXDIR={install_dir} INFORMIXSERVER={informix_server} ONCONFIG=onconfig.{informix_server} INFORMIXSQLHOSTS={install_dir}/etc/sqlhosts PATH={install_dir}/bin:$PATH LD_LIBRARY_PATH={install_dir}/lib:{install_dir}/lib/esql"
+    guardctl = "/opt/guardium/modules/ATAP/current/files/bin/guardctl"
+
+    # ── 1. start informix ────────────────────────────────────────────────────
+    if not execute_commands([f"systemctl start informix-{informix_server}"], logger, verbose):
+        logger.error("✗ Failed to start informix service")
+        return False
+    logger.info(f"✓ informix-{informix_server} started")
+
+    # ── 2. guardctl authorize-user informix ──────────────────────────────────
+    if not execute_commands([f"{guardctl} authorize-user informix"], logger, verbose):
+        logger.error("✗ Failed to authorize informix user")
+        return False
+    logger.info("✓ informix user authorized")
+
+    # ── 3. symlink libguard_informix_exit_64.so ──────────────────────────────
+    if not execute_commands([
+        f"su - informix -c 'ln -fs /usr/lib64/libguard_informix_exit_64.so {install_dir}/lib/libguard_informix_exit_64.so'"
+    ], logger, verbose):
+        logger.error("✗ Failed to create symlink")
+        return False
+    logger.info("✓ symlink created")
+
+    # ── 4. ifxguard config files ─────────────────────────────────────────────
+    for srv in [informix_server, f"{informix_server}_ssl"]:
+        cfg_file = f"{install_dir}/etc/ifxguard.{srv}"
+        content = (
+            f"NAME   ifxguard.{srv}\\n"
+            f"WORKERS   6\\n"
+            f"LIBPATH   {install_dir}/lib/libguard_informix_exit_64.so\\n"
+            f"DEBUG   2\\n"
+            f"LOGFILE   /tmp/{srv}.log\\n"
+        )
+        if not execute_commands([
+            f"su - informix -c \"printf '{content}' > {cfg_file}\""
+        ], logger, verbose):
+            logger.error(f"✗ Failed to create {cfg_file}")
+            return False
+        logger.info(f"✓ {cfg_file} created")
+
+    # ── 5. activate ifxguard ─────────────────────────────────────────────────
+    for srv in [informix_server, f"{informix_server}_ssl"]:
+        cfg_file = f"{install_dir}/etc/ifxguard.{srv}"
+        if not execute_commands([
+            f"su - informix -c 'export {env}; ifxguard -c {cfg_file}'"
+        ], logger, verbose):
+            logger.error(f"✗ Failed to activate ifxguard for {srv}")
+            return False
+        logger.info(f"✓ ifxguard activated for {srv}")
+
+    # ── 6. configure IE on collector ─────────────────────────────────────────
+    collector_config = ApplianceConfigLoader(config_loader=config).get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"Collector '{collector_appliance}' not found")
+        return False
+    api_target_host = collector_config.get('ip')
+    if not api_target_host:
+        logger.error(f"Collector '{collector_appliance}' has no IP")
+        return False
+
+    api = _get_api(config, logger, cm_appliance)
+    if not api:
+        return False
+
+    logger.info(f"➜ delete Informix IE {stap_host} on {api_target_host}")
+    api.delete_inspection_engine(stap_host=stap_host, type="informix", wait_for_response="1", api_target_host=api_target_host)
+
+    logger.info(f"➜ create Informix Exit IE {stap_host} on {api_target_host}")
+    api.create_inspection_engine(
+        stap_host=stap_host,
+        protocol="Informix Exit",
+        db_user="informix",
+        db_version="15",
+        client="0.0.0.0/0.0.0.0",
+        proc_name=f"{install_dir}/bin/oninit",
+        db_install_dir="/home/informix",
+        api_target_host=api_target_host
+    )
+    logger.info("✓ Informix Exit IE configured")
+    return True
+
 # Made with Bob
