@@ -323,6 +323,12 @@ def correct_mysql_ie(
     if not _monitor_gim(api, stap_host, logger):
         return False
 
+    logger.info("➜ restart STAP")
+    if not execute_commands(["/opt/guardium/modules/STAP/current/guard-config-update --restart STAP"], logger, verbose):
+        logger.error("✗ Failed to restart STAP")
+        return False
+    logger.info("✓ STAP restarted")
+
     logger.info("✓ MySQL IE corrected")
     return True
 
