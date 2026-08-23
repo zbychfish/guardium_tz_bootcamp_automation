@@ -167,6 +167,8 @@ EOF""",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install --upgrade pip",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install -e .",
         f"cd {dbtraffic_dir} && {venv_python} -m pip install -r requirements.txt",
+        f"printf '#!/bin/bash\\nsource {dbtraffic_dir}/venv/bin/activate\\n' > {dbtraffic_dir}/activate_venv.sh",
+        f"chmod +x {dbtraffic_dir}/activate_venv.sh",
     ]
     if not execute_commands(commands, logger, verbose):
         logger.error("✗ Failed to configure guardium_notes_dbtraffic")
