@@ -1041,6 +1041,12 @@ def configure_informix_exit(
         api_target_host=api_target_host
     )
     logger.info("✓ Informix Exit IE configured")
+
+    if not execute_commands([f"systemctl stop informix-{informix_server}"], logger, verbose):
+        logger.error("✗ Failed to stop informix service")
+        return False
+    logger.info(f"✓ informix-{informix_server} stopped")
+
     return True
 
 # Made with Bob
