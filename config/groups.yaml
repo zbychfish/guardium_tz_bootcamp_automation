@@ -1130,3 +1130,38 @@ groups:
           cm_appliance: "cm"
           installation_delay: 10
           debug: false
+
+  genai_lab:
+    name: "GenAI Lab"
+    description: "Setup appnode2 as app-node, install GenAI patch"
+    deployed_with: [new_architecture]
+    dependencies: [va_api]
+    stages:
+      - name: setup_appnode2
+        function: setup_appnode
+        module: tasks.ltr_labs
+        description: "Setup app-node on appnode2 by executing 'store unit type app-node', wait for reboot and reconnection"
+        args:
+          appliance_name: "appnode2"
+          debug: false
+
+      - name: prepare_appnode2_for_patching
+        function: copy_single_file_to_appliance_task
+        module: tasks.setup_appliances
+        description: "Copy GenAI patch file to appnode2 for installation"
+        args:
+          appliance_name: "appnode2"
+          source_file_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/extensions/SqlGuard-12.0p80020_genai_Jun_22_2026.tgz.enc.sig"
+          target_dir: "/var/IBM/Guardium/log/patches/"
+          owner: "tomcat:tomcat"
+          debug: false
+
+      - name: install_patch_on_appnode2
+        function: install_patch_on_appliance_single
+        module: tasks.setup_appliances
+        description: "Install GenAI patch on appnode2"
+        args:
+          appliance_name: "appnode2"
+          patch_selection: "1"
+          reinstall_answer: "y"
+          debug: false
