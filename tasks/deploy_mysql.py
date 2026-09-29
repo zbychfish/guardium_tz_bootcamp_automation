@@ -115,7 +115,6 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True,
     logger.info("  ➜ Installing mysql-community-server via dnf")
     if not execute_commands([
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
-        "dnf install -y https://repo.mysql.com/mysql84-community-release-el9.rpm"
         "dnf config-manager --disable mysql-9.7-lts-community 2>/dev/null || true",
         "dnf config-manager --disable mysql-tools-9.7-lts-community 2>/dev/null || true",
         "dnf config-manager --enable mysql-8.4-lts-community 2>/dev/null",
