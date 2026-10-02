@@ -106,9 +106,13 @@ def create_mysql_config_file(password: str, logger, verbose: bool = True) -> boo
 
 
 def deploy_mysql_on_raptor(config, logger, verbose: bool = True,
-                           mysql_release_rpm: str = "https://dev.mysql.com/get/mysql84-community-release-el9-5.noarch.rpm",
+                           mysql_release_rpm: str = None,
                            **kwargs) -> bool:
     _header(logger, "MySQL deployment on raptor")
+
+    if not mysql_release_rpm:
+        logger.error("✗ mysql_release_rpm is required")
+        return False
 
     password = config.get_custom_variable('pwd')
 
