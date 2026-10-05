@@ -121,14 +121,16 @@ def deploy_mysql_on_raptor(config, logger, verbose: bool = True,
         "rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023",
         "dnf config-manager --disable mysql-9.7-lts-community 2>/dev/null || true",
         "dnf config-manager --disable mysql-tools-9.7-lts-community 2>/dev/null || true",
-        "dnf config-manager --enable mysql-8.4-lts-community 2>/dev/null",
-        "dnf config-manager --enable mysql-tools-8.4-lts-community 2>/dev/null",
     ], logger, verbose):
         logger.error("✗ MySQL repo configuration failed")
         return False
     if not dnf_install(mysql_release_rpm, logger):
         logger.error("✗ MySQL repo RPM installation failed")
         return False
+    if not execute_commands([
+        "dnf config-manager --enable mysql-8.4-lts-community 2>/dev/null",
+        "dnf config-manager --enable mysql-tools-8.4-lts-community 2>/dev/null",
+    ], logger, verbose):
     if not dnf_install("mysql-community-server", logger):
         logger.error("✗ MySQL installation failed")
         return False
