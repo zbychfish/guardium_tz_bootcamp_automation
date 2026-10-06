@@ -1906,7 +1906,7 @@ def accept_license_agreement(
     cmds = [
         f"sudo mkdir -p $(dirname {flag_file})",
         f"sudo touch {flag_file}",
-        f"sudo chown tomcat:tomcat {flag_file}",
+        f"sudo chown root:guardium {flag_file}",
     ]
 
     ssh_client = paramiko.SSHClient()

@@ -264,7 +264,7 @@ groups:
       - name: accept_license_agreement_all
         function: accept_license_agreement_all
         module: tasks.setup_appliances
-        description: "Create /opt/IBM/Guardium/etc/gflags/guard_license_agreement_accepted on all non-CM appliances (tomcat:tomcat)"
+        description: "Create /opt/IBM/Guardium/etc/gflags/guard_license_agreement_accepted on all non-CM appliances (root:guardium)"
         args:
           debug: false
 
