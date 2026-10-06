@@ -335,7 +335,7 @@ groups:
       - name: register_appliances_on_cm
         function: register_appliances_all
         module: tasks.setup_appliances
-        description: "Register all Collectors and AppNodes on Central Manager sequentially (one by one, 10 min timeout per appliance)"
+        description: "Register all Collectors and AppNodes on Central Manager sequentially (one by one, 4 min timeout per appliance)"
         args:
           cm_port: 8443
           timeout: 240  # 4 minutes per appliance

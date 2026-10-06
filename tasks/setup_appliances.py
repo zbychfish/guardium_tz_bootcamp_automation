@@ -743,22 +743,25 @@ def register_appliances_all(
     for name, cfg in sorted_appliances:
         logger.info(f"  - {name} ({cfg.get('type')})")
 
-    appliance_names = [name for name, _ in sorted_appliances]
-
-    results, errors = execute_on_appliances_async(
-        appliances=appliance_names,
-        operation_func=register_appliance,
-        operation_name="register_appliance",
-        logger=logger,
-        config=config,
-        cm_ip=cm_ip,
-        cm_port=cm_port,
-        user=user,
-        password=password,
-        prompt_regex=prompt_regex,
-        debug=debug,
-        timeout=timeout
-    )
+    results = {}
+    errors = {}
+    for name, _ in sorted_appliances:
+        logger.info(f"➜ Registering {name}...")
+        success = register_appliance(
+            appliance_name=name,
+            logger=logger,
+            config=config,
+            cm_ip=cm_ip,
+            cm_port=cm_port,
+            user=user,
+            password=password,
+            prompt_regex=prompt_regex,
+            debug=debug,
+            timeout=timeout
+        )
+        results[name] = success
+        if not success:
+            errors[name] = "registration failed"
 
     _log_summary(logger, "APPLIANCE REGISTRATION SUMMARY", results, errors)
     return all(results.values())
