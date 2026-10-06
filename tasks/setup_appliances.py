@@ -448,9 +448,9 @@ def create_demo_user(
     _header(logger, "CREATE DEMO USER")
 
     if not accessmgr_password:
-        accessmgr_password = config.get_custom_variable('cli_pwd')
+        accessmgr_password = config.get_custom_variable('predefined_admin_gui_pwds')
         if not accessmgr_password:
-            logger.error("cli_pwd not found in custom_variables")
+            logger.error("predefined_admin_gui_pwds not found in custom_variables")
             return False
 
     if not demo_password:
