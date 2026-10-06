@@ -23,6 +23,7 @@ from core.appliance_operations import (
     install_patch_on_appliance as core_install,
     copy_single_file_to_appliance,
     prepare_log_guard_dir,
+    accept_license_agreement,
     _get_appliance_connection_params
 )
 
@@ -87,6 +88,42 @@ def reset_cli_password_all(
     )
 
     _log_summary(logger, "RESET CLI PASSWORD SUMMARY", results, errors)
+    return all(results.values())
+
+def accept_license_agreement_all(
+    config,
+    logger,
+    verbose: bool = True,
+    cloudsupport_password: Optional[str] = None,
+    debug: bool = False,
+    **kwargs) -> bool:
+    _header(logger, "ACCEPT LICENSE AGREEMENT ON ALL NON-CM APPLIANCES")
+
+    all_appliances = _get_all_appliances(config, logger)
+    if not all_appliances:
+        return False
+
+    non_cm = [(n, c) for n, c in all_appliances.items() if c.get('type', '').lower() != 'cm']
+    if not non_cm:
+        logger.warning("No non-CM appliances found")
+        return True
+
+    appliance_names = [name for name, _ in non_cm]
+    logger.info(f"Found {len(appliance_names)} non-CM appliances")
+    for name, cfg in non_cm:
+        logger.info(f"  - {name} ({cfg.get('type')})")
+
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=accept_license_agreement,
+        operation_name="accept_license_agreement",
+        logger=logger,
+        config=config,
+        cloudsupport_password=cloudsupport_password,
+        debug=debug
+    )
+
+    _log_summary(logger, "ACCEPT LICENSE AGREEMENT SUMMARY", results, errors)
     return all(results.values())
 
 def set_shared_secret_all(
@@ -222,13 +259,13 @@ def install_policy_on_collector(
     try:
         api = create_guardium_api(config, logger, appliance_name=cm_appliance)
 
-        demo_password = config.get_custom_variable('pwd')
-        if not demo_password:
-            logger.error("pwd not found in custom_variables")
+        accessmgr_password = config.get_custom_variable('predefined_admin_gui_pwds')
+        if not accessmgr_password:
+            logger.error("predefined_admin_gui_pwds not found in custom_variables")
             return False
 
-        logger.info("➜ get_token demo")
-        api.get_token(username='demo', password=demo_password)
+        logger.info("➜ get_token accessmgr")
+        api.get_token(username='accessmgr', password=accessmgr_password)
         logger.info("✓ Authenticated")
 
         error_code = '999'
