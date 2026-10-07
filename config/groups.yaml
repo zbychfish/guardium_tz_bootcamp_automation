@@ -166,7 +166,7 @@ groups:
     name: "Standard databases installation"
     description: "setup DB engines on bootcamp machines"
     deployed_with: [databases]
-    dependencies: [initial_preparation]  # Requires initial_preparation to be completed
+    dependencies: [initial_preparation, setup_appliances]  # Requires initial_preparation to be completed
     stages:
       - name: deploy_mysql_on_raptor
         function: deploy_mysql_on_raptor
@@ -250,7 +250,7 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     deployed_with: [appliances]
-    dependencies: [initial_preparation, database_preparations]
+    dependencies: [initial_preparation]
     stages:
       - name: reset_cli_password_all
         function: reset_cli_password_all
