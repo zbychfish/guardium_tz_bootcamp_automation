@@ -252,8 +252,8 @@ def create_s3_bucket(
     logger.info("✓ AWS CLI profile 'seaweed' configured")
 
     bucket_cmds = [
-        "aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 mb s3://guardium-ltr",
-        "aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 ls",
+        "AWS_CA_BUNDLE=/opt/seaweedfs/certs/ca/ca.crt aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 mb s3://guardium-ltr",
+        "AWS_CA_BUNDLE=/opt/seaweedfs/certs/ca/ca.crt aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 ls",
     ]
     for cmd in bucket_cmds:
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
