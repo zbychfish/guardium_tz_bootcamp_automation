@@ -191,7 +191,7 @@ http {
         listen 8333 ssl;
         server_name raptor.demo.guardium _;
 
-        ssl_certificate /etc/nginx/certs/tls.crt;
+        ssl_certificate /etc/nginx/certs/fullchain.crt;
         ssl_certificate_key /etc/nginx/certs/tls.key;
 
         # Zwiększenie limitu uploadu dla S3
