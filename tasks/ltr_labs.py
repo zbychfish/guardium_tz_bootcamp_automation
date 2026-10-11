@@ -472,38 +472,28 @@ def import_seaweedfs_CA_certificate(
             logger.error(traceback.format_exc())
         return False
 
-def distribute_minio_certificate(
+def distribute_seaweedfs_certificate(
     config,
     logger,
     verbose: bool = False,
     appliance_name: str = "cm",
     ltr_appnode: str = "appnode1",
-    phase2_delay: int = 120,
-    timeout: int = 600,
-    check_interval: int = 10,
+    check_interval: int = 30,
+    max_checks: int = 30,
     debug: bool = False,
     **kwargs) -> bool:
 
-    _header(logger, f"DISTRIBUTE DATALAKE CERTIFICATE FROM {appliance_name}")
+    _header(logger, f"DISTRIBUTE SEAWEEDFS CERTIFICATE FROM {appliance_name}")
 
-    from core.appliance_config_loader import ApplianceConfigLoader
     loader = ApplianceConfigLoader(config_loader=config)
     all_appliances = loader.get_all_appliances()
+    others = [n for n in all_appliances if n != appliance_name and n != ltr_appnode]
 
-    # collectors = wszyscy oprócz CM i ltr_appnode
-    collectors = [n for n in all_appliances if n != appliance_name and n != ltr_appnode]
-
-    # faza 1: CM(3xINFO) + ltr_appnode(3xSuccess) + collectors(1xSuccess datalake-s3-gui)
-    # faza 2: dodatkowo wszyscy others (kafka, appnode2...) mają 1xSuccess datalake-s3-gui
     CM_ALIASES      = {"datalake-catalog", "datalake-gui", "datalake-s3-gui"}
     APPNODE_ALIASES = {"datalake-catalog", "datalake-gui", "datalake-s3-gui"}
     S3_ALIAS        = "datalake-s3-gui"
 
-    logger.info(f"  ltr_appnode={ltr_appnode}  collectors={collectors}")
-
-    params = _get_appliance_connection_params(config, logger, appliance_name)
-    if not params:
-        return False
+    logger.info(f"  ltr_appnode={ltr_appnode}  others={others}")
 
     # domain suffix z ltr_appnode hostname
     appnode_cfg = loader.get_appliance(ltr_appnode)
@@ -513,18 +503,16 @@ def distribute_minio_certificate(
         parts = fqdn.split('.', 1)
         domain = '.' + parts[1] if len(parts) > 1 else ""
 
-    def _parse(output, expected_shorts):
+    def _parse(output):
         cm_ok      = set()
         appnode_ok = set()
-        others_ok  = {n: False for n in expected_shorts}
+        others_ok  = {n: False for n in others}
         for line in output.splitlines():
             cols = line.split()
             if len(cols) < 4:
                 continue
-            hostname = cols[1]
-            alias    = cols[2]
-            status   = cols[3]
-            short    = hostname.split('.')[0]
+            hostname, alias, status = cols[1], cols[2], cols[3]
+            short = hostname.split('.')[0]
             if status == "INFO" and "finished" in line and short == appliance_name:
                 cm_ok.add(alias)
             elif status == "Success" and short == ltr_appnode:
@@ -533,28 +521,16 @@ def distribute_minio_certificate(
                 others_ok[short] = True
         missing = []
         if not CM_ALIASES.issubset(cm_ok):
-            missing.append(f"CM missing INFO: {CM_ALIASES - cm_ok}")
+            missing.append(f"CM missing: {CM_ALIASES - cm_ok}")
         if not APPNODE_ALIASES.issubset(appnode_ok):
-            missing.append(f"{ltr_appnode} missing Success: {APPNODE_ALIASES - appnode_ok}")
+            missing.append(f"{ltr_appnode} missing: {APPNODE_ALIASES - appnode_ok}")
         for n, ok in others_ok.items():
             if not ok:
-                missing.append(f"{n} missing Success {S3_ALIAS}")
+                missing.append(f"{n} missing {S3_ALIAS}")
         return missing
 
-    def _monitor(client, expected_shorts, label):
-        start = time.time()
-        missing = ["initial"]
-        while time.time() - start < timeout:
-            time.sleep(check_interval)
-            output = client.execute_command("distribute certificate showlog all", timeout=300)
-            missing = _parse(output, expected_shorts)
-            elapsed = int(time.time() - start)
-            if missing:
-                logger.info(f"  [{label} {elapsed}s] waiting: {missing}")
-            else:
-                logger.info(f"✓ [{label}] distribution complete ({elapsed}s)")
-                return True
-        logger.error(f"✗ [{label}] timeout after {timeout}s, missing: {missing}")
+    params = _get_appliance_connection_params(config, logger, appliance_name)
+    if not params:
         return False
 
     try:
@@ -568,33 +544,25 @@ def distribute_minio_certificate(
             return False
 
         try:
-            # ── Faza 1: distribute do ltr_appnode + collectors ────────────────
-            targets = ",".join(
-                [f"{ltr_appnode}{domain}"] + [f"{n}{domain}" for n in collectors]
-            )
-            cmd1 = f"distribute application certificate datalake {targets}"
-            logger.info(f"➜ {cmd1}")
-            client.execute_command(cmd1, timeout=300)
-            logger.info("✓ Phase 1 distribute executed")
+            cmd = f"distribute application certificate datalake all_managed --metastore_unit={ltr_appnode}{domain}"
+            logger.info(f"➜ {cmd}")
+            client.execute_command(cmd, timeout=300)
+            logger.info("✓ distribute command executed")
 
-            if not _monitor(client, collectors, "phase1"):
-                return False
+            missing = ["initial"]
+            for attempt in range(1, max_checks + 1):
+                logger.info(f"⌛ check {attempt}/{max_checks} (waiting {check_interval}s)...")
+                time.sleep(check_interval)
+                output = client.execute_command("distribute certificate showlog all", timeout=300)
+                missing = _parse(output)
+                if missing:
+                    logger.info(f"  waiting: {missing}")
+                else:
+                    logger.info(f"✓ distribution complete (attempt {attempt})")
+                    return True
 
-            # ── Faza 2: distribute all_managed ───────────────────────────────
-            logger.info(f"⌛ waiting {phase2_delay}s before phase 2...")
-            time.sleep(phase2_delay)
-
-            cmd2 = "distribute application certificate datalake all_managed true"
-            logger.info(f"➜ {cmd2}")
-            client.execute_command(cmd2, timeout=300)
-            logger.info("✓ Phase 2 distribute executed")
-
-            # others = wszyscy oprócz CM i ltr_appnode (collectors + kafka + appnode2...)
-            others = [n for n in all_appliances if n != appliance_name and n != ltr_appnode]
-            if not _monitor(client, others, "phase2"):
-                return False
-
-            return True
+            logger.error(f"✗ timeout after {max_checks} checks, missing: {missing}")
+            return False
 
         finally:
             client.disconnect()

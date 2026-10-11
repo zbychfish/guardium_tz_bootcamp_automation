@@ -984,15 +984,14 @@ groups:
           appliance_name: "cm"
           debug: false
 
-      - name: distribute_minio_certificate
-        function: distribute_minio_certificate
+      - name: distribute_seaweedfs_certificate
+        function: distribute_seaweedfs_certificate
         module: tasks.ltr_labs
-        description: "Distribute datalake certificate to all managed appliances (appnodes and collectors)"
+        description: "Distribute SeaweedFS datalake certificate to all managed appliances"
         args:
           ltr_appnode: "appnode1"
-          phase2_delay: 120
-          timeout: 600
-          check_interval: 10
+          check_interval: 30
+          max_checks: 30
           debug: false
 
       - name: activate_ltr
