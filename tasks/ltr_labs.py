@@ -11,7 +11,8 @@ from core.appliance_operations import (
 )
 from core.guardium_rest_api import import_definitions_files
 from core.logger import get_logger
-from core.utils import execute_local_command
+import secrets
+from core.utils import execute_local_command, write_file
 
 logger = get_logger(__name__)
 
@@ -27,82 +28,219 @@ def _require(logger, **kwargs) -> bool:
             return False
     return True
 
-# ---------------------------------------------------------------------------
-
-def setup_minio_on_raptor(
+def setup_seaweedfs_on_raptor(
     config,
     logger,
     verbose: bool = False,
     debug: bool = False,
     **kwargs) -> bool:
 
-    _header(logger, "SETUP MINIO ON RAPTOR")
+    _header(logger, "SETUP SEAWEEDFS ON RAPTOR")
 
     raptor_ip = config.get_machine_ip("raptor", use_private=True)
     if not raptor_ip:
         logger.error("Could not determine raptor IP address")
         return False
 
+    cmds = [
+        "mkdir -p /opt/seaweedfs/{data,certs,nginx}",
+        "mkdir -p /opt/seaweedfs/certs/ca",
+        "openssl genrsa -out /opt/seaweedfs/certs/ca/ca.key 4096",
+        'openssl req -x509 -new -nodes -key /opt/seaweedfs/certs/ca/ca.key -sha256 -days 3650 -subj "/CN=seaweedFS-Root-CA" -out /opt/seaweedfs/certs/ca/ca.crt',
+        "cp /opt/seaweedfs/certs/ca/ca.crt /etc/pki/ca-trust/source/anchors/",
+        "update-ca-trust",
+        "openssl genrsa -out /opt/seaweedfs/certs/tls.key 4096 && chmod 600 /opt/seaweedfs/certs/tls.key",
+        f'openssl req -new -key /opt/seaweedfs/certs/tls.key -out /opt/seaweedfs/seaweedfs.csr -subj "/CN=seaweedfs.demo.guardium" -addext "subjectAltName=DNS:raptor.demo.guardium,IP:{raptor_ip}"',
+        "openssl x509 -req -in /opt/seaweedfs/seaweedfs.csr -CA /opt/seaweedfs/certs/ca/ca.crt -CAkey /opt/seaweedfs/certs/ca/ca.key -CAcreateserial -out /opt/seaweedfs/certs/tls.crt -days 3600 -sha256 -copy_extensions copy",
+        "cat /opt/seaweedfs/certs/tls.crt /opt/seaweedfs/certs/ca/ca.crt > /opt/seaweedfs/certs/fullchain.crt",
+        "chmod 644 /opt/seaweedfs/certs/*",
+        "chmod 600 /opt/seaweedfs/certs/tls.key /opt/seaweedfs/certs/ca/ca.key",
+        "chcon -Rt container_file_t /opt/seaweedfs",
+    ]
+
+    for cmd in cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+
+    logger.info("✓ SeaweedFS certificates prepared on raptor")
+    return True
+
+SEAWEEDFS_SERVICE = """\
+[Unit]
+Description=SeaweedFS S3 + Nginx TLS Proxy Stack
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+ExecStartPre=-/usr/bin/podman pod rm -f seaweedfs-pod
+ExecStartPre=/usr/bin/podman pod create --name seaweedfs-pod -p 8333:8333 -p 9333:9333
+
+ExecStartPre=/usr/bin/podman run -d --pod seaweedfs-pod --name seaweedfs-server \\
+  -v /opt/seaweedfs/data:/data:z \\
+  -v /opt/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro,z \\
+  -v /opt/seaweedfs/security.toml:/etc/seaweedfs/security.toml:ro,z \\
+  chrislusf/seaweedfs:latest server -dir=/data -filer -s3 -s3.port=8332 -s3.iam.config=/etc/seaweedfs/s3.json
+
+ExecStartPre=/usr/bin/sleep 2
+
+ExecStart=/usr/bin/podman run --rm --pod seaweedfs-pod --name seaweedfs-proxy \\
+  -v /opt/seaweedfs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro,z \\
+  -v /opt/seaweedfs/certs:/etc/nginx/certs:ro,z \\
+  docker.io/library/nginx:alpine nginx -g "daemon off;"
+
+ExecStop=/usr/bin/podman pod stop seaweedfs-pod
+ExecStopPost=/usr/bin/podman pod rm -f seaweedfs-pod
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+S3_JSON_TEMPLATE = """\
+{{
+  "identities": [
+    {{
+      "name": "s3admin",
+      "credentials": [
+        {{
+          "accessKey": "s3admin",
+          "secretKey": "{pwd}"
+        }}
+      ],
+      "actions": [
+        "Admin",
+        "Read",
+        "Write",
+        "List"
+      ]
+    }}
+  ]
+}}
+"""
+
+NGINX_CONF = """\
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream seaweedfs_s3 {
+        server 127.0.0.1:8332;
+    }
+
+    server {
+        listen 8333 ssl;
+        server_name raptor.demo.guardium _;
+
+        ssl_certificate /etc/nginx/certs/fullchain.crt;
+        ssl_certificate_key /etc/nginx/certs/tls.key;
+
+        # Zwiększenie limitu uploadu dla S3
+        client_max_body_size 0;
+
+        location / {
+            proxy_pass http://seaweedfs_s3;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Wymagane dla streamingu dużych plików S3
+            proxy_http_version 1.1;
+            proxy_request_buffering off;
+        }
+    }
+}
+"""
+
+def create_seaweedfs_config_files(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "CREATE SEAWEEDFS CONFIG FILES")
+
     pwd = config.get_custom_variable("pwd")
     if not _require(logger, pwd=pwd):
         return False
 
-    pre_cmds = [
-        "mkdir -p /home/minio/ca/{certs,private,newcerts}",
-        "chmod 700 /home/minio/ca/private",
-        "touch /home/minio/ca/index.txt",
-        "echo 1000 > /home/minio/ca/serial",
-        "mkdir -p /home/minio/certs/CAs",
-        "openssl genrsa -out /home/minio/ca/private/ca.key 4096",
-        'openssl req -x509 -new -nodes -key /home/minio/ca/private/ca.key -sha256 -days 3650 -subj "/CN=MinIO-Root-CA" -out /home/minio/ca/certs/ca.crt',
-        "cp /home/minio/ca/certs/ca.crt /home/minio/certs/CAs/",
-        "cp /home/minio/ca/certs/ca.crt /etc/pki/ca-trust/source/anchors/",
-        "update-ca-trust",
-        "openssl genrsa -out /home/minio/certs/private.key 4096 && chmod 600 /home/minio/certs/private.key",
-        f'openssl req -new -key /home/minio/certs/private.key -out /home/minio/minio.csr -subj "/CN=minio.demo.guardium" -addext "subjectAltName=DNS:raptor.demo.guardium,IP:{raptor_ip}"',
-        "openssl x509 -req -in /home/minio/minio.csr -CA /home/minio/ca/certs/ca.crt -CAkey /home/minio/ca/private/ca.key -CAcreateserial -out /home/minio/certs/public.crt -days 3600 -sha256 -copy_extensions copy",
-        "mkdir -p /home/data/minio",
-        "chmod 700 /home/data/minio",
-        "curl -L -o /usr/local/bin/mc https://dl.min.io/client/mc/release/linux-amd64/mc",
-        "chmod +x /usr/local/bin/mc",
+    jwt_key = secrets.token_hex(32)
+    files = {
+        "/opt/seaweedfs/nginx/nginx.conf": NGINX_CONF,
+        "/opt/seaweedfs/s3.json": S3_JSON_TEMPLATE.format(pwd=pwd),
+        "/opt/seaweedfs/security.toml": (
+            f'[jwt.filer_signing]\nkey = "{jwt_key}"\n\n'
+            f'[jwt.filer_signing.read]\nkey = "{jwt_key}"\n'
+        ),
+        "/etc/systemd/system/seaweedfs-stack.service": SEAWEEDFS_SERVICE,
+    }
+    for path, content in files.items():
+        try:
+            write_file(path, content)
+            logger.info(f"✓ {path} created")
+        except Exception as e:
+            logger.error(f"✗ Failed to create {path}: {e}")
+            return False
+
+    perms_cmds = [
+        "chmod 644 /opt/seaweedfs/nginx/nginx.conf",
+        "chmod 644 /opt/seaweedfs/s3.json",
+        "chmod 644 /opt/seaweedfs/security.toml",
+        "chcon -t container_file_t /opt/seaweedfs/nginx/nginx.conf",
+        "chcon -t container_file_t /opt/seaweedfs/s3.json",
+        "chcon -t container_file_t /opt/seaweedfs/security.toml",
     ]
-    podman_cmd = (
-        f"podman run -d --name minio --restart=always "
-        f"-p 0.0.0.0:9000:9000 -p 0.0.0.0:9001:9001 "
-        f"-v /home/data/minio:/data:Z "
-        f"-v /home/minio/certs:/root/.minio/certs:Z "
-        f"-e MINIO_ROOT_USER=minioadmin "
-        f"-e MINIO_ROOT_PASSWORD='{pwd}' "
-        f"quay.io/minio/minio server /data --console-address ':9001'"
+    for cmd in perms_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+
+    logger.info("✓ SeaweedFS config files permissions set")
+
+    firewall_cmds = [
+        "firewall-cmd --permanent --add-port=8333/tcp",
+        "firewall-cmd --reload",
+    ]
+    for cmd in firewall_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+    logger.info("✓ Firewall port 8333/tcp opened")
+
+    service_cmds = [
+        "systemctl daemon-reload",
+        "systemctl enable --now seaweedfs-stack",
+        "systemctl start seaweedfs-stack",
+    ]
+    for cmd in service_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+    logger.info("✓ seaweedfs-stack service started")
+
+    logger.info("⌛ Waiting 30s for service to stabilize...")
+    time.sleep(30)
+
+    verify_cmd = (
+        "openssl s_client -connect raptor.demo.guardium:8333 -servername raptor.demo.guardium"
+        " </dev/null 2>/dev/null"
+        ' | openssl x509 -noout -text | grep -E "(Issuer:|Subject:|Not After|DNS:|IP Address:)"'
     )
-    post_cmds = [
-        f"/usr/local/bin/mc alias set myminio https://raptor.demo.guardium:9000 minioadmin '{pwd}'",
-        "/usr/local/bin/mc mb myminio/guardium-ltr",
-        "podman update --restart=always minio",
-    ]
-
-    for cmd in pre_cmds:
-        result = execute_local_command(cmd, logger=logger, verbose=verbose)
-        if result["rc"] != 0:
-            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
-            return False
-
-    logger.info("➜ Starting MinIO container...")
-    result = execute_local_command(podman_cmd, logger=logger, verbose=verbose)
+    result = execute_local_command(verify_cmd, logger=logger, verbose=verbose)
     if result["rc"] != 0:
-        logger.error(f"✗ Failed to start MinIO container\n{result['stderr']}")
+        logger.error(f"✗ TLS verification failed\n{result['stderr']}")
         return False
+    logger.info(f"✓ TLS certificate verified:\n{result['stdout']}")
 
-    logger.info("⌛ Waiting 10s for MinIO to start...")
-    time.sleep(10)
-
-    for cmd in post_cmds:
-        result = execute_local_command(cmd, logger=logger, verbose=verbose)
-        if result["rc"] != 0:
-            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
-            return False
-
-    logger.info("✓ MinIO certificates prepared and MinIO started on raptor")
     return True
 
 def setup_appnode(
