@@ -477,6 +477,12 @@ def main():
         metavar="GROUP.STAGE",
         help="Remove specific stage from completed state (format: group_name.stage_name)"
     )
+
+    parser.add_argument(
+        "--complete-stage",
+        metavar="GROUP.STAGE",
+        help="Mark specific stage as completed without executing it (format: group_name.stage_name)"
+    )
     
     parser.add_argument(
         "--status",
@@ -551,7 +557,38 @@ def main():
                 for completed_stage in completed_tasks:
                     print(f"  - {completed_stage}")
         return 0
-    
+
+    if args.complete_stage:
+        stage_key = args.complete_stage
+        all_stage_keys = [
+            f"{group}.{stage.get('name')}"
+            for group in orchestrator.group_manager.list_groups()
+            for stage in orchestrator.group_manager.get_group_stages(group)
+        ]
+
+        if stage_key in all_stage_keys:
+            full_key = stage_key
+        else:
+            matching = [k for k in all_stage_keys if k.endswith(f".{stage_key}")]
+            if len(matching) == 1:
+                full_key = matching[0]
+            elif len(matching) > 1:
+                print(f"✗ Multiple stages match '{stage_key}':")
+                for k in matching:
+                    print(f"  - {k}")
+                print(f"\nPlease specify the full stage key (GROUP.STAGE)")
+                return 1
+            else:
+                print(f"✗ Stage '{stage_key}' not found in any group")
+                print(f"\nAvailable stages:")
+                for k in all_stage_keys:
+                    print(f"  - {k}")
+                return 1
+
+        orchestrator.state.mark_completed(full_key)
+        print(f"✓ Stage '{full_key}' marked as completed")
+        return 0
+
     if args.status:
         orchestrator.show_status()
         return 0
