@@ -139,7 +139,7 @@ ExecStartPre=/usr/bin/podman run -d --pod seaweedfs-pod --name seaweedfs-server 
   -v /opt/seaweedfs/data:/data:z \\
   -v /opt/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro,z \\
   -v /opt/seaweedfs/security.toml:/etc/seaweedfs/security.toml:ro,z \\
-  chrislusf/seaweedfs:latest server -dir=/data -filer -s3 -s3.port=8332 -s3.iam.config=/etc/seaweedfs/s3.json
+  docker.io/chrislusf/seaweedfs:latest server -dir=/data -filer -s3 -s3.port=8332 -s3.iam.config=/etc/seaweedfs/s3.json
 
 ExecStartPre=/usr/bin/sleep 2
 
