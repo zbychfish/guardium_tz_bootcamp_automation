@@ -191,7 +191,7 @@ http {
         listen 8333 ssl;
         server_name raptor.demo.guardium _;
 
-        ssl_certificate /etc/nginx/certs/fullchain.crt;
+        ssl_certificate /etc/nginx/certs/tls.crt;
         ssl_certificate_key /etc/nginx/certs/tls.key;
 
         # Zwiększenie limitu uploadu dla S3
@@ -242,6 +242,7 @@ def create_s3_bucket(
         f"aws configure set profile.seaweed.aws_secret_access_key {pwd}",
         "aws configure set profile.seaweed.region us-east-1",
         "aws configure set profile.seaweed.output json",
+        "aws configure set profile.seaweed.ca_bundle /opt/seaweedfs/certs/ca/ca.crt",
     ]
     for cmd in configure_cmds:
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
@@ -251,8 +252,8 @@ def create_s3_bucket(
     logger.info("✓ AWS CLI profile 'seaweed' configured")
 
     bucket_cmds = [
-        "SSL_CERT_FILE=/etc/pki/tls/cert.pem aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 mb s3://guardium-ltr",
-        "SSL_CERT_FILE=/etc/pki/tls/cert.pem aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 ls",
+        "aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 mb s3://guardium-ltr",
+        "aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 ls",
     ]
     for cmd in bucket_cmds:
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
