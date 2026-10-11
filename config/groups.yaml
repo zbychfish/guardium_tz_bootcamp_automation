@@ -392,7 +392,7 @@ groups:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"
     deployed_with: [gim]
-    dependencies: [databases]
+    dependencies: [database_preparations]
     stages:
      
       - name: import_gim_modules
