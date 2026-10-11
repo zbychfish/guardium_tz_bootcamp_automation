@@ -212,6 +212,60 @@ http {
 }
 """
 
+def create_s3_bucket(
+    config,
+    logger,
+    verbose: bool = False,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "CREATE S3 BUCKET ON SEAWEEDFS")
+
+    install_cmds = [
+        'curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"',
+        "unzip -o /tmp/awscliv2.zip -d /tmp/",
+        "/tmp/aws/install --update",
+    ]
+    for cmd in install_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+    logger.info("✓ AWS CLI installed")
+
+    pwd = config.get_custom_variable("pwd")
+    if not _require(logger, pwd=pwd):
+        return False
+
+    configure_cmds = [
+        "aws configure set profile.seaweed.aws_access_key_id s3admin",
+        f"aws configure set profile.seaweed.aws_secret_access_key {pwd}",
+        "aws configure set profile.seaweed.region us-east-1",
+        "aws configure set profile.seaweed.output json",
+        "aws configure set profile.seaweed.ca_bundle /opt/seaweedfs/certs/ca/ca.crt",
+    ]
+    for cmd in configure_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+    logger.info("✓ AWS CLI profile 'seaweed' configured")
+
+    bucket_cmds = [
+        "aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 mb s3://guardium-ltr",
+        "aws --profile seaweed --endpoint-url https://raptor.demo.guardium:8333 s3 ls",
+    ]
+    for cmd in bucket_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+        if result["stdout"]:
+            logger.info(result["stdout"])
+    logger.info("✓ S3 bucket guardium-ltr created and verified")
+
+    return True
+
 def setup_appnode(
     config,
     logger,

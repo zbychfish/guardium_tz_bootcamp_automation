@@ -932,6 +932,13 @@ groups:
         args:
           debug: false
 
+      - name: create_s3_bucket
+        function: create_s3_bucket
+        module: tasks.ltr_labs
+        description: "Install AWS CLI and create S3 bucket on SeaweedFS"
+        args:
+          debug: false
+
       - name: setup_appnode
         function: setup_appnode
         module: tasks.ltr_labs
