@@ -351,12 +351,12 @@ def enable_ltr_on_appnode(
             logger.error(traceback.format_exc())
         return False
 
-def import_minio_CA_certificate(
+def import_seaweedfs_CA_certificate(
     config,
     logger,
     verbose: bool = False,
     appliance_name: str = None,
-    certificate_file_path: str = "/home/minio/ca/certs/ca.crt",
+    certificate_file_path: str = "/opt/seaweedfs/certs/ca/ca.crt",
     debug: bool = False,
     **kwargs) -> bool:
 

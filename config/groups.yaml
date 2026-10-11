@@ -976,13 +976,12 @@ groups:
           appliance_name: "appnode1"
           debug: false
 
-      - name: import_minio_CA_certificate
-        function: import_minio_CA_certificate
+      - name: import_seaweedfs_CA_certificate
+        function: import_seaweedfs_CA_certificate
         module: tasks.ltr_labs
-        description: "Import MinIO S3 certificate to CM for datalake integration"
+        description: "Import SeaweedFS CA certificate to CM for datalake integration"
         args:
           appliance_name: "cm"
-          certificate_file_path: "/home/minio/ca/certs/ca.crt"
           debug: false
 
       - name: distribute_minio_certificate
