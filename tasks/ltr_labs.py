@@ -42,7 +42,11 @@ def setup_seaweedfs_on_raptor(
         logger.error("Could not determine raptor IP address")
         return False
 
-    cmds = [
+    pwd = config.get_custom_variable("pwd")
+    if not _require(logger, pwd=pwd):
+        return False
+
+    cert_cmds = [
         "mkdir -p /opt/seaweedfs/{data,certs,nginx}",
         "mkdir -p /opt/seaweedfs/certs/ca",
         "openssl genrsa -out /opt/seaweedfs/certs/ca/ca.key 4096",
@@ -57,14 +61,65 @@ def setup_seaweedfs_on_raptor(
         "chmod 600 /opt/seaweedfs/certs/tls.key /opt/seaweedfs/certs/ca/ca.key",
         "chcon -Rt container_file_t /opt/seaweedfs",
     ]
-
-    for cmd in cmds:
+    for cmd in cert_cmds:
         result = execute_local_command(cmd, logger=logger, verbose=verbose)
         if result["rc"] != 0:
             logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
             return False
+    logger.info("✓ SeaweedFS certificates prepared")
 
-    logger.info("✓ SeaweedFS certificates prepared on raptor")
+    jwt_key = secrets.token_hex(32)
+    files = {
+        "/opt/seaweedfs/nginx/nginx.conf": NGINX_CONF,
+        "/opt/seaweedfs/s3.json": S3_JSON_TEMPLATE.format(pwd=pwd),
+        "/opt/seaweedfs/security.toml": (
+            f'[jwt.filer_signing]\nkey = "{jwt_key}"\n\n'
+            f'[jwt.filer_signing.read]\nkey = "{jwt_key}"\n'
+        ),
+        "/etc/systemd/system/seaweedfs-stack.service": SEAWEEDFS_SERVICE,
+    }
+    for path, content in files.items():
+        try:
+            write_file(path, content)
+            logger.info(f"✓ {path} created")
+        except Exception as e:
+            logger.error(f"✗ Failed to create {path}: {e}")
+            return False
+
+    perms_cmds = [
+        "chmod 644 /opt/seaweedfs/nginx/nginx.conf",
+        "chmod 644 /opt/seaweedfs/s3.json",
+        "chmod 644 /opt/seaweedfs/security.toml",
+        "chcon -t container_file_t /opt/seaweedfs/nginx/nginx.conf",
+        "chcon -t container_file_t /opt/seaweedfs/s3.json",
+        "chcon -t container_file_t /opt/seaweedfs/security.toml",
+        "firewall-cmd --permanent --add-port=8333/tcp",
+        "firewall-cmd --reload",
+        "systemctl daemon-reload",
+        "systemctl enable --now seaweedfs-stack",
+        "systemctl start seaweedfs-stack",
+    ]
+    for cmd in perms_cmds:
+        result = execute_local_command(cmd, logger=logger, verbose=verbose)
+        if result["rc"] != 0:
+            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
+            return False
+    logger.info("✓ Permissions set, firewall opened, service started")
+
+    logger.info("⌛ Waiting 30s for service to stabilize...")
+    time.sleep(30)
+
+    verify_cmd = (
+        "openssl s_client -connect raptor.demo.guardium:8333 -servername raptor.demo.guardium"
+        " </dev/null 2>/dev/null"
+        ' | openssl x509 -noout -text | grep -E "(Issuer:|Subject:|Not After|DNS:|IP Address:)"'
+    )
+    result = execute_local_command(verify_cmd, logger=logger, verbose=verbose)
+    if result["rc"] != 0:
+        logger.error(f"✗ TLS verification failed\n{result['stderr']}")
+        return False
+    logger.info(f"✓ TLS certificate verified:\n{result['stdout']}")
+
     return True
 
 SEAWEEDFS_SERVICE = """\
@@ -156,92 +211,6 @@ http {
     }
 }
 """
-
-def create_seaweedfs_config_files(
-    config,
-    logger,
-    verbose: bool = False,
-    debug: bool = False,
-    **kwargs) -> bool:
-
-    _header(logger, "CREATE SEAWEEDFS CONFIG FILES")
-
-    pwd = config.get_custom_variable("pwd")
-    if not _require(logger, pwd=pwd):
-        return False
-
-    jwt_key = secrets.token_hex(32)
-    files = {
-        "/opt/seaweedfs/nginx/nginx.conf": NGINX_CONF,
-        "/opt/seaweedfs/s3.json": S3_JSON_TEMPLATE.format(pwd=pwd),
-        "/opt/seaweedfs/security.toml": (
-            f'[jwt.filer_signing]\nkey = "{jwt_key}"\n\n'
-            f'[jwt.filer_signing.read]\nkey = "{jwt_key}"\n'
-        ),
-        "/etc/systemd/system/seaweedfs-stack.service": SEAWEEDFS_SERVICE,
-    }
-    for path, content in files.items():
-        try:
-            write_file(path, content)
-            logger.info(f"✓ {path} created")
-        except Exception as e:
-            logger.error(f"✗ Failed to create {path}: {e}")
-            return False
-
-    perms_cmds = [
-        "chmod 644 /opt/seaweedfs/nginx/nginx.conf",
-        "chmod 644 /opt/seaweedfs/s3.json",
-        "chmod 644 /opt/seaweedfs/security.toml",
-        "chcon -t container_file_t /opt/seaweedfs/nginx/nginx.conf",
-        "chcon -t container_file_t /opt/seaweedfs/s3.json",
-        "chcon -t container_file_t /opt/seaweedfs/security.toml",
-    ]
-    for cmd in perms_cmds:
-        result = execute_local_command(cmd, logger=logger, verbose=verbose)
-        if result["rc"] != 0:
-            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
-            return False
-
-    logger.info("✓ SeaweedFS config files permissions set")
-
-    firewall_cmds = [
-        "firewall-cmd --permanent --add-port=8333/tcp",
-        "firewall-cmd --reload",
-    ]
-    for cmd in firewall_cmds:
-        result = execute_local_command(cmd, logger=logger, verbose=verbose)
-        if result["rc"] != 0:
-            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
-            return False
-    logger.info("✓ Firewall port 8333/tcp opened")
-
-    service_cmds = [
-        "systemctl daemon-reload",
-        "systemctl enable --now seaweedfs-stack",
-        "systemctl start seaweedfs-stack",
-    ]
-    for cmd in service_cmds:
-        result = execute_local_command(cmd, logger=logger, verbose=verbose)
-        if result["rc"] != 0:
-            logger.error(f"✗ Failed: {cmd}\n{result['stderr']}")
-            return False
-    logger.info("✓ seaweedfs-stack service started")
-
-    logger.info("⌛ Waiting 30s for service to stabilize...")
-    time.sleep(30)
-
-    verify_cmd = (
-        "openssl s_client -connect raptor.demo.guardium:8333 -servername raptor.demo.guardium"
-        " </dev/null 2>/dev/null"
-        ' | openssl x509 -noout -text | grep -E "(Issuer:|Subject:|Not After|DNS:|IP Address:)"'
-    )
-    result = execute_local_command(verify_cmd, logger=logger, verbose=verbose)
-    if result["rc"] != 0:
-        logger.error(f"✗ TLS verification failed\n{result['stderr']}")
-        return False
-    logger.info(f"✓ TLS certificate verified:\n{result['stdout']}")
-
-    return True
 
 def setup_appnode(
     config,

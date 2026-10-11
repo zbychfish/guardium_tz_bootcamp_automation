@@ -932,13 +932,6 @@ groups:
         args:
           debug: false
 
-      - name: create_seaweedfs_config_files
-        function: create_seaweedfs_config_files
-        module: tasks.ltr_labs
-        description: "Create SeaweedFS config files: nginx/nginx.conf"
-        args:
-          debug: false
-
       - name: setup_appnode
         function: setup_appnode
         module: tasks.ltr_labs
