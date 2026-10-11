@@ -578,7 +578,6 @@ def activate_ltr(
     logger,
     verbose: bool = False,
     appliance_name: str = "cm",
-    retry_wait_seconds: int = 600,
     debug: bool = False,
     **kwargs) -> bool:
 
@@ -595,8 +594,8 @@ def activate_ltr(
     cmd = (
         f'grdapi configure_complete_cold_storage '
         f'protocol="CUSTOM" '
-        f'objectStorageEndpoint="https://raptor.demo.guardium:9000" '
-        f'accessKey=minioadmin '
+        f'objectStorageEndpoint="https://raptor.demo.guardium:8333" '
+        f'accessKey=s3admin '
         f'secretKey="{admin_pwd}" '
         f'dataBucket=guardium-ltr '
         f'resultSchema="datalake_reports" '
@@ -609,53 +608,65 @@ def activate_ltr(
     )
     logger.info(f"➜ {cmd.replace(admin_pwd, '***')}")
 
-    indicators = [
-        "Cold Storage Maintenance Setup Completed",
-        "Cold Storage ID:",
-        "Cold Storage Name: datalake",
-        '"status":"success"',
-        "Complete cold storage configuration successful",
-    ]
-    streaming_error = "Step 3/4 FAILED: Data streaming configuration failed"
+    success_indicator = "Complete cold storage configuration successful. All four steps completed."
 
-    for attempt in range(1, 3):
-        try:
-            client = ApplianceClient(
-                host=params['host'], user=params['user'], password=params['password'],
-                prompt_regex=params['prompt_regex'],
-                initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
-            )
-            if not client.connect():
-                logger.error(f"Failed to connect to {appliance_name}")
-                return False
-
-            try:
-                output = client.execute_command(cmd, timeout=300)
-            finally:
-                client.disconnect()
-
-        except Exception as e:
-            logger.error(f"✗ Error activating LTR (attempt {attempt}/2): {e}")
-            if debug:
-                logger.error(traceback.format_exc())
+    try:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'],
+            initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
+        )
+        if not client.connect():
+            logger.error(f"Failed to connect to {appliance_name}")
             return False
 
-        found = [ind for ind in indicators if ind.lower() in output.lower()]
-        if len(found) >= 3:
-            logger.info(f"✓ LTR activated ({len(found)}/{len(indicators)} indicators)")
-            return True
+        try:
+            output = client.execute_command(cmd, timeout=300)
+        finally:
+            client.disconnect()
 
-        if streaming_error in output and attempt == 1:
-            logger.warning(f"⚠ Streaming error detected — waiting {retry_wait_seconds}s ({retry_wait_seconds // 60} min) before retry...")
-            time.sleep(retry_wait_seconds)
-            logger.info("➜ Retrying activate_ltr (attempt 2/2)...")
-            continue
-
-        logger.error(f"✗ LTR activation failed ({len(found)}/{len(indicators)} indicators)\n{output}")
+    except Exception as e:
+        logger.error(f"✗ Error activating LTR: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
         return False
 
-    logger.error("✗ LTR activation failed after 2 attempts")
-    return False
+    if success_indicator not in output:
+        logger.error(f"✗ LTR activation failed\n{output}")
+        return False
+    logger.info("✓ LTR activated — all four steps completed")
+
+    verify_steps = [
+        ("grdapi get_cold_storage_app_nodes", "appnode1.demo.guardium"),
+        ("grdapi list_cold_storages",         "cold storage name = datalake"),
+    ]
+    try:
+        client = ApplianceClient(
+            host=params['host'], user=params['user'], password=params['password'],
+            prompt_regex=params['prompt_regex'],
+            initial_pattern=None, timeout=60, strip_ansi=True, debug=debug,
+        )
+        if not client.connect():
+            logger.error(f"Failed to connect for verification")
+            return False
+        try:
+            for cmd_v, expected in verify_steps:
+                logger.info(f"➜ {cmd_v}")
+                out = client.execute_command(cmd_v, timeout=60)
+                if expected not in out:
+                    logger.error(f"✗ Verification failed for '{cmd_v}': expected '{expected}'\n{out}")
+                    return False
+                logger.info(f"✓ {cmd_v}")
+        finally:
+            client.disconnect()
+    except Exception as e:
+        logger.error(f"✗ Verification error: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+
+    logger.info("✓ LTR verified")
+    return True
 
 def import_ltr_dashboard(
     config,
