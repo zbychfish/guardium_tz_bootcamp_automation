@@ -587,6 +587,38 @@ def activate_ltr(
     if not _require(logger, pwd=admin_pwd):
         return False
 
+    appnode_params = _get_appliance_connection_params(config, logger, "appnode1")
+    if not appnode_params:
+        return False
+
+    try:
+        appnode_client = ApplianceClient(
+            host=appnode_params['host'], user=appnode_params['user'], password=appnode_params['password'],
+            prompt_regex=appnode_params['prompt_regex'],
+            initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
+        )
+        if not appnode_client.connect():
+            logger.error("Failed to connect to appnode1")
+            return False
+        try:
+            logger.info("➜ restart gui on appnode1")
+            output = appnode_client.execute_command_with_confirmation(
+                command="restart gui",
+                confirmation_pattern=r"Are you sure you want to restart GUI \(y/n\)\?",
+                response="y",
+            )
+            if "GUI restart succeeded" not in output:
+                logger.error(f"✗ GUI restart failed: {output}")
+                return False
+            logger.info("✓ GUI restarted on appnode1")
+        finally:
+            appnode_client.disconnect()
+    except Exception as e:
+        logger.error(f"✗ Error restarting GUI on appnode1: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+
     params = _get_appliance_connection_params(config, logger, appliance_name)
     if not params:
         return False
