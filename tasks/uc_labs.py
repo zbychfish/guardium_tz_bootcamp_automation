@@ -32,16 +32,14 @@ def install_filebeat_on_sauropod(
 
     _header(logger, "INSTALL FILEBEAT ON SAUROPOD")
 
-    machines = config.get('machines', {})
-    sauropod_info = machines.get('sauropod', {})
-    sauropod_ip = sauropod_info.get('private_ip')
-    sauropod_password = sauropod_info.get('password')
-
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
-        logger.error("✗ sauropod private_ip not found in machines config")
+        logger.error("✗ sauropod IP not found in machines config")
         return False
+
+    sauropod_password = config.get_custom_variable('pwd')
     if not sauropod_password:
-        logger.error("✗ sauropod password not found in machines config")
+        logger.error("✗ pwd not found in custom_variables")
         return False
 
     filebeat_rpms = glob.glob(os.path.join(rpms_dir, filebeat_pattern))
