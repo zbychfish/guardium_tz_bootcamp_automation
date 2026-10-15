@@ -250,7 +250,7 @@ groups:
     name: "Setup Appliances"
     description: "Configure Guardium appliances (collector, CM, etc.)"
     deployed_with: [appliances]
-    dependencies: [initial_preparation, databases]
+    dependencies: [initial_preparation]
     stages:
       - name: reset_cli_password_all
         function: reset_cli_password_all
