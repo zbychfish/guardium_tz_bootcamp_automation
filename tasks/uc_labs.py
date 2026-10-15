@@ -42,6 +42,10 @@ def install_filebeat_on_sauropod(
         logger.error("✗ pwd not found in custom_variables")
         return False
 
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
+
     filebeat_rpms = glob.glob(os.path.join(rpms_dir, filebeat_pattern))
     if not filebeat_rpms:
         logger.error(f"✗ no filebeat RPM found: {os.path.join(rpms_dir, filebeat_pattern)}")
@@ -51,7 +55,8 @@ def install_filebeat_on_sauropod(
     filebeat_filename = os.path.basename(filebeat_rpm)
     logger.info(f"  found: {filebeat_filename}")
 
-    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=sauropod_password,
+                    port=ssh_port, timeout=60)
     try:
         logger.info("➜ connect to sauropod")
         if not ssh.connect():
