@@ -32,17 +32,19 @@ def install_filebeat_on_sauropod(
 
     _header(logger, "INSTALL FILEBEAT ON SAUROPOD")
 
-    machines = config.get('machines', {})
-    sauropod_info = machines.get('sauropod', {})
-    sauropod_ip = sauropod_info.get('private_ip')
-    sauropod_password = sauropod_info.get('password')
-
+    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
-        logger.error("✗ sauropod private_ip not found in machines config")
+        logger.error("✗ sauropod IP not found in machines config")
         return False
+
+    sauropod_password = config.get_custom_variable('pwd')
     if not sauropod_password:
-        logger.error("✗ sauropod password not found in machines config")
+        logger.error("✗ pwd not found in custom_variables")
         return False
+
+    ssh_config = config.get('ssh', {})
+    ssh_port = ssh_config.get('port', 2223)
+    ssh_username = ssh_config.get('username', 'root')
 
     filebeat_rpms = glob.glob(os.path.join(rpms_dir, filebeat_pattern))
     if not filebeat_rpms:
@@ -53,7 +55,8 @@ def install_filebeat_on_sauropod(
     filebeat_filename = os.path.basename(filebeat_rpm)
     logger.info(f"  found: {filebeat_filename}")
 
-    ssh = SSHClient(host=sauropod_ip, username="root", password=sauropod_password, timeout=60)
+    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=sauropod_password,
+                    port=ssh_port, timeout=60)
     try:
         logger.info("➜ connect to sauropod")
         if not ssh.connect():
@@ -81,7 +84,7 @@ def install_filebeat_on_sauropod(
         for cmd in [
             r"sed -i '/^- type: filestream/,/^[^[:space:]]/c\- type: filestream\n  id: \"cassandra\"\n  enabled: true\n  paths:\n    - /var/log/cassandra/audit/audit.log\n  exclude_lines: [\"AuditLogManager\"]\n  tags: [\"cassandra\"]\n  multiline.type: pattern\n  multiline.pattern: \"^INFO\"\n  multiline.negate: true\n  multiline.match: after' /etc/filebeat/filebeat.yml",
             r"sed -i '/^output.elasticsearch:/,/^[^[:space:]]/ { s/^/# / }' /etc/filebeat/filebeat.yml",
-            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.com:5047\"]| }' /etc/filebeat/filebeat.yml",
+            r"sed -i '/^#output.logstash:/,/^[^[:space:]]/ { s/^#output\.logstash:/output.logstash:/; s|^  #hosts:.*|  hosts: [\"coll1.demo.guardium:5047\"]| }' /etc/filebeat/filebeat.yml",
         ]:
             result = ssh.execute_command(cmd, print_output=verbose)
             if result['rc'] != 0:
