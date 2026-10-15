@@ -823,14 +823,14 @@ groups:
           wait_seconds: 1200
           debug: true
 
-      - name: cycle_kafka_nodes
-        function: cycle_kafka_nodes
-        module: tasks.uc_labs
-        description: "Stop Kafka nodes (wait 5min) then start (wait 10min)"
-        args:
-          stop_wait_seconds: 300
-          start_wait_seconds: 600
-          debug: true
+      # - name: cycle_kafka_nodes
+      #   function: cycle_kafka_nodes
+      #   module: tasks.uc_labs
+      #   description: "Stop Kafka nodes (wait 5min) then start (wait 10min)"
+      #   args:
+      #     stop_wait_seconds: 300
+      #     start_wait_seconds: 600
+      #     debug: true
 
       - name: test_uc_profile_connection
         function: test_uc_profile_connection
