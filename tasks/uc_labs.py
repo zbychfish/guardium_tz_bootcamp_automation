@@ -200,10 +200,10 @@ def setup_kafka_node(
 def run_uc_and_setup_kafka_node(
     config,
     logger,
+    wait_seconds: int,
     verbose: bool = False,
     collector_appliance: str = "coll1",
     kafka_appliance: str = "kafka1",
-    wait_seconds: int,
     debug: bool = False,
     **kwargs) -> bool:
     
@@ -256,12 +256,12 @@ def run_uc_and_setup_kafka_node(
 def register_kafka_cluster(
     config,
     logger,
+    stabilize_seconds: int,
     verbose: bool = False,
     cm_appliance: str = "cm",
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
     apply_cruise_control: bool = False,
-    stabilize_seconds: int,
     debug: bool = True,
     **kwargs) -> bool:
 
@@ -343,13 +343,13 @@ def create_uc_credential_for_oracle_container(
 def import_uc_profile_oracle_container(
     config,
     logger,
+    wait_seconds: int,
     verbose: bool = False,
     cm_appliance: str = "cm",
     csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
     jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
     update_mode: bool = False,
     test_connections: bool = True,
-    wait_seconds: int,
     debug: bool = True,
     **kwargs) -> bool:
 
