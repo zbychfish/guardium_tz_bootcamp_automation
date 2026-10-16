@@ -200,14 +200,18 @@ def setup_kafka_node(
 def run_uc_and_setup_kafka_node(
     config,
     logger,
-    wait_seconds: int,
     verbose: bool = False,
     collector_appliance: str = "coll1",
     kafka_appliance: str = "kafka1",
+    wait_seconds: int = None,
     debug: bool = False,
     **kwargs) -> bool:
     
     _header(logger, "RUN UC AND SETUP KAFKA NODE")
+
+    if wait_seconds is None:
+        logger.error("✗ wait_seconds not set in groups.yaml args")
+        return False
 
     appliance_loader = ApplianceConfigLoader(config_loader=config)
     coll_config = appliance_loader.get_appliance(collector_appliance)
@@ -256,16 +260,20 @@ def run_uc_and_setup_kafka_node(
 def register_kafka_cluster(
     config,
     logger,
-    stabilize_seconds: int,
     verbose: bool = False,
     cm_appliance: str = "cm",
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
     apply_cruise_control: bool = False,
+    stabilize_seconds: int = None,
     debug: bool = True,
     **kwargs) -> bool:
 
     _header(logger, "REGISTER KAFKA CLUSTER")
+
+    if stabilize_seconds is None:
+        logger.error("✗ stabilize_seconds not set in groups.yaml args")
+        return False
 
     pwd = config.get_custom_variable('pwd')
     if not pwd:
@@ -343,13 +351,13 @@ def create_uc_credential_for_oracle_container(
 def import_uc_profile_oracle_container(
     config,
     logger,
-    wait_seconds: int,
     verbose: bool = False,
     cm_appliance: str = "cm",
     csv_path: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv",
     jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
     update_mode: bool = False,
     test_connections: bool = True,
+    wait_seconds: int = None,
     debug: bool = True,
     **kwargs) -> bool:
 
@@ -358,6 +366,10 @@ def import_uc_profile_oracle_container(
     logger.info(f"  csv={csv_path}")
     logger.info(f"  jar={jar_file}")
     logger.info(f"  update_mode={update_mode} test_connections={test_connections}")
+
+    if wait_seconds is None:
+        logger.error("✗ wait_seconds not set in groups.yaml args")
+        return False
 
     pwd = config.get_custom_variable('pwd')
     if not pwd:
