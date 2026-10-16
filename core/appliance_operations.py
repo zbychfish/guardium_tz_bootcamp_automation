@@ -1227,11 +1227,24 @@ def copy_single_file_to_appliance(
         _, stdout, _ = ssh_client.exec_command('which sshpass')
         sshpass_available = stdout.channel.recv_exit_status() == 0
 
-        logger.info(f"[{appliance_name}] -> scp {filename}")
+        tmp_dir = "/opt/guardium_upload_tmp"
+        tmp_file = f"{tmp_dir}/{filename}"
+
+        logger.info(f"[{appliance_name}] -> sudo mkdir -p {tmp_dir}")
+        _, stdout, stderr = ssh_client.exec_command(f'sudo mkdir -p {tmp_dir}')
+        if stdout.channel.recv_exit_status() != 0:
+            logger.error(f"[{appliance_name}] x mkdir {tmp_dir}: {stderr.read().decode()}")
+            return False
+        _, stdout, stderr = ssh_client.exec_command(f'sudo chmod 777 {tmp_dir}')
+        if stdout.channel.recv_exit_status() != 0:
+            logger.error(f"[{appliance_name}] x chmod {tmp_dir}: {stderr.read().decode()}")
+            return False
+
+        logger.info(f"[{appliance_name}] -> scp {filename} -> {tmp_dir}/")
         if sshpass_available:
             scp_cmd = (f"sshpass -p '{raptor_root_password}' scp -P {ssh_port} "
                        f"-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
-                       f"root@{raptor_ip}:{source_file_path} /tmp/{filename}")
+                       f"root@{raptor_ip}:{source_file_path} {tmp_file}")
             _, stdout, stderr = ssh_client.exec_command(scp_cmd, timeout=300)
             if stdout.channel.recv_exit_status() != 0:
                 logger.error(f"[{appliance_name}] x scp failed: {stderr.read().decode()}")
@@ -1242,7 +1255,7 @@ def copy_single_file_to_appliance(
             while channel.recv_ready():
                 channel.recv(65535)
             channel.send((f"scp -P {ssh_port} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
-                          f"root@{raptor_ip}:{source_file_path} /tmp/{filename}\n").encode())
+                          f"root@{raptor_ip}:{source_file_path} {tmp_file}\n").encode())
             output = ""
             deadline = time.time() + 30
             while time.time() < deadline:
@@ -1258,24 +1271,27 @@ def copy_single_file_to_appliance(
                 channel.recv(4096)
             channel.close()
 
-        _, stdout, _ = ssh_client.exec_command(f"test -f /tmp/{filename} && echo 'OK'")
+        _, stdout, _ = ssh_client.exec_command(f"test -f {tmp_file} && echo 'OK'")
         if stdout.read().decode().strip() != "OK":
             logger.error(f"[{appliance_name}] x scp {filename} failed")
             return False
-        logger.info(f"[{appliance_name}] + {filename} in /tmp/")
+        logger.info(f"[{appliance_name}] + {filename} in {tmp_dir}/")
 
-        logger.info(f"[{appliance_name}] -> mkdir -p {target_dir}")
+        logger.info(f"[{appliance_name}] -> sudo mkdir -p {target_dir}")
         _, stdout, stderr = ssh_client.exec_command(f'sudo mkdir -p {target_dir}')
         if stdout.channel.recv_exit_status() != 0:
             logger.error(f"[{appliance_name}] x mkdir {target_dir}: {stderr.read().decode()}")
             return False
 
-        logger.info(f"[{appliance_name}] -> mv /tmp/{filename} {target_dir} && chown {owner}")
+        logger.info(f"[{appliance_name}] -> mv {tmp_file} {target_dir} && chown {owner}")
         _, stdout, stderr = ssh_client.exec_command(
-            f'sudo mv /tmp/{filename} {target_dir} && sudo chown {owner} {target_dir}/{filename}')
+            f'sudo mv {tmp_file} {target_dir} && sudo chown {owner} {target_dir}/{filename}')
         if stdout.channel.recv_exit_status() != 0:
             logger.error(f"[{appliance_name}] x mv/chown: {stderr.read().decode()}")
             return False
+
+        logger.info(f"[{appliance_name}] -> sudo rm -rf {tmp_dir}")
+        ssh_client.exec_command(f'sudo rm -rf {tmp_dir}')
 
         logger.info(f"[{appliance_name}] ✓ {filename} → {target_dir}")
         return True
