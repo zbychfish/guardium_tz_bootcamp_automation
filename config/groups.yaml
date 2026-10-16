@@ -820,7 +820,7 @@ groups:
           csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
           jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
           test_connections: false
-          wait_seconds: 0
+          wait_seconds: 30
           debug: true
 
       - name: test_uc_profile_connection
