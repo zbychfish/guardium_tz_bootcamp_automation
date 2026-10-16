@@ -27,11 +27,15 @@ def _header(logger, title: str) -> None:
 
 def install_edge_patch_via_api(config, logger, verbose=True,
                                cm_appliance="cm",
-                               patch_filename="SqlGuard-12.0p15003_Edge_Jun_26_2026.tgz.enc.sig",
+                               patch_filename=None,
                                mode="local_only",
                                debug=False, **kwargs):
                                
     _header(logger, "INSTALL EDGE PATCH ON CM VIA REST API")
+
+    if not patch_filename:
+        logger.error("✗ patch_filename not set in groups.yaml args")
+        return False
 
     m = re.search(r'12\.0p(\d+)', os.path.basename(patch_filename))
     if not m:
@@ -105,11 +109,11 @@ def install_edge_patch_via_api(config, logger, verbose=True,
 
 def register_edge_gateway(config, logger, verbose=True,
                           cm_appliance="cm",
-                          exports_to="cm.demo.guardium",
-                          name="sauropod.demo.guardium",
-                          namespace="edge",
-                          storageclass_rw_once="local-path",
-                          version="v2.2.0",
+                          exports_to=None,
+                          name=None,
+                          namespace=None,
+                          storageclass_rw_once=None,
+                          version=None,
                           deploy_proxy=True,
                           # purge_age: int = 30,
                           debug=False, **kwargs):
@@ -153,9 +157,9 @@ def register_edge_gateway(config, logger, verbose=True,
     return True
 
 def install_k3s_on_sauropod(config, logger, verbose=True,
-                            k3s_version="v1.32.13+k3s1",
+                            k3s_version=None,
                             cm_appliance="cm",
-                            expected_pods=3, max_wait=300, check_interval=15,
+                            expected_pods=None, max_wait=None, check_interval=None,
                             debug=False, **kwargs):
     _header(logger, "INSTALL K3S ON SAUROPOD")
 
@@ -291,8 +295,8 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
 
 def download_edge_bundle_via_api(config, logger, verbose=True,
                                  cm_appliance="cm",
-                                 edge_name="sauropod.demo.guardium",
-                                 sauropod_dest="/tmp/edge.tar.gz",
+                                 edge_name=None,
+                                 sauropod_dest=None,
                                  debug=False, **kwargs):
 
     _header(logger, "DOWNLOAD EDGE BUNDLE VIA REST API TO SAUROPOD")
@@ -418,9 +422,9 @@ def prepare_sauropod_for_edge(config, logger, verbose=True,
         ssh.disconnect()
 
 def deploy_edge_gateway(config, logger, verbose=True,
-                        edge_dir="/tmp/sauropod.demo.guardium",
-                        install_script="edge-install.sh",
-                        script_timeout=600,
+                        edge_dir=None,
+                        install_script=None,
+                        script_timeout=None,
                         debug=False, **kwargs):
 
     _header(logger, "DEPLOY EDGE GATEWAY ON SAUROPOD")
@@ -511,10 +515,10 @@ def deploy_edge_gateway(config, logger, verbose=True,
         client.close()
 
 def monitor_edge_gateway_deployment(config, logger, verbose=True,
-                                    namespace="edge",
-                                    pod_prefix="edge-manager",
-                                    appear_interval=15, appear_max=40,
-                                    log_interval=30, log_max=60,
+                                    namespace=None,
+                                    pod_prefix=None,
+                                    appear_interval=None, appear_max=None,
+                                    log_interval=None, log_max=None,
                                     completion_marker="EDGE_SERVICES_INSTALLATION_STATUS is Completed",
                                     debug=False, **kwargs):
 
@@ -591,9 +595,9 @@ def monitor_edge_gateway_deployment(config, logger, verbose=True,
 
 def install_policy_on_sauropod(config, logger, verbose=True,
                                cm_appliance="cm",
-                               policy_name="Default bootcamp policy",
-                               units="sauropod.demo.guardium",
-                               install_action="install_override",
+                               policy_name=None,
+                               units=None,
+                               install_action=None,
                                debug=False, **kwargs):
 
     _header(logger, "INSTALL POLICY ON SAUROPOD")
@@ -628,7 +632,7 @@ def install_policy_on_sauropod(config, logger, verbose=True,
 
 def import_edge_dashboard(config, logger, verbose=True,
                           cm_appliance="cm",
-                          definitions_dir="/opt/guardium_tz_bootcamp_automation/upload/source_files/exports/",
+                          definitions_dir=None,
                           debug=False, **kwargs):
     _header(logger, "IMPORT EDGE DASHBOARD ON CM")
 
@@ -647,7 +651,7 @@ def import_edge_dashboard(config, logger, verbose=True,
 
 def configure_stap_for_edge_on_ceratops(config, logger, verbose=True,
                                         cm_appliance="cm",
-                                        installation_delay=10,
+                                        installation_delay=None,
                                         debug=False, **kwargs):
     _header(logger, "CONFIGURE WINSTAP FOR EDGE ON CERATOPS")
 

@@ -1031,7 +1031,7 @@ groups:
         description: "Monitor Edge patch installation on cm: wait for appear (15s), then DONE (60s)"
         args:
           appliance_name: "cm"
-          patch_numbers: ["15003"]
+          patch_numbers: ["15004"]
           appear_interval: 30
           appear_max: 40
           check_interval: 60
