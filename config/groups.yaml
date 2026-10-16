@@ -792,9 +792,9 @@ groups:
       - name: run_uc_and_setup_kafka_node
         function: run_uc_and_setup_kafka_node
         module: tasks.uc_labs
-        description: "Run Universal Connector on coll1 and setup kafka-node on kafka1"
+        description: "Setup kafka-node on kafka1"
         args:
-          wait_seconds: 60
+          wait_seconds: 5400
           debug: true
 
       - name: create_uc_credential
@@ -809,7 +809,7 @@ groups:
         module: tasks.uc_labs
         description: "Register Kafka cluster via REST API"
         args:
-          stabilize_seconds: 120
+          stabilize_seconds: 180
           debug: true
 
       - name: import_uc_profile
@@ -820,17 +820,8 @@ groups:
           csv_path: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/oracle_21_container_sauropod.csv"
           jar_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar"
           test_connections: false
-          wait_seconds: 1200
+          wait_seconds: 0
           debug: true
-
-      # - name: cycle_kafka_nodes
-      #   function: cycle_kafka_nodes
-      #   module: tasks.uc_labs
-      #   description: "Stop Kafka nodes (wait 5min) then start (wait 10min)"
-      #   args:
-      #     stop_wait_seconds: 300
-      #     start_wait_seconds: 600
-      #     debug: true
 
       - name: test_uc_profile_connection
         function: test_uc_profile_connection

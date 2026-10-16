@@ -203,7 +203,7 @@ def run_uc_and_setup_kafka_node(
     verbose: bool = False,
     collector_appliance: str = "coll1",
     kafka_appliance: str = "kafka1",
-    wait_seconds: int = 60,
+    wait_seconds: int,
     debug: bool = False,
     **kwargs) -> bool:
     
@@ -261,7 +261,7 @@ def register_kafka_cluster(
     cluster_name: str = "kafka_cluster_1",
     member_list: str = "kafka1.demo.guardium",
     apply_cruise_control: bool = False,
-    stabilize_seconds: int = 300,
+    stabilize_seconds: int,
     debug: bool = True,
     **kwargs) -> bool:
 
@@ -299,57 +299,6 @@ def register_kafka_cluster(
     logger.info(f"⌛ waiting {stabilize_seconds}s ({stabilize_seconds // 60} min) for Kafka cluster to stabilize...")
     time.sleep(stabilize_seconds)
     logger.info("✓ Kafka cluster registration completed")
-    return True
-
-def cycle_kafka_nodes(
-    config,
-    logger,
-    verbose: bool = False,
-    cm_appliance: str = "cm",
-    cluster_name: str = "kafka_cluster_1",
-    member_list: str = "kafka1.demo.guardium",
-    stop_wait_seconds: int = 300,
-    start_wait_seconds: int = 1200,
-    debug: bool = False,
-    **kwargs) -> bool:
-
-    _header(logger, "CYCLE KAFKA NODES (stop → start)")
-
-    params = _get_appliance_connection_params(config, logger, cm_appliance)
-    if not params:
-        return False
-
-    steps = [
-        ("stop",  f"grdapi stop_kafka_nodes  clusterName={cluster_name} memberList={member_list}", stop_wait_seconds),
-        ("start", f"grdapi start_kafka_nodes clusterName={cluster_name} memberList={member_list}", start_wait_seconds),
-    ]
-
-    for action, cmd, wait_after in steps:
-        client = ApplianceClient(
-            host=params['host'], user=params['user'], password=params['password'],
-            prompt_regex=params['prompt_regex'], initial_pattern=None,
-            timeout=120, strip_ansi=True, debug=debug, logger=logger
-        )
-        try:
-            if not client.connect():
-                logger.error(f"✗ failed to connect to {cm_appliance} for '{action}'")
-                return False
-            logger.info(f"➜ {action}: {cmd}")
-            result = client.execute_command(cmd, timeout=120)
-            if debug:
-                logger.info(f"  output: {result}")
-            logger.info(f"✓ {action} executed")
-        except Exception as e:
-            logger.error(f"✗ {action} failed: {e}")
-            logger.error(traceback.format_exc())
-            return False
-        finally:
-            client.disconnect()
-
-        logger.info(f"⌛ waiting {wait_after}s ({wait_after // 60} min)...")
-        time.sleep(wait_after)
-
-    logger.info("✓ CYCLE KAFKA NODES — completed")
     return True
 
 def create_uc_credential_for_oracle_container(
@@ -400,7 +349,7 @@ def import_uc_profile_oracle_container(
     jar_file: str = "/opt/guardium_tz_bootcamp_automation/upload/source_files/oracle/ojdbc8.jar",
     update_mode: bool = False,
     test_connections: bool = True,
-    wait_seconds: int = 900,
+    wait_seconds: int,
     debug: bool = True,
     **kwargs) -> bool:
 
