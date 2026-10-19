@@ -1528,7 +1528,7 @@ def monitor_patch_installation(
         try:
             if not client.connect():
                 return None
-            return client.execute_command("show system patch install")
+            return client.execute_command("show system patch install", timeout=60)
         except Exception:
             return None
         finally:
