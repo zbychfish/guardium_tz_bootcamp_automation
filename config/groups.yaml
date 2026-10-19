@@ -1036,7 +1036,7 @@ groups:
           appear_max: 40
           check_interval: 60
           max_checks: 60
-          debug: true
+          debug: false
 
       - name: install_k3s_on_sauropod
         function: install_k3s_on_sauropod
@@ -1140,7 +1140,7 @@ groups:
     deployed_with: [new_architecture]
     dependencies: [va_api]
     stages:
-      - name: setup_appnode2
+      - name: setup_appnode2_for_genai
         function: setup_appnode
         module: tasks.ltr_labs
         description: "Setup app-node on appnode2 by executing 'store unit type app-node', wait for reboot and reconnection"
@@ -1148,7 +1148,7 @@ groups:
           appliance_name: "appnode2"
           debug: false
 
-      - name: prepare_appnode2_for_patching
+      - name: prepare_appnode2_for_genai_patching
         function: copy_single_file_to_appliance_task
         module: tasks.setup_appliances
         description: "Copy GenAI patch file to appnode2 for installation"
@@ -1159,7 +1159,7 @@ groups:
           owner: "tomcat:tomcat"
           debug: false
 
-      - name: install_patch_on_appnode2
+      - name: install_genai_patch_on_appnode2
         function: install_patch_on_appliance_single
         module: tasks.setup_appliances
         description: "Install GenAI patch on appnode2"
