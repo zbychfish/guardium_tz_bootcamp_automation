@@ -379,16 +379,26 @@ def import_uc_profile_oracle_container(
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
-    logger.info("➜ import_profiles_from_file")
-    result = api.import_profiles_from_file(
-        csv_path=csv_path,
-        jar_file=jar_file,
-        update_mode=update_mode,
-        test_connections=test_connections
-    )
-    if debug:
-        logger.info(f"  API response: {result}")
-    logger.info("✓ UC profile imported")
+    for attempt in range(1, 6):
+        logger.info(f"➜ import_profiles_from_file (attempt {attempt}/5)")
+        result = api.import_profiles_from_file(
+            csv_path=csv_path,
+            jar_file=jar_file,
+            update_mode=update_mode,
+            test_connections=test_connections
+        )
+        if debug:
+            logger.info(f"  API response: {result}")
+        msg = result.get('Message', '')
+        if 'no uploads found' in msg:
+            logger.warning(f"⚠ attempt {attempt}/5: jar not yet available — retrying in 60s...")
+            time.sleep(60)
+            continue
+        logger.info("✓ UC profile imported")
+        break
+    else:
+        logger.error("✗ import_profiles_from_file failed after 5 attempts (jar not found)")
+        return False
 
     logger.info(f"⌛ waiting {wait_seconds}s ({wait_seconds // 60} min) for UC profile to be processed...")
     time.sleep(wait_seconds)

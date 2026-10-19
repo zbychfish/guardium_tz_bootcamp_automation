@@ -1168,4 +1168,13 @@ groups:
           patch_selection: "1"
           reinstall_answer: "y"
           debug: false
-          
+
+      - name: create_gdp_mcp_api_key
+        function: create_gdp_mcp_api_key
+        module: tasks.genai_labs
+        description: "Create API key 'gdp_mcp' on appnode2 via grdapi create_api_key, save to .genai_api_key"
+        args:
+          appliance_name: "appnode2"
+          key_name: "gdp_mcp"
+          debug: false
+
