@@ -361,9 +361,18 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
                                  cm_appliance="cm",
                                  edge_name=None,
                                  sauropod_dest=None,
+                                 retry_count=None,
+                                 retry_interval=None,
                                  debug=False, **kwargs):
 
     _header(logger, "DOWNLOAD EDGE BUNDLE VIA REST API TO SAUROPOD")
+
+    if retry_count is None:
+        logger.error("✗ retry_count not set in groups.yaml args")
+        return False
+    if retry_interval is None:
+        logger.error("✗ retry_interval not set in groups.yaml args")
+        return False
 
     pwd = config.get_custom_variable('pwd')
     if not pwd:
@@ -372,19 +381,25 @@ def download_edge_bundle_via_api(config, logger, verbose=True,
 
     api = create_guardium_api(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
-    logger.info(f"➜ Calling get_bundle(name={edge_name}) on CM...")
-    try:
-        bundle_bytes = api.get_bundle(name=edge_name)
-    except Exception as e:
-        logger.error(f"✗ get_bundle API call failed: {e}")
-        if debug:
-            logger.error(traceback.format_exc())
-        return False
 
-    if not bundle_bytes:
-        logger.error("✗ get_bundle returned empty response")
+    bundle_bytes = None
+    for attempt in range(1, retry_count + 1):
+        logger.info(f"➜ get_bundle(name={edge_name}) attempt {attempt}/{retry_count}...")
+        try:
+            bundle_bytes = api.get_bundle(name=edge_name)
+        except Exception as e:
+            logger.error(f"✗ get_bundle API call failed: {e}")
+            if debug:
+                logger.error(traceback.format_exc())
+            return False
+        if bundle_bytes:
+            logger.info(f"✓ Bundle received ({len(bundle_bytes)} bytes)")
+            break
+        logger.warning(f"⚠ attempt {attempt}/{retry_count}: empty response — retrying in {retry_interval}s...")
+        time.sleep(retry_interval)
+    else:
+        logger.error(f"✗ get_bundle returned empty response after {retry_count} attempts")
         return False
-    logger.info(f"✓ Bundle received ({len(bundle_bytes)} bytes)")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
     if not sauropod_ip:
