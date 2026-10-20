@@ -307,13 +307,6 @@ groups:
         args:
           debug: false
 
-      # - name: prepare_log_guard_dir_all (REMOVE IN 12.2.3)
-      #   function: prepare_log_guard_dir_all
-      #   module: tasks.setup_appliances
-      #   description: "Create /var/log/guard (2775 root:guardium) and jobqueue.log (644 tomcat:guardium) on all appliances"
-      #   args:
-      #     debug: false
-
       - name: restart_all_appliances_after_initial_setup
         function: restart_appliance_all
         module: tasks.setup_appliances
@@ -321,8 +314,8 @@ groups:
         args:
           debug: false
           wait_for_availability: true
-          retry_interval: 15  # Seconds between retry attempts (default: 10)
-          max_retries: 40  # Maximum retry attempts (default: 60, total timeout = 40 * 15 = 600s = 10min)
+          retry_interval: 30  # Seconds between retry attempts (default: 10)
+          max_retries: 40
 
       - name: set_unit_type_manager
         function: set_unit_type_manager
@@ -348,8 +341,8 @@ groups:
         args:
           debug: false
           wait_for_availability: true
-          retry_interval: 15  # Seconds between retry attempts (default: 10)
-          max_retries: 40  # Maximum retry attempts (default: 60, total timeout = 40 * 15 = 600s = 10min)
+          retry_interval: 30  # Seconds between retry attempts (default: 10)
+          max_retries: 40
       
       - name: import_definitions_on_cm
         function: import_definitions_on_cm

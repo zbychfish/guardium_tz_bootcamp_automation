@@ -58,8 +58,8 @@ def create_gdp_mcp_api_key(
         api_key = None
         for line in result.splitlines():
             ls = line.strip()
-            if ls.startswith('API Key:'):
-                api_key = ls.split('API Key:', 1)[1].strip()
+            if ls.startswith('Encoded API key:'):
+                api_key = ls.split('Encoded API key:', 1)[1].strip()
                 break
 
         if not api_key:
