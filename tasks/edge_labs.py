@@ -179,7 +179,7 @@ def register_edge_gateway(config, logger, verbose=True,
                           storageclass_rw_once=None,
                           version=None,
                           deploy_proxy=True,
-                          # purge_age: int = 30,
+                          purge_age=None,
                           debug=False, **kwargs):
 
     _header(logger, "REGISTER EDGE GATEWAY ON CM")
