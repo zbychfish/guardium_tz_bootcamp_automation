@@ -1073,7 +1073,7 @@ groups:
         description: "Download edge bundle from CM REST API get_bundle, save as /tmp/edge.tar.gz on sauropod"
         args:
           cm_appliance: "cm"
-          edge_name: "sauropod.demo.guardium"
+          edge_name: "sauropod
           sauropod_dest: "/tmp/edge.tar.gz"
           debug: false
 
@@ -1087,9 +1087,9 @@ groups:
       - name: deploy_edge_gateway
         function: deploy_edge_gateway
         module: tasks.edge_labs
-        description: "Run edge-install.sh from /tmp/sauropod.demo.guardium with TTY"
+        description: "Run edge-install.sh from /tmp/sauropod with TTY"
         args:
-          edge_dir: "/tmp/sauropod.demo.guardium"
+          edge_dir: "/tmp/sauropod"
           install_script: "edge-install.sh"
           script_timeout: 600
           debug: false
