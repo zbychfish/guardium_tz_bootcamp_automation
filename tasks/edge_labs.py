@@ -107,6 +107,65 @@ def install_edge_patch_via_api(config, logger, verbose=True,
     logger.info("✓ Edge patch installation initiated via REST API on CM")
     return True
 
+def set_purge_age_period(
+    config,
+    logger,
+    verbose: bool = False,
+    cm_appliance: str = "cm",
+    purge_age_period: int = None,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "SET PURGE AGE PERIOD")
+
+    if purge_age_period is None:
+        logger.error("✗ purge_age_period not set in groups.yaml args")
+        return False
+
+    params = _get_appliance_connection_params(config, logger, cm_appliance)
+    if not params:
+        return False
+
+    client = ApplianceClient(
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
+        timeout=60, strip_ansi=True, debug=debug
+    )
+    try:
+        if not client.connect():
+            logger.error(f"✗ Failed to connect to {cm_appliance}")
+            return False
+
+        logger.info(f"➜ store purge_age_period {purge_age_period}")
+        client.execute_command(f"store purge_age_period {purge_age_period}", timeout=30)
+
+        logger.info("➜ show purge_age_period")
+        result = client.execute_command("show purge_age_period", timeout=30)
+        if debug:
+            logger.info(f"  output: {result}")
+
+        actual = None
+        for line in result.splitlines():
+            ls = line.strip()
+            if ls.isdigit():
+                actual = int(ls)
+                break
+
+        if actual != purge_age_period:
+            logger.error(f"✗ Expected {purge_age_period}, got: {actual}")
+            return False
+
+        logger.info(f"✓ purge_age_period set to {actual}")
+        return True
+
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        client.disconnect()
+
 def register_edge_gateway(config, logger, verbose=True,
                           cm_appliance="cm",
                           exports_to=None,

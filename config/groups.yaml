@@ -1050,7 +1050,16 @@ groups:
           check_interval: 15
           debug: false
 
-      - name: register_edge_gateway 
+      - name: set_purge_age_period_on_cm
+        function: set_purge_age_period
+        module: tasks.edge_labs
+        description: "Set purge_age_period to 365 on cm via CLI store command, verify with show"
+        args:
+          cm_appliance: "cm"
+          purge_age_period: 365
+          debug: false
+
+      - name: register_edge_gateway
         function: register_edge_gateway
         module: tasks.edge_labs
         description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge - POPRAWIC purge_age"
