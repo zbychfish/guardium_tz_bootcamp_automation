@@ -137,7 +137,12 @@ def set_purge_age_period(
             return False
 
         logger.info(f"➜ store purge_age_period {purge_age_period}")
-        client.execute_command(f"store purge_age_period {purge_age_period}", timeout=30)
+        client.execute_command_simple_confirmation(
+            command=f"store purge_age_period {purge_age_period}",
+            confirmation_text="Are you sure you want to continue? (y/n)",
+            response="y",
+            timeout=30
+        )
 
         logger.info("➜ show purge_age_period")
         result = client.execute_command("show purge_age_period", timeout=30)
