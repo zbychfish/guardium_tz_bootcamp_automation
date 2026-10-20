@@ -1059,7 +1059,7 @@ groups:
         args:
           cm_appliance: "cm"
           exports_to: "cm.demo.guardium"
-          name: "sauropod.demo.guardium"
+          name: "sauropod"
           namespace: "edge"
           storageclass_rw_once: "local-path"
           version: "v2.2.1"
