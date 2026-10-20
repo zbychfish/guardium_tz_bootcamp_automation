@@ -1071,7 +1071,7 @@ groups:
           storageclass_rw_once: "local-path"
           version: "v2.2.1"
           deploy_proxy: true
-          # purge_age: 30
+          purge_age: 120
           debug: true
 
       - name: download_edge_bundle_via_api

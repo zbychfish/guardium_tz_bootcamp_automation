@@ -203,7 +203,7 @@ def register_edge_gateway(config, logger, verbose=True,
             storageclass_rw_once=storageclass_rw_once,
             version=version,
             deploy_proxy=deploy_proxy,
-            # purge_age=purge_age,
+            purge_age=purge_age,
         )
     except Exception as e:
         logger.error(f"✗ register_edge API call failed: {e}")
