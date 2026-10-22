@@ -57,6 +57,8 @@ groups:
         module: tasks.preparation_for_services_deployment
         description: "Install kernel-devel, Java 11 and podman on sauropod via SSH"
         args:
+          retry_count: 3
+          retry_interval: 60
           debug: false
 
       - name: create_demo_user_on_ceratops

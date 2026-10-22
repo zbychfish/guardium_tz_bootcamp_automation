@@ -7,6 +7,7 @@ Handles system updates and downloading supporting files before service deploymen
 
 import os
 import sys
+import time
 from pathlib import Path
 
 # Add core modules to path
@@ -194,7 +195,9 @@ def configure_swap(config: ConfigLoader, logger, verbose: bool = True, **kwargs)
     return True
 
 
-def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = True, **kwargs) -> bool:
+def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = True,
+                                 retry_count: int = None, retry_interval: int = None,
+                                 **kwargs) -> bool:
     logger.info("Installing kernel-devel, Java 11 and podman on sauropod")
 
     sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
@@ -219,27 +222,38 @@ def install_packages_on_sauropod(config: ConfigLoader, logger, verbose: bool = T
         return False
 
     try:
-        install_cmd = "dnf install -y kernel-devel-$(uname -r) java-11-openjdk podman"
-        result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+        if retry_count is None:
+            logger.error("✗ retry_count not set in groups.yaml args")
+            return False
+        if retry_interval is None:
+            logger.error("✗ retry_interval not set in groups.yaml args")
+            return False
 
-        if result['rc'] != 0:
+        install_cmd = "dnf install -y kernel-devel-$(uname -r) java-11-openjdk podman"
+        result = None
+
+        for attempt in range(1, retry_count + 1):
+            logger.info(f"  dnf install attempt {attempt}/{retry_count}")
+            result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
+            if result['rc'] == 0:
+                break
             if 'rhel-8-for-x86_64-appstream-eus-rpms' in result['stderr'] or '404' in result['stderr']:
                 logger.warning("  EUS repository error — applying workaround")
-                result = ssh.execute_command('subscription-manager repos --disable="*eus*"', timeout=60, print_output=verbose)
-                if result['rc'] != 0:
-                    logger.warning(f"  Failed to disable EUS repos (rc={result['rc']}), continuing")
-                result = ssh.execute_command('subscription-manager repos --enable=rhel-8-for-x86_64-baseos-rpms --enable=rhel-8-for-x86_64-appstream-rpms', timeout=60, print_output=verbose)
-                if result['rc'] != 0:
+                r = ssh.execute_command('subscription-manager repos --disable="*eus*"', timeout=60, print_output=verbose)
+                if r['rc'] != 0:
+                    logger.warning(f"  Failed to disable EUS repos (rc={r['rc']}), continuing")
+                r = ssh.execute_command('subscription-manager repos --enable=rhel-8-for-x86_64-baseos-rpms --enable=rhel-8-for-x86_64-appstream-rpms', timeout=60, print_output=verbose)
+                if r['rc'] != 0:
                     logger.error("✗ Failed to enable standard repositories")
                     return False
-                logger.info("  ✓ Repositories updated, retrying installation")
-                result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
-                if result['rc'] != 0:
-                    logger.error("✗ Package installation failed after workaround")
-                    return False
-            else:
-                logger.error("✗ Package installation failed on sauropod")
-                return False
+                logger.info("  ✓ Repositories updated")
+            if attempt < retry_count:
+                logger.warning(f"  ✗ attempt {attempt}/{retry_count} failed — retrying in {retry_interval}s...")
+                time.sleep(retry_interval)
+
+        if result['rc'] != 0:
+            logger.error(f"✗ Package installation failed after {retry_count} attempts")
+            return False
 
         logger.info("✓ kernel-devel, Java 11 and podman installed on sauropod")
 
