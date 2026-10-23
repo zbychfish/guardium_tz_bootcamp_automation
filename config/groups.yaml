@@ -1075,8 +1075,10 @@ groups:
         description: "Download edge bundle from CM REST API get_bundle, save as /tmp/edge.tar.gz on sauropod"
         args:
           cm_appliance: "cm"
-          edge_name: "sauropod" 
+          edge_name: "sauropod"
           sauropod_dest: "/tmp/edge.tar.gz"
+          retry_count: 10
+          retry_interval: 60
           debug: false
 
       - name: prepare_sauropod_for_edge
