@@ -383,6 +383,17 @@ groups:
       #     policy_name: "Default bootcamp policy"
       #     debug: false
 
+      - name: install_policy_on_collector_workaround
+        function: install_policy_on_collector_workaround
+        module: tasks.setup_appliances
+        description: "Install policy on collector via CLI grdapi on cm (workaround for REST API bug)"
+        args:
+          cm_appliance: "cm"
+          collector_appliance: "coll1"
+          policy_name: "Default bootcamp policy"
+          install_action: "install_override"
+          debug: false
+
   gim_lab:
     name: "GIM Lab"
     description: "Install GIM on raptor, import GIM modules, and install STAP agent"

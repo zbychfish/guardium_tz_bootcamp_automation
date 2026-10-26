@@ -302,6 +302,61 @@ def install_policy_on_collector(
         logger.error(traceback.format_exc())
         return False
 
+def install_policy_on_collector_workaround(
+    config,
+    logger,
+    verbose: bool = True,
+    cm_appliance: str = "cm",
+    collector_appliance: str = "coll1",
+    policy_name: str = "Default bootcamp policy",
+    install_action: str = "install_override",
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "INSTALL POLICY ON COLLECTOR (WORKAROUND)")
+
+    appliance_loader = ApplianceConfigLoader(config_loader=config)
+    collector_config = appliance_loader.get_appliance(collector_appliance)
+    if not collector_config:
+        logger.error(f"✗ Collector '{collector_appliance}' not found")
+        return False
+    collector_hostname = collector_config.get('hostname') or f"{collector_appliance}.demo.guardium"
+
+    params = _get_appliance_connection_params(config, logger, cm_appliance)
+    if not params:
+        return False
+
+    client = ApplianceClient(
+        host=params['host'], user=params['user'], password=params['password'],
+        prompt_regex=params['prompt_regex'], initial_pattern=None,
+        timeout=120, strip_ansi=True, debug=debug
+    )
+    try:
+        if not client.connect():
+            logger.error(f"✗ Failed to connect to {cm_appliance}")
+            return False
+
+        cmd = f'grdapi policy_install policy="{policy_name}" install_action={install_action} api_target_host={collector_hostname}'
+        logger.info(f"➜ {cmd}")
+        result = client.execute_command(cmd, timeout=120)
+        if verbose:
+            logger.info(f"  output: {result}")
+
+        if 'ID=0' in result:
+            logger.info(f"✓ Policy '{policy_name}' installed on {collector_appliance}")
+            return True
+
+        logger.error(f"✗ Unexpected response: {result}")
+        return False
+
+    except Exception as e:
+        logger.error(f"✗ {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+    finally:
+        client.disconnect()
+
 def initial_collector_settings(
     config,
     logger,
