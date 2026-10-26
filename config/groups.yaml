@@ -373,15 +373,15 @@ groups:
           max_checks: 60  # Maximum number of checks before timeout (default: 60 = 1 hour with 60s interval)
           debug: false
       
-      # - name: install_policy_on_collector
-      #   function: install_policy_on_collector
-      #   module: tasks.setup_appliances
-      #   description: "Install policy on collector via REST API"
-      #   args:
-      #     cm_appliance: "cm"
-      #     collector_appliance: "coll1"
-      #     policy_name: "Default bootcamp policy"
-      #     debug: false
+      - name: install_policy_on_collector
+        function: install_policy_on_collector
+        module: tasks.setup_appliances
+        description: "Install policy on collector via REST API"
+        args:
+          cm_appliance: "cm"
+          collector_appliance: "coll1"
+          policy_name: "Default bootcamp policy"
+          debug: false
 
   gim_lab:
     name: "GIM Lab"
