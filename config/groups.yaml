@@ -363,14 +363,33 @@ groups:
           patches_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
           debug: false
 
-      - name: install_and_monitor_patches_all
-        function: install_and_monitor_patches_all
+      # - name: install_and_monitor_patches_all
+      #   function: install_and_monitor_patches_all
+      #   module: tasks.setup_appliances
+      #   description: "Install and monitor patches on ALL appliances in parallel"
+      #   args:
+      #     reinstall_answer: "y"
+      #     check_interval: 120
+      #     max_checks: 60
+      #     debug: false
+
+      - name: install_patches_all
+        function: install_patches_all
         module: tasks.setup_appliances
-        description: "Install and monitor patches on ALL appliances in parallel (max 20). Automatically gets patch order from CM if not specified."
+        description: "Initiate patch installation on ALL appliances in parallel (no monitoring)"
         args:
-          reinstall_answer: "y"  # Answer to reinstall question (default: "y")
-          check_interval: 120  # Seconds between status checks (default: 60)
-          max_checks: 60  # Maximum number of checks before timeout (default: 60 = 1 hour with 60s interval)
+          reinstall_answer: "y"
+          debug: false
+
+      - name: monitor_patches_all
+        function: monitor_patches_all
+        module: tasks.setup_appliances
+        description: "Monitor patch installation on ALL appliances in parallel"
+        args:
+          appear_interval: 30
+          appear_max: 20
+          check_interval: 120
+          max_checks: 60
           debug: false
       
       # - name: install_policy_on_collector

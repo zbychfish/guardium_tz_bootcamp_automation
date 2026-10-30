@@ -21,6 +21,8 @@ from core.appliance_operations import (
     get_patch_installation_order,
     install_and_monitor_patches,
     install_patch_on_appliance as core_install,
+    install_patch_on_appliance,
+    monitor_patch_installation,
     copy_single_file_to_appliance,
     prepare_log_guard_dir,
     accept_license_agreement,
@@ -906,6 +908,129 @@ def install_and_monitor_patches_all(
     )
 
     _log_summary(logger, "PATCH INSTALLATION SUMMARY", results, errors)
+    return all(results.values())
+
+
+def _resolve_patch_numbers(config, logger, cm_name, patch_selection, debug=False):
+    import os, glob as _glob, re as _re
+    patches_dir = "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
+    try:
+        sig_files = sorted(_glob.glob(os.path.join(patches_dir, "*.sig")))
+        available = {}
+        for i, f in enumerate(sig_files, 1):
+            m = _re.search(r'p(\d+)', os.path.basename(f))
+            if m:
+                available[i] = m.group(1)
+        patch_numbers = []
+        for pos_str in [p.strip() for p in patch_selection.split(',')]:
+            try:
+                pos = int(pos_str)
+                if pos in available:
+                    patch_numbers.append(available[pos])
+            except ValueError:
+                pass
+        if '7240' in patch_numbers and '240' not in patch_numbers:
+            logger.info("  ⚠ patch 7240 detected — adding prerequisite patch 240 to monitoring list")
+            patch_numbers.append('240')
+        return patch_numbers or None
+    except Exception as e:
+        logger.warning(f"could not resolve patch numbers: {e} — monitoring all")
+        return None
+
+
+def install_patches_all(
+    config,
+    logger,
+    verbose: bool = True,
+    reinstall_answer: str = "y",
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "INSTALL PATCHES ON ALL APPLIANCES (initiation only)")
+
+    all_appliances = _get_all_appliances(config, logger)
+    if not all_appliances:
+        return False
+
+    cm_appliances = {n: c for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm'}
+    if not cm_appliances:
+        logger.error("no Central Manager found in machines_info.json")
+        return False
+    cm_name = next(iter(cm_appliances))
+    patch_selection = get_patch_installation_order(config=config, logger=logger, appliance_name=cm_name, debug=debug)
+    if not patch_selection:
+        logger.error("failed to determine patch installation order from CM")
+        return False
+
+    appliance_names = list(all_appliances.keys())
+    logger.info(f"found {len(appliance_names)} appliances, initiating install...")
+
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=install_patch_on_appliance,
+        operation_name="install_patch_on_appliance",
+        logger=logger,
+        config=config,
+        patch_selection=patch_selection,
+        reinstall_answer=reinstall_answer,
+        debug=debug
+    )
+
+    _log_summary(logger, "PATCH INITIATION SUMMARY", results, errors)
+    return all(results.values())
+
+
+def monitor_patches_all(
+    config,
+    logger,
+    verbose: bool = True,
+    check_interval: int = None,
+    max_checks: int = None,
+    appear_interval: int = None,
+    appear_max: int = None,
+    debug: bool = False,
+    **kwargs) -> bool:
+
+    _header(logger, "MONITOR PATCHES ON ALL APPLIANCES")
+
+    if check_interval is None or max_checks is None:
+        logger.error("✗ check_interval and max_checks must be set in groups.yaml args")
+        return False
+
+    all_appliances = _get_all_appliances(config, logger)
+    if not all_appliances:
+        return False
+
+    cm_appliances = {n: c for n, c in all_appliances.items() if c.get('type', '').lower() == 'cm'}
+    if not cm_appliances:
+        logger.error("no Central Manager found in machines_info.json")
+        return False
+    cm_name = next(iter(cm_appliances))
+    patch_selection = get_patch_installation_order(config=config, logger=logger, appliance_name=cm_name, debug=debug)
+    if not patch_selection:
+        logger.error("failed to determine patch installation order from CM")
+        return False
+
+    patch_numbers = _resolve_patch_numbers(config, logger, cm_name, patch_selection, debug)
+
+    appliance_names = list(all_appliances.keys())
+    logger.info(f"found {len(appliance_names)} appliances, monitoring patches: {patch_numbers}...")
+
+    results, errors = execute_on_appliances_async(
+        appliances=appliance_names,
+        operation_func=monitor_patch_installation,
+        operation_name="monitor_patch_installation",
+        logger=logger,
+        config=config,
+        patch_numbers=patch_numbers,
+        check_interval=check_interval,
+        max_checks=max_checks,
+        appear_interval=appear_interval or 0,
+        appear_max=appear_max or 0,
+        debug=debug
+    )
+
+    _log_summary(logger, "PATCH MONITORING SUMMARY", results, errors)
     return all(results.values())
 
 def prepare_appliance_for_patching_single(
