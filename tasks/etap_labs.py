@@ -263,12 +263,12 @@ def setup_raptor_to_deploy_etap(
                 logger.debug(f"tags: {etap_versions.get('Tags', [])}")
             latest = {}
             for tag in etap_versions.get("Tags", []):
-                match = re.match(r"^v(\d+\.\d+\.\d+)", tag)
+                match = re.match(r"^v(\d+\.\d+\.\d+(?:\.\d+)?)", tag)
                 if not match:
                     continue
                 version_str = match.group(1)
-                major, minor, _ = version_str.split(".")
-                key = f"{major}.{minor}"
+                parts = version_str.split(".")
+                key = f"{parts[0]}.{parts[1]}"
                 try:
                     v = Version(version_str)
                     if key not in latest or v > latest[key]:
