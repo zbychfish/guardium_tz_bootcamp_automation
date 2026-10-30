@@ -651,8 +651,8 @@ groups:
   winstap_lab:
     name: "WinSTAP Lab"
     description: "Windows STAP lab - prepare ceratops for GIM/STAP installation"
-    deployed_with: [standard_demo]
-    dependencies: [va_basics]
+    deployed_with: [standard_demo_no]
+    dependencies: []
     stages:
       - name: extract_zip_on_ceratops
         function: extract_zip_on_ceratops
@@ -683,7 +683,7 @@ groups:
   fam_lab:
     name: "FAM Lab"
     description: "File Activity Monitoring lab - configure FAM on raptor"
-    deployed_with: []
+    deployed_with: [standard_demo_no]
     dependencies: [winstap_lab]
     stages:
       - name: configure_fam_on_raptor
@@ -735,7 +735,7 @@ groups:
     name: "Oracle Lab"
     description: "Oracle lab content before UC 2.0"
     deployed_with: [standard_demo]
-    dependencies: [winstap_lab]
+    dependencies: [etap_lab]
     stages:
       - name: install_stap_on_sauropod
         function: install_stap_on_sauropod
@@ -744,9 +744,9 @@ groups:
         args:
           appliance_name: "cm"
           collector_name: "coll1"
-          gim_installer_filename: "guard-bundle-GIM-12.2.2.0_r123489_v12_x_1-rhel-8-linux-x86_64.gim.sh"
+          gim_installer_filename: "guard-bundle-GIM-12.x.p103_r125006_main_1-rhel-8-linux-x86_64.gim.sh"
           module: "BUNDLE-STAP"
-          module_version: "12.2.2.0_r123489_11"
+          module_version: "12.x.p103_r125006_1"
           debug: false
 
       - name: enable_atap_for_oracle
