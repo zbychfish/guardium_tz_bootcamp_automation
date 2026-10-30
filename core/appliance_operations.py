@@ -1600,7 +1600,7 @@ def monitor_patch_installation(
                     in_progress += 1
                     continue
                 sl = patch_status[patch_num]
-                if "DONE: Patch installation Succeeded" in sl:
+                if "DONE: Patch installation Succeeded" in sl or "DONE: Installation Successful" in sl:
                     done_patches.append(patch_num)
                 elif patch_num == "9997" and "WARNING:" in sl:
                     done_patches.append(patch_num)
