@@ -905,6 +905,20 @@ groups:
         args:
           debug: false
 
+      - name: update_tuple_for_policy
+        function: update_tuple_for_policy
+        module: tasks.general_labs
+        description: "Add tuple member to 'Postgres application profiles' group, then reinstall policy on coll1"
+        args:
+          cm_appliance: "cm"
+          group_desc: "Postgres application profiles"
+          tuple_parameter2: "POSTGRESQL CLIENT PROGRAM"
+          tuple_parameter3: "APPUSER%"
+          tuple_parameter5: "%"
+          reinstall_policy_name: "Application data access control"
+          reinstall_target_host: "coll1.demo.guardium"
+          debug: false
+
   va_api:
     name: "VA API"
     description: "Import VA dashboard and Oracle security assessment definitions"

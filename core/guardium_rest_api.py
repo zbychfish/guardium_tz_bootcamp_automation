@@ -563,6 +563,26 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def reinstall_policy(self, policy: str, api_target_host: Optional[str] = None) -> dict:
+        url = f'{self.base_url}/restAPI/reinstall_policy'
+        data: dict = {'policy': policy}
+        if api_target_host:
+            data['api_target_host'] = api_target_host
+        response = requests.post(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
+    def create_tuple_group_member(self, desc: str, **tuple_params) -> dict:
+        url = f'{self.base_url}/restAPI/tuple_group_member'
+        data = {'desc': desc}
+        for i in range(1, 11):
+            key = f'tupleParameter{i}'
+            if key in tuple_params and tuple_params[key] is not None:
+                data[key] = tuple_params[key]
+        response = requests.post(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json()
+
     def patch_install(
         self,
         patch_number: int,

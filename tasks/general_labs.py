@@ -182,6 +182,52 @@ def add_postgres_app_profile_member(config, logger, verbose=True,
     logger.info(f"✓ Member added to group '{group_desc}'")
     return True
 
+def update_tuple_for_policy(config, logger, verbose=True,
+                            cm_appliance="cm",
+                            group_desc="Postgres application profiles",
+                            tuple_parameter2="POSTGRESQL CLIENT PROGRAM",
+                            tuple_parameter3="APPUSER%",
+                            tuple_parameter5="%",
+                            reinstall_policy_name="Application data access control",
+                            reinstall_target_host="coll1.demo.guardium",
+                            debug=False, **kwargs):
+
+    _header(logger, "UPDATE TUPLE FOR POLICY")
+
+    raptor_ip = config.get_machine_ip('raptor', use_private=True)
+    if not raptor_ip:
+        logger.error("✗ Raptor IP not found in machines config")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("✗ pwd not found in custom_variables")
+        return False
+
+    api = create_guardium_api(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    logger.info(f"➜ create_tuple_group_member desc='{group_desc}' tupleParameter1={raptor_ip} tupleParameter2={tuple_parameter2} tupleParameter3={tuple_parameter3} tupleParameter4={raptor_ip} tupleParameter5={tuple_parameter5}")
+    result = api.create_tuple_group_member(
+        desc=group_desc,
+        tupleParameter1=raptor_ip,
+        tupleParameter2=tuple_parameter2,
+        tupleParameter3=tuple_parameter3,
+        tupleParameter4=raptor_ip,
+        tupleParameter5=tuple_parameter5,
+    )
+    if debug:
+        logger.info(f"  API response: {result}")
+    logger.info(f"✓ Tuple member added to group '{group_desc}'")
+
+    logger.info(f"➜ reinstall_policy policy='{reinstall_policy_name}' api_target_host={reinstall_target_host}")
+    result = api.reinstall_policy(policy=reinstall_policy_name, api_target_host=reinstall_target_host)
+    if debug:
+        logger.info(f"  API response: {result}")
+    logger.info(f"✓ Policy '{reinstall_policy_name}' reinstalled on {reinstall_target_host}")
+    return True
+
+
 def install_app_data_access_policy(config, logger, verbose=True,
                                    cm_appliance="cm", collector_appliance="coll1",
                                    policy_name="Application data access control",
