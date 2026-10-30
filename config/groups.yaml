@@ -363,16 +363,6 @@ groups:
           patches_source_dir: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/"
           debug: false
 
-      # - name: install_and_monitor_patches_all
-      #   function: install_and_monitor_patches_all
-      #   module: tasks.setup_appliances
-      #   description: "Install and monitor patches on ALL appliances in parallel"
-      #   args:
-      #     reinstall_answer: "y"
-      #     check_interval: 120
-      #     max_checks: 60
-      #     debug: false
-
       - name: install_patches_all
         function: install_patches_all
         module: tasks.setup_appliances
@@ -411,6 +401,8 @@ groups:
           collector_appliance: "coll1"
           policy_name: "Default bootcamp policy"
           install_action: "install_override"
+          retry_count: 5
+          retry_interval: 60
           debug: false
 
   gim_lab:
