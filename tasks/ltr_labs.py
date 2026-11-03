@@ -290,10 +290,15 @@ def enable_ltr_on_appnode(
     logger,
     verbose: bool = False,
     appliance_name: str = None,
+    service_start_attempts: int = None,
     debug: bool = False,
     **kwargs) -> bool:
 
     if not _require(logger, appliance_name=appliance_name):
+        return False
+
+    if service_start_attempts is None:
+        logger.error("service_start_attempts must be set in groups.yaml args")
         return False
 
     _header(logger, f"ENABLE LTR ON APPNODE: {appliance_name}")
@@ -302,14 +307,20 @@ def enable_ltr_on_appnode(
     if not params:
         return False
 
-    try:
-        client = ApplianceClient(
+    def _new_client():
+        c = ApplianceClient(
             host=params['host'], user=params['user'], password=params['password'],
             prompt_regex=params['prompt_regex'],
             initial_pattern=None, timeout=300, strip_ansi=True, debug=debug,
         )
-        if not client.connect():
+        if not c.connect():
             logger.error(f"Failed to connect to {appliance_name}")
+            return None
+        return c
+
+    try:
+        client = _new_client()
+        if not client:
             return False
 
         steps = [
@@ -325,8 +336,27 @@ def enable_ltr_on_appnode(
                     return False
                 logger.info(f"✓ {desc}")
 
-            logger.info("➜ store datalake service start")
-            client.execute_command("store datalake service start", timeout=300)
+            started = False
+            for start_attempt in range(1, service_start_attempts + 1):
+                logger.info(f"➜ store datalake service start (attempt {start_attempt}/{service_start_attempts})")
+                try:
+                    start_out = client.execute_command("store datalake service start", timeout=300)
+                    if "Broken pipe" in start_out or "client_loop" in start_out:
+                        raise ConnectionError(start_out.strip())
+                    started = True
+                    break
+                except Exception as e:
+                    logger.warning(f"⚠ service start interrupted: {e}")
+                    try:
+                        client.disconnect()
+                    except Exception:
+                        pass
+                    client = _new_client()
+                    if not client:
+                        return False
+            if not started:
+                logger.error(f"✗ store datalake service start failed after {service_start_attempts} attempts")
+                return False
 
             for attempt in range(1, 11):
                 logger.info(f"➜ show datalake status (attempt {attempt}/10)")
