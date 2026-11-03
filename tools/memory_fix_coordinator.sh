@@ -120,7 +120,7 @@ if [ -z "$PASSWORD" ]; then
     exit 1
 fi
 
-SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
+SSH_OPTS=(-p 22 -o ConnectTimeout=30 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
           -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive)
 REMOTE_SCRIPT="$(declare -f apply_fix); apply_fix '${APP_ID}' '${XM_SIZE}' '${QUERY_MAX_MEMORY_PER_NODE}'"
 
