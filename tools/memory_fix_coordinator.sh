@@ -30,7 +30,7 @@ done
 apply_fix() {
     local app_id="$1" xm_size="$2" max_mem="$3"
     local coordinator_dir="/var/IBM/Guardium/applications/${app_id}/runtime/coordinator"
-    local jvm_config="${coordinator_dir}/jvm.config-server"
+    local jvm_config="${coordinator_dir}/jvm.config"
     local config_properties="${coordinator_dir}/config.properties"
     local sudo_cmd="sudo"
     [ "$(id -u)" -eq 0 ] && sudo_cmd=""
