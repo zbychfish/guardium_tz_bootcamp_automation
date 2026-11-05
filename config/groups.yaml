@@ -659,7 +659,7 @@ groups:
         module: tasks.windows_labs
         description: "Extract GIM-Installer zip on ceratops to C:\\bootcamp"
         args:
-          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.x.p101_r120203346_1.zip'
+          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.x.p102_r120204351_1.zip'
           dest_dir: 'C:\bootcamp\gim_unpacked'
           debug: false
 
@@ -677,7 +677,7 @@ groups:
         module: tasks.windows_labs
         description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
         args:
-          module_version: "12.2_r120202259_1"
+          module_version: "12.x.p102_r120204351_1"
           debug: false
 
   fam_lab:
