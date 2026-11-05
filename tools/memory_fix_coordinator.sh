@@ -11,8 +11,8 @@ MACHINES_INFO="/root/machines_info.json"
 APPLIANCE="appnode1"
 HOST=""
 APP_ID="b567fe34-ae50-4ffe-9d05-4b5319997309"
-XM_SIZE="28G"
-QUERY_MAX_MEMORY_PER_NODE="26GB"
+XM_SIZE="25G"
+QUERY_MAX_MEMORY_PER_NODE="16GB"
 LOCAL=0
 
 while [ $# -gt 0 ]; do

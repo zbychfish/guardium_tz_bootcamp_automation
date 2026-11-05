@@ -659,7 +659,7 @@ groups:
         module: tasks.windows_labs
         description: "Extract GIM-Installer zip on ceratops to C:\\bootcamp"
         args:
-          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.2_r120202259_1.zip'
+          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.x.p101_r120203346_1.zip'
           dest_dir: 'C:\bootcamp\gim_unpacked'
           debug: false
 
