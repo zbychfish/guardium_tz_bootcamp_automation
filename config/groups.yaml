@@ -1093,19 +1093,33 @@ groups:
       #     purge_age_period: 365
       #     debug: false
 
-      - name: register_edge_gateway
-        function: register_edge_gateway
+      # - name: register_edge_gateway
+      #   function: register_edge_gateway
+      #   module: tasks.edge_labs
+      #   description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge - POPRAWIC purge_age"
+      #   args:
+      #     cm_appliance: "cm"
+      #     exports_to: "cm.demo.guardium"
+      #     name: "sauropod"
+      #     namespace: "edge"
+      #     storageclass_rw_once: "local-path"
+      #     version: "v2.3.1"
+      #     deploy_proxy: true
+      #     purge_age: 120
+      #     debug: true
+
+      - name: register_edge_gateway_v2
+        function: register_edge_gateway_v2
         module: tasks.edge_labs
-        description: "Register Edge gateway on CM via REST API POST /restAPI/register_edge - POPRAWIC purge_age"
+        description: "Register Edge gateway on CM via REST API v2 POST /restAPI/v2/edge"
         args:
           cm_appliance: "cm"
-          exports_to: "cm.demo.guardium"
-          name: "sauropod"
+          edge_name: "sauropod"
+          exports_to: ["cm.demo.guardium"]
           namespace: "edge"
-          storageclass_rw_once: "local-path"
           version: "v2.3.1"
-          deploy_proxy: true
-          purge_age: 120
+          sw_rw_once: "local-path"
+          ingress_option: "TRAEFIK"
           debug: true
 
       - name: download_edge_bundle_via_api

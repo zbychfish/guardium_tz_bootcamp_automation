@@ -13,6 +13,7 @@ from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
 from core.appliance_operations import _get_appliance_connection_params
 from core.guardium_rest_api import create_guardium_api, import_definitions_files
+from core.guardium_rest_api_v2 import create_guardium_api_v2
 from core.logger import get_logger
 from core.ssh_client import SSHClient
 from core.utils import ssh_dnf_install
@@ -218,6 +219,70 @@ def register_edge_gateway(config, logger, verbose=True,
         return False
 
     logger.info("✓ Edge gateway registered successfully on CM")
+    return True
+
+def register_edge_gateway_v2(config, logger, verbose=True,
+                             cm_appliance=None,
+                             edge_name=None,
+                             exports_to=None,
+                             namespace=None,
+                             version=None,
+                             sw_rw_once=None,
+                             cpu_limit=None,
+                             mem_limit=None,
+                             storage_limit=None,
+                             ingress_option=None,
+                             backup_exports=None,
+                             external_registry_name=None,
+                             worker_nodes=None,
+                             export_group_name=None,
+                             default_export=None,
+                             debug=False, **kwargs):
+
+    _header(logger, "REGISTER EDGE GATEWAY ON CM (API v2)")
+
+    if not cm_appliance or not edge_name:
+        logger.error("✗ cm_appliance and edge_name must be set in groups.yaml args")
+        return False
+
+    logger.info(f"  edge_name={edge_name}, namespace={namespace}, exports_to={exports_to}")
+    logger.info(f"  sw_rw_once={sw_rw_once}, version={version}, ingress_option={ingress_option}")
+
+    pwd = config.get_custom_variable('pwd')
+    if not pwd:
+        logger.error("pwd not found in custom_variables")
+        return False
+
+    api = create_guardium_api_v2(config, logger, cm_appliance)
+    api.get_token(username='demo', password=pwd)
+
+    try:
+        result = api.register_edge(
+            edge_name=edge_name,
+            exports_to=exports_to,
+            namespace=namespace,
+            version=version,
+            sw_rw_once=sw_rw_once,
+            cpu_limit=cpu_limit,
+            mem_limit=mem_limit,
+            storage_limit=storage_limit,
+            ingress_option=ingress_option,
+            backup_exports=backup_exports,
+            external_registry_name=external_registry_name,
+            worker_nodes=worker_nodes,
+            export_group_name=export_group_name,
+            default_export=default_export,
+        )
+    except Exception as e:
+        logger.error(f"✗ register_edge (v2) API call failed: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+
+    if verbose:
+        logger.info(f"  API response: {result}")
+
+    logger.info("✓ Edge gateway registered successfully on CM (API v2)")
     return True
 
 def install_k3s_on_sauropod(config, logger, verbose=True,
