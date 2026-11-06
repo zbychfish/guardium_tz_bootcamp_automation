@@ -369,6 +369,7 @@ groups:
         description: "Initiate patch installation on ALL appliances in parallel (no monitoring)"
         args:
           reinstall_answer: "y"
+          patch_order_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt"
           debug: false
 
       - name: monitor_patches_all
@@ -376,6 +377,7 @@ groups:
         module: tasks.setup_appliances
         description: "Monitor patch installation on ALL appliances in parallel"
         args:
+          patch_order_file: "/opt/guardium_tz_bootcamp_automation/upload/source_files/appliances/patches/patch_order.txt"
           appear_interval: 30
           appear_max: 20
           check_interval: 120

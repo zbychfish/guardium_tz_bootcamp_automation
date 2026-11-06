@@ -1349,6 +1349,45 @@ def get_patch_installation_order(
     logger.info(f"✓ patch order: {patch_selection}")
     return patch_selection
 
+def get_patch_order_numbers(
+    logger,
+    patch_order_file: Optional[str] = None) -> Optional[List[str]]:
+
+    import os
+
+    if not patch_order_file:
+        logger.error("patch_order_file must be set in groups.yaml args")
+        return None
+
+    if not os.path.exists(patch_order_file):
+        logger.error(f"patch order file not found: {patch_order_file}")
+        return None
+
+    numbers = []
+    with open(patch_order_file, 'r') as f:
+        for line in f:
+            m = re.search(r'p(\d+)', line.strip())
+            if m:
+                numbers.append(m.group(1))
+
+    if not numbers:
+        logger.error(f"no patch numbers found in {patch_order_file}")
+        return None
+
+    logger.info(f"✓ patch order (by patch number): {', '.join(numbers)}")
+    return numbers
+
+def _map_patch_menu(menu_text: str) -> Dict[str, str]:
+    mapping = {}
+    for line in menu_text.split('\n'):
+        m = re.match(r'^\s*(\d+)\s*[\.\)\:\-]?\s+(.*)$', line)
+        if not m:
+            continue
+        p = re.search(r'p(\d+)', m.group(2))
+        if p:
+            mapping[p.group(1)] = m.group(1)
+    return mapping
+
 def install_patch_on_appliance(
     config,
     logger,
@@ -1357,12 +1396,13 @@ def install_patch_on_appliance(
     reinstall_answer: str = "y",
     user: Optional[str] = None,
     password: Optional[str] = None,
-    debug: bool = False,) -> bool:
+    debug: bool = False,
+    patch_numbers: Optional[List[str]] = None,) -> bool:
     
     import socket
 
-    if not patch_selection:
-        logger.error("patch_selection is required")
+    if not patch_selection and not patch_numbers:
+        logger.error("patch_selection or patch_numbers is required")
         return False
 
     params = _get_appliance_connection_params(config, logger, appliance_name, user, password)
@@ -1428,6 +1468,17 @@ def install_patch_on_appliance(
                                         logger.debug(f"[{appliance_name}] recv: {ansi_escape.sub('', extra)}")
                             except:
                                 pass
+                            if patch_numbers:
+                                menu_map = _map_patch_menu(ansi_escape.sub('', buf))
+                                logger.info(f"[{appliance_name}] patch menu mapping (patch -> list number): {menu_map}")
+                                missing = [p for p in patch_numbers if p not in menu_map]
+                                if missing:
+                                    logger.error(f"[{appliance_name}] ✗ patches not found in install menu: {', '.join(missing)}\n{ansi_escape.sub('', buf)}")
+                                    channel.send(("q\r").encode())
+                                    time.sleep(1)
+                                    client.disconnect()
+                                    return False
+                                patch_selection = ",".join(menu_map[p] for p in patch_numbers)
                             logger.info(f"[{appliance_name}] ➜ patch selection: {patch_selection}")
                             channel.send((patch_selection + "\r").encode())
                             patch_selected = True
@@ -1464,6 +1515,7 @@ def install_patch_on_appliance(
                         except:
                             pass
                         client.disconnect()
+                        logger.info(f"[{appliance_name}] install command output:\n{buf_clean}")
                         logger.info(f"[{appliance_name}] ✓ patch install command completed")
                         time.sleep(10)
                         return monitor_patch_installation(
@@ -1594,10 +1646,12 @@ def monitor_patch_installation(
             done_patches = []
             fail_patches = []
             in_progress = 0
+            not_listed = []
 
             for patch_num in patch_numbers_to_check:
                 if patch_num not in patch_status:
                     in_progress += 1
+                    not_listed.append(patch_num)
                     continue
                 sl = patch_status[patch_num]
                 if "DONE: Patch installation Succeeded" in sl or "DONE: Installation Successful" in sl:
@@ -1610,7 +1664,8 @@ def monitor_patch_installation(
                     in_progress += 1
 
             done_str = ", ".join(done_patches) if done_patches else "—"
-            logger.info(f"[{appliance_name}]: done={done_str} | in_progress={in_progress} | failed={len(fail_patches)}")
+            not_listed_str = f" | not_listed={', '.join(not_listed)}" if not_listed else ""
+            logger.info(f"[{appliance_name}]: done={done_str} | in_progress={in_progress} | failed={len(fail_patches)}{not_listed_str}")
 
             if fail_patches:
                 logger.error(f"[{appliance_name}] ✗ failed patches: {', '.join(fail_patches)}")
