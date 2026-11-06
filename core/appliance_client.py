@@ -1009,7 +1009,8 @@ class ApplianceClient:
         command: str = "restart system",
         confirmation_pattern: str = r"Are you sure you want to restart the system\s*\(y/n\)\?",
         busy_pattern: str = r"MYSQL is busy updating the database",
-        confirm_idle: float = 0.2
+        confirm_idle: float = 0.2,
+        force: bool = False
     ) -> str:
         """
         Execute system restart with condition - checks if MySQL is busy.
@@ -1058,7 +1059,7 @@ class ApplianceClient:
                 
                 buf_for_match = strip_ansi(buf) if self.strip_ansi_flag else buf
                 
-                if busy_re.search(buf_for_match):
+                if busy_re.search(buf_for_match) and not force:
                     if self.debug:
                         self._log.debug("MySQL busy detected, sending 'n'")
                     self.channel.send(b"n\r")
@@ -1073,7 +1074,7 @@ class ApplianceClient:
                     return "Restart rejected - MySQL is busy updating the database"
                 else:
                     if self.debug:
-                        self._log.debug("No busy detected, sending 'y' - system will restart")
+                        self._log.debug("Sending 'y' - system will restart" + (" (forced)" if force else ""))
                     self.channel.send(b"y\r")
                     confirmed = True
                     time.sleep(0.5)

@@ -168,11 +168,14 @@ def restart_appliance(
                 logger.error(f"[{appliance_name}] failed to connect")
                 return False
 
-            if mysql_attempt > 1:
+            force_restart = mysql_attempt == mysql_busy_retries
+            if force_restart:
+                logger.warning(f"[{appliance_name}] ➜ restart system (attempt {mysql_attempt}/{mysql_busy_retries}) - answering 'y' even if MySQL is busy")
+            elif mysql_attempt > 1:
                 logger.info(f"[{appliance_name}] ➜ restart system (attempt {mysql_attempt}/{mysql_busy_retries})")
             else:
                 logger.info(f"[{appliance_name}] ➜ restart system")
-            result = client.execute_restart_with_check()
+            result = client.execute_restart_with_check(force=force_restart)
             client.disconnect()
 
             if "System is restarting" in result:

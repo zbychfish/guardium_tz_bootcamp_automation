@@ -586,6 +586,38 @@ groups:
         args:
           debug: false
 
+  winstap_lab:
+    name: "WinSTAP Lab"
+    description: "Windows STAP lab - prepare ceratops for GIM/STAP installation"
+    deployed_with: [agents]
+    dependencies: [etap_lab]
+    stages:
+      - name: extract_zip_on_ceratops
+        function: extract_zip_on_ceratops
+        module: tasks.windows_labs
+        description: "Extract GIM-Installer zip on ceratops to C:\\bootcamp"
+        args:
+          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.x.p102_r120204351_1.zip'
+          dest_dir: 'C:\bootcamp\gim_unpacked'
+          debug: false
+
+      - name: install_gim_on_ceratops
+        function: install_gim_on_ceratops
+        module: tasks.windows_labs
+        description: "Run Setup.exe unattended to install GIM client on ceratops"
+        args:
+          setup_exe: 'C:\bootcamp\gim_unpacked\Setup.exe'
+          appliance: "cm.demo.guardium"
+          debug: false
+
+      - name: install_winstap_on_ceratops
+        function: install_winstap_on_ceratops
+        module: tasks.windows_labs
+        description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
+        args:
+          module_version: "12.x.p102_r120204351_1"
+          debug: false
+
   va_basics:
     name: "VA Basics Lab"
     description: "Enable Vulnerability Assessment feature and basic VA lab setup"
@@ -648,38 +680,6 @@ groups:
           config_file: "/opt/vascanner/config"
           certs_dir: "/root/gn-trainings/vascanner/certs"
           va_agent_name: "VA_SCANNER_ON_SAUROPOD"
-          debug: false
-
-  winstap_lab:
-    name: "WinSTAP Lab"
-    description: "Windows STAP lab - prepare ceratops for GIM/STAP installation"
-    deployed_with: [standard_demo_no]
-    dependencies: []
-    stages:
-      - name: extract_zip_on_ceratops
-        function: extract_zip_on_ceratops
-        module: tasks.windows_labs
-        description: "Extract GIM-Installer zip on ceratops to C:\\bootcamp"
-        args:
-          zip_path: 'C:\bootcamp\zip\GIM-Installer-12.x.p102_r120204351_1.zip'
-          dest_dir: 'C:\bootcamp\gim_unpacked'
-          debug: false
-
-      - name: install_gim_on_ceratops
-        function: install_gim_on_ceratops
-        module: tasks.windows_labs
-        description: "Run Setup.exe unattended to install GIM client on ceratops"
-        args:
-          setup_exe: 'C:\bootcamp\gim_unpacked\Setup.exe'
-          appliance: "cm.demo.guardium"
-          debug: false
-
-      - name: install_winstap_on_ceratops
-        function: install_winstap_on_ceratops
-        module: tasks.windows_labs
-        description: "Install WINSTAP module on ceratops via GIM API with WINSTAP_SQLGUARD_IP=coll1"
-        args:
-          module_version: "12.x.p102_r120204351_1"
           debug: false
 
   fam_lab:
