@@ -2,7 +2,8 @@
 # Run on raptor. Logs in to the appliance as cloudsupport and changes the coordinator memory settings via sudo (root).
 # Host and cloudsupport password are read from /root/machines_info.json (private_ip of appnode1, custom_variables.cloudsupport_pwd).
 #
-# Usage: ./memory_fix_coordinator.sh [--host IP] [--appliance NAME] [--app-id ID] [--xm SIZE] [--max-memory-per-node SIZE] [--local]
+# Usage: ./memory_fix_coordinator.sh [--host IP] [--appliance NAME] [--xm SIZE] [--max-memory-per-node SIZE] [--local]
+# The application directory under /var/IBM/Guardium/applications is detected on the appliance (exactly one directory is expected).
 #   --local  skip SSH and apply the change on the machine where the script runs (must be the appliance itself)
 
 set -u
@@ -10,7 +11,6 @@ set -u
 MACHINES_INFO="/root/machines_info.json"
 APPLIANCE="appnode1"
 HOST=""
-APP_ID="b567fe34-ae50-4ffe-9d05-4b5319997309"
 XM_SIZE="25G"
 QUERY_MAX_MEMORY_PER_NODE="16GB"
 LOCAL=0
@@ -19,7 +19,6 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --host) HOST="$2"; shift 2 ;;
         --appliance) APPLIANCE="$2"; shift 2 ;;
-        --app-id) APP_ID="$2"; shift 2 ;;
         --xm) XM_SIZE="$2"; shift 2 ;;
         --max-memory-per-node) QUERY_MAX_MEMORY_PER_NODE="$2"; shift 2 ;;
         --local) LOCAL=1; shift ;;
@@ -28,14 +27,25 @@ while [ $# -gt 0 ]; do
 done
 
 apply_fix() {
-    local app_id="$1" xm_size="$2" max_mem="$3"
-    local coordinator_dir="/var/IBM/Guardium/applications/${app_id}/runtime/coordinator"
-    local jvm_config="${coordinator_dir}/jvm.config"
-    local config_properties="${coordinator_dir}/config.properties"
+    local xm_size="$1" max_mem="$2"
+    local apps_dir="/var/IBM/Guardium/applications"
     local sudo_cmd="sudo"
     [ "$(id -u)" -eq 0 ] && sudo_cmd=""
 
     echo "Host: $(hostname)"
+
+    local app_dirs app_count
+    app_dirs="$($sudo_cmd find "$apps_dir" -mindepth 1 -maxdepth 1 -type d)"
+    app_count="$(printf '%s\n' "$app_dirs" | grep -c .)"
+    if [ "$app_count" -ne 1 ]; then
+        echo "ERROR: expected exactly one directory in ${apps_dir}, found ${app_count}:" >&2
+        printf '%s\n' "$app_dirs" >&2
+        return 1
+    fi
+
+    local coordinator_dir="${app_dirs}/runtime/coordinator"
+    local jvm_config="${coordinator_dir}/jvm.config"
+    local config_properties="${coordinator_dir}/config.properties"
 
     local f
     for f in "$jvm_config" "$config_properties"; do
@@ -84,7 +94,7 @@ apply_fix() {
 }
 
 if [ "$LOCAL" -eq 1 ]; then
-    apply_fix "$APP_ID" "$XM_SIZE" "$QUERY_MAX_MEMORY_PER_NODE"
+    apply_fix "$XM_SIZE" "$QUERY_MAX_MEMORY_PER_NODE"
     exit $?
 fi
 
@@ -122,7 +132,7 @@ fi
 
 SSH_OPTS=(-p 22 -o ConnectTimeout=30 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
           -o PubkeyAuthentication=no -o PreferredAuthentications=password,keyboard-interactive)
-REMOTE_SCRIPT="$(declare -f apply_fix); apply_fix '${APP_ID}' '${XM_SIZE}' '${QUERY_MAX_MEMORY_PER_NODE}'"
+REMOTE_SCRIPT="$(declare -f apply_fix); apply_fix '${XM_SIZE}' '${QUERY_MAX_MEMORY_PER_NODE}'"
 
 echo "Connecting to ${APPLIANCE} (${HOST}) as cloudsupport"
 
