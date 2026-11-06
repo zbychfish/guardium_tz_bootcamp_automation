@@ -262,7 +262,7 @@ def install_k3s_on_sauropod(config, logger, verbose=True,
 
         install_cmd = (
             f"curl -sfL https://get.k3s.io | "
-            f"INSTALL_K3S_VERSION={k3s_version} sh -s - --disable traefik"
+            f"INSTALL_K3S_VERSION={k3s_version} sh -s -"
         )
         logger.info(f"➜ Installing k3s {k3s_version}...")
         result = ssh.execute_command(install_cmd, timeout=300, print_output=verbose)
