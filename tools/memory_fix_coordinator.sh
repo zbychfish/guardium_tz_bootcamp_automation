@@ -35,7 +35,7 @@ apply_fix() {
     echo "Host: $(hostname)"
 
     local app_dirs app_count
-    app_dirs="$($sudo_cmd find "$apps_dir" -mindepth 1 -maxdepth 1 -type d)"
+    app_dirs="$($sudo_cmd find "$apps_dir" -mindepth 1 -maxdepth 1 -type d -not -name '.*')"
     app_count="$(printf '%s\n' "$app_dirs" | grep -c .)"
     if [ "$app_count" -ne 1 ]; then
         echo "ERROR: expected exactly one directory in ${apps_dir}, found ${app_count}:" >&2
