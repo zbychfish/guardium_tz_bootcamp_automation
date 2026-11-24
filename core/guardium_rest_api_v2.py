@@ -61,6 +61,12 @@ class GuardiumRestAPIv2:
         response.raise_for_status()
         return response.json() if response.content else {}
 
+    def get_edge_ports(self) -> dict:
+        url = f'{self.base_url}/edge/ports'
+        response = requests.get(url, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json() if response.content else {}
+
 
 def create_guardium_api_v2(config, logger, appliance_name: str) -> GuardiumRestAPIv2:
     return GuardiumRestAPIv2(create_guardium_api(config, logger, appliance_name), logger=logger)

@@ -7,6 +7,7 @@ import tempfile
 import time
 import traceback
 
+import requests
 import paramiko
 
 from core.appliance_client import ApplianceClient
@@ -797,100 +798,122 @@ def configure_stap_for_edge_on_ceratops(config, logger, verbose=True,
                                         cm_appliance="cm",
                                         installation_delay=None,
                                         debug=False, **kwargs):
-    _header(logger, "CONFIGURE WINSTAP FOR EDGE ON CERATOPS")
+    _header(logger, "GET EDGE PORTS (API v2)")
 
-    ceratops_ip = config.get_machine_ip('ceratops', use_private=True)
-    if not ceratops_ip:
-        logger.error("Ceratops IP not found in machines config")
-        return False
-
-    sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
-    if not sauropod_ip:
-        logger.error("Sauropod IP not found in machines config")
-        return False
-
-    ssh_config = config.get('ssh', {})
-    ssh_port = ssh_config.get('port', 2223)
-    ssh_username = ssh_config.get('username', 'root')
     pwd = config.get_custom_variable('pwd')
     if not pwd:
         logger.error("pwd not found in custom_variables")
         return False
 
-    ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
-                    port=ssh_port, timeout=30)
-
-    logger.info("➜ Getting haproxy NodePorts from sauropod...")
-    try:
-        if not ssh.connect():
-            logger.error("✗ Failed to connect to sauropod")
-            return False
-        result = ssh.execute_command(
-            "kubectl -n edge describe svc haproxy-kubernetes-ingress",
-            print_output=False
-        )
-        if result['rc'] != 0:
-            logger.error(f"✗ kubectl failed: {result['stderr']}")
-            return False
-        svc_output = result['stdout']
-    finally:
-        ssh.disconnect()
-
-    m9800 = re.search(r'NodePort:\s+port-9800\s+(\d+)/TCP', svc_output)
-    m9801 = re.search(r'NodePort:\s+port-9801\s+(\d+)/TCP', svc_output)
-    if not m9800:
-        logger.error("✗ NodePort for port-9800 not found in kubectl output")
-        return False
-    if not m9801:
-        logger.error("✗ NodePort for port-9801 not found in kubectl output")
-        return False
-    node_port_9800 = m9800.group(1)
-    node_port_9801 = m9801.group(1)
-    logger.info(f"  NodePort 9800 → {node_port_9800}")
-    logger.info(f"  NodePort 9801 → {node_port_9801}")
-
-    api = create_guardium_api(config, logger, cm_appliance)
+    api = create_guardium_api_v2(config, logger, cm_appliance)
     api.get_token(username='demo', password=pwd)
 
-    for param, value in [
-        ("WINSTAP_USING_EDGE",        "1"),
-        ("WINSTAP_SQLGUARD_IP",       sauropod_ip),
-        ("WINSTAP_SQLGUARD_PORT",     node_port_9800),
-        ("WINSTAP_SQLGUARD_TLS_PORT", node_port_9801),
-    ]:
-        logger.info(f"  Setting {param}={value} on ceratops ({ceratops_ip})")
-        api.gim_client_params(client_ip=ceratops_ip, param_name=param, param_value=value)
+    try:
+        result = api.get_edge_ports()
+        logger.info(f"Response from GET /restAPI/v2/edge/ports:")
+        logger.info(f"{result}")
+    except Exception as e:
+        logger.error(f"✗ GET /restAPI/v2/edge/ports API call failed: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
 
-    logger.info("➜ Scheduling GIM install on ceratops...")
-    api.gim_schedule_install(client_ip=ceratops_ip, date="now")
-    logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
-    time.sleep(installation_delay)
-
-    logger.info("➜ Monitoring installation progress...")
-    check_count = 0
-    while True:
-        check_count += 1
-        logger.info(f"  Check #{check_count}: Querying module status...")
-        modules = api.gim_list_client_modules(client_ip=ceratops_ip)
-
-        if "ErrorCode" in modules or "ErrorMessage" in modules:
-            logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
-            return False
-
-        entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
-        result_mods = []
-        for e in entries:
-            m_name = re.search(r"NAME:\s+([A-Z0-9\-]+)", e)
-            m_state = re.search(r"STATE:\s+([A-Z\-]+)", e)
-            result_mods.append({"name": m_name.group(1) if m_name else "?", "state": m_state.group(1) if m_state else "?"})
-        pending = [m for m in result_mods if m["state"] != "INSTALLED"]
-        if pending:
-            logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
-            logger.info("  Waiting 30s before next check...")
-            time.sleep(30)
-        else:
-            logger.info("  ✓ All modules installed successfully!")
-            break
-
-    logger.info("✓ WinSTAP configured for Edge on ceratops")
     return True
+
+    # _header(logger, "CONFIGURE WINSTAP FOR EDGE ON CERATOPS")
+    #
+    # ceratops_ip = config.get_machine_ip('ceratops', use_private=True)
+    # if not ceratops_ip:
+    #     logger.error("Ceratops IP not found in machines config")
+    #     return False
+    #
+    # sauropod_ip = config.get_machine_ip('sauropod', use_private=True)
+    # if not sauropod_ip:
+    #     logger.error("Sauropod IP not found in machines config")
+    #     return False
+    #
+    # ssh_config = config.get('ssh', {})
+    # ssh_port = ssh_config.get('port', 2223)
+    # ssh_username = ssh_config.get('username', 'root')
+    # pwd = config.get_custom_variable('pwd')
+    # if not pwd:
+    #     logger.error("pwd not found in custom_variables")
+    #     return False
+    #
+    # ssh = SSHClient(host=sauropod_ip, username=ssh_username, password=pwd,
+    #                 port=ssh_port, timeout=30)
+    #
+    # logger.info("➜ Getting haproxy NodePorts from sauropod...")
+    # try:
+    #     if not ssh.connect():
+    #         logger.error("✗ Failed to connect to sauropod")
+    #         return False
+    #     result = ssh.execute_command(
+    #         "kubectl -n edge describe svc haproxy-kubernetes-ingress",
+    #         print_output=False
+    #     )
+    #     if result['rc'] != 0:
+    #         logger.error(f"✗ kubectl failed: {result['stderr']}")
+    #         return False
+    #     svc_output = result['stdout']
+    # finally:
+    #     ssh.disconnect()
+    #
+    # m9800 = re.search(r'NodePort:\s+port-9800\s+(\d+)/TCP', svc_output)
+    # m9801 = re.search(r'NodePort:\s+port-9801\s+(\d+)/TCP', svc_output)
+    # if not m9800:
+    #     logger.error("✗ NodePort for port-9800 not found in kubectl output")
+    #     return False
+    # if not m9801:
+    #     logger.error("✗ NodePort for port-9801 not found in kubectl output")
+    #     return False
+    # node_port_9800 = m9800.group(1)
+    # node_port_9801 = m9801.group(1)
+    # logger.info(f"  NodePort 9800 → {node_port_9800}")
+    # logger.info(f"  NodePort 9801 → {node_port_9801}")
+    #
+    # api = create_guardium_api(config, logger, cm_appliance)
+    # api.get_token(username='demo', password=pwd)
+    #
+    # for param, value in [
+    #     ("WINSTAP_USING_EDGE",        "1"),
+    #     ("WINSTAP_SQLGUARD_IP",       sauropod_ip),
+    #     ("WINSTAP_SQLGUARD_PORT",     node_port_9800),
+    #     ("WINSTAP_SQLGUARD_TLS_PORT", node_port_9801),
+    # ]:
+    #     logger.info(f"  Setting {param}={value} on ceratops ({ceratops_ip})")
+    #     api.gim_client_params(client_ip=ceratops_ip, param_name=param, param_value=value)
+    #
+    # logger.info("➜ Scheduling GIM install on ceratops...")
+    # api.gim_schedule_install(client_ip=ceratops_ip, date="now")
+    # logger.info(f"✓ Scheduled. Waiting {installation_delay}s before monitoring...")
+    # time.sleep(installation_delay)
+    #
+    # logger.info("➜ Monitoring installation progress...")
+    # check_count = 0
+    # while True:
+    #     check_count += 1
+    #     logger.info(f"  Check #{check_count}: Querying module status...")
+    #     modules = api.gim_list_client_modules(client_ip=ceratops_ip)
+    #
+    #     if "ErrorCode" in modules or "ErrorMessage" in modules:
+    #         logger.error(f"  ✗ API Error: {modules.get('ErrorCode')} {modules.get('ErrorMessage')}")
+    #         return False
+    #
+    #     entries = [e.strip() for e in re.split(r"#+\s*ENTRY\s+\d+\s*#+", modules.get("Message", "")) if e.strip()]
+    #     result_mods = []
+    #     for e in entries:
+    #         m_name = re.search(r"NAME:\s+([A-Z0-9\-]+)", e)
+    #         m_state = re.search(r"STATE:\s+([A-Z\-]+)", e)
+    #         result_mods.append({"name": m_name.group(1) if m_name else "?", "state": m_state.group(1) if m_state else "?"})
+    #     pending = [m for m in result_mods if m["state"] != "INSTALLED"]
+    #     if pending:
+    #         logger.info(f"  ⌛ {len(pending)} module(s) still installing: {[m['name'] for m in pending]}")
+    #         logger.info("  Waiting 30s before next check...")
+    #         time.sleep(30)
+    #     else:
+    #         logger.info("  ✓ All modules installed successfully!")
+    #         break
+    #
+    # logger.info("✓ WinSTAP configured for Edge on ceratops")
+    # return True
