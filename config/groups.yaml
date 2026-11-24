@@ -1187,7 +1187,7 @@ groups:
       - name: configure_stap_for_edge_on_ceratops
         function: configure_stap_for_edge_on_ceratops
         module: tasks.edge_labs
-        description: "Get edge ports via REST API v2"
+        description: "Get WIN/WIN_TLS ports via REST API v2, set WINSTAP params via GIM API on ceratops, schedule install"
         args:
           cm_appliance: "cm"
           edge_name: "sauropod"
