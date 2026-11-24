@@ -1077,7 +1077,7 @@ groups:
         module: tasks.edge_labs
         description: "Install k3s v1.35.10+k3s1 on sauropod, wait for 3 pods Running, patch CoreDNS"
         args:
-          k3s_version: "v1.32.13+k3s1"
+          k3s_version: "v1.34.13+k3s1"
           cm_appliance: "cm"
           expected_pods: 3
           max_wait: 300
