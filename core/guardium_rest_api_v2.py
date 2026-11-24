@@ -61,9 +61,12 @@ class GuardiumRestAPIv2:
         response.raise_for_status()
         return response.json() if response.content else {}
 
-    def get_edge_ports(self) -> dict:
+    def get_edge_ports(self, edge_name: Optional[str] = None) -> dict:
         url = f'{self.base_url}/edge/ports'
-        response = requests.get(url, headers=self.get_headers(), verify=self.verify_ssl)
+        params = {}
+        if edge_name:
+            params['edge_name'] = edge_name
+        response = requests.get(url, headers=self.get_headers(), params=params, verify=self.verify_ssl)
         response.raise_for_status()
         return response.json() if response.content else {}
 

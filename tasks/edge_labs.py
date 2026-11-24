@@ -796,9 +796,10 @@ def import_edge_dashboard(config, logger, verbose=True,
 
 def configure_stap_for_edge_on_ceratops(config, logger, verbose=True,
                                         cm_appliance="cm",
+                                        edge_name="sauropod",
                                         installation_delay=None,
                                         debug=False, **kwargs):
-    _header(logger, "GET EDGE PORTS (API v2)")
+    _header(logger, f"GET EDGE PORTS FOR '{edge_name}' (API v2)")
 
     pwd = config.get_custom_variable('pwd')
     if not pwd:
@@ -809,8 +810,8 @@ def configure_stap_for_edge_on_ceratops(config, logger, verbose=True,
     api.get_token(username='demo', password=pwd)
 
     try:
-        result = api.get_edge_ports()
-        logger.info(f"Response from GET /restAPI/v2/edge/ports:")
+        result = api.get_edge_ports(edge_name=edge_name)
+        logger.info(f"Response from GET /restAPI/v2/edge/ports (edge_name={edge_name}):")
         logger.info(f"{result}")
     except Exception as e:
         logger.error(f"✗ GET /restAPI/v2/edge/ports API call failed: {e}")
