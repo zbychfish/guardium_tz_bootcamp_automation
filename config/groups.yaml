@@ -61,6 +61,13 @@ groups:
           retry_interval: 60
           debug: false
 
+      - name: RDP_relay_setup
+        function: RDP_relay_setup
+        module: tasks.setup_hosts
+        description: "Create /etc/systemd/system/socat-RDP.service forwarding 8443 -> ceratops:51124, daemon-reload"
+        args:
+          debug: false
+
       - name: create_demo_user_on_ceratops
         function: create_demo_user_on_ceratops
         module: tasks.setup_hosts
@@ -155,13 +162,6 @@ groups:
         args:
           ceratops_machine: "ceratops"
           ssh_username: "itzuser"
-          debug: false
-
-      - name: RDP_relay_setup
-        function: RDP_relay_setup
-        module: tasks.setup_hosts
-        description: "Create /etc/systemd/system/socat-RDP.service forwarding 8443 -> ceratops:51124, daemon-reload"
-        args:
           debug: false
 
   database_preparations:
