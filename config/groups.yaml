@@ -682,6 +682,15 @@ groups:
           va_agent_name: "VA_SCANNER_ON_SAUROPOD"
           debug: false
 
+      - name: execute_va_assessment
+        function: execute_va_assessment
+        module: tasks.va_labs
+        description: "Execute VA assessment 'postgres on raptor' on CM via REST API PUT /restAPI/execute_assessment"
+        args:
+          cm_appliance: "cm"
+          assessment_description: "postgres on raptor"
+          debug: false
+
   fam_lab:
     name: "FAM Lab"
     description: "File Activity Monitoring lab - configure FAM on raptor"

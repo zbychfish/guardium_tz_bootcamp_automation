@@ -698,6 +698,13 @@ class GuardiumRestAPI:
         response.raise_for_status()
         return response.json()
 
+    def execute_assessment(self, assessment_description: str) -> dict:
+        url = f'{self.base_url}/restAPI/execute_assessment'
+        data = {'assessmentDescription': assessment_description}
+        response = requests.put(url, json=data, headers=self.get_headers(), verify=self.verify_ssl)
+        response.raise_for_status()
+        return response.json() if response.content else {}
+
 
 def create_guardium_api(config, logger, appliance_name: str = "cm01") -> 'GuardiumRestAPI':
     """

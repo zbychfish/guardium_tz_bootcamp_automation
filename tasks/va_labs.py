@@ -11,7 +11,7 @@ from typing import Optional
 
 from core.appliance_client import ApplianceClient
 from core.appliance_config_loader import ApplianceConfigLoader
-from core.guardium_rest_api import import_definitions_files
+from core.guardium_rest_api import create_guardium_api, import_definitions_files
 from core.logger import get_logger
 from core.ssh_client import SSHClient
 from core.utils import execute_local_command
@@ -552,3 +552,37 @@ def create_va_oauth_client(
         return False
     finally:
         client.disconnect()
+
+def execute_va_assessment(
+    config,
+    logger,
+    verbose,
+    cm_appliance=None,
+    assessment_description=None,
+    debug=None,
+    **kwargs) -> bool:
+
+    _header(logger, "EXECUTE VA ASSESSMENT")
+
+    if not cm_appliance or not assessment_description or debug is None:
+        logger.error("cm_appliance, assessment_description and debug must be set in groups.yaml args")
+        return False
+
+    pwd = config.get_custom_variable('pwd')
+    if not _require(logger, pwd=pwd):
+        return False
+
+    try:
+        api = create_guardium_api(config, logger, cm_appliance)
+        api.get_token(username='demo', password=pwd)
+        result = api.execute_assessment(assessment_description=assessment_description)
+    except Exception as e:
+        logger.error(f"✗ execute_assessment failed: {e}")
+        if debug:
+            logger.error(traceback.format_exc())
+        return False
+
+    if verbose:
+        logger.info(f"  API response: {result}")
+    logger.info(f"✓ Assessment '{assessment_description}' request sent")
+    return True
