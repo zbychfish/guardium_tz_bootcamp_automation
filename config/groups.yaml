@@ -952,6 +952,15 @@ groups:
         args:
           debug: false
 
+      - name: execute_va_assessment_oracle
+        function: execute_va_assessment
+        module: tasks.va_labs
+        description: "Execute VA assessment 'oracle assessment' on CM via REST API PUT /restAPI/execute_assessment"
+        args:
+          cm_appliance: "cm"
+          assessment_description: "oracle assessment"
+          debug: false
+
   ltr_lab:
     name: "LTR Lab"
     description: "Prepare raptor for LTR tasks based on guardium_notes_dbtraffic"

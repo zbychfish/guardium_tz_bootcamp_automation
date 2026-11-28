@@ -575,14 +575,12 @@ def execute_va_assessment(
     try:
         api = create_guardium_api(config, logger, cm_appliance)
         api.get_token(username='demo', password=pwd)
-        result = api.execute_assessment(assessment_description=assessment_description)
+        api.execute_assessment(assessment_description=assessment_description)
     except Exception as e:
         logger.error(f"✗ execute_assessment failed: {e}")
         if debug:
             logger.error(traceback.format_exc())
         return False
 
-    if verbose:
-        logger.info(f"  API response: {result}")
-    logger.info(f"✓ Assessment '{assessment_description}' request sent")
+    logger.info(f"✓ Assessment '{assessment_description}' request sent (async, result not checked)")
     return True
